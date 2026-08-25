@@ -1,7 +1,7 @@
 # 07. 팝오버 UI 사양
 
 Type: prototype
-Status: open
+Status: claimed
 Blocked by: 03
 
 ## Question
