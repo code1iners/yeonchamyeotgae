@@ -29,8 +29,18 @@ macOS·Windows 트레이 앱의 셸로 Tauri v2와 Electron 중 무엇을 쓰는
 **Electron으로 간다.** Tauri v2 프로토타입은 만들지 않았다 — 아래 1번이 프로토타입 없이도
 갈리고, 그 방향이 지도의 확정 전제와 같기 때문이다.
 
-프로토타입: [`prototype/electron-tray-spike`](../../../prototype-electron-tray) 브랜치의
-`prototype-electron-tray/`. main에 병합하지 않는다.
+프로토타입은 `prototype/electron-tray-spike` 브랜치의 `prototype-electron-tray/`에 있다.
+main에 병합하지 않으며, 구현에 재활용하지 않는다 — 아래 실측치의 **근거 원본**으로만 남긴다.
+꺼내 보려면:
+
+```
+git switch prototype/electron-tray-spike
+cd prototype-electron-tray && pnpm install && pnpm start
+```
+
+처음 쓰면 헤매는 부분이 두 군데라 읽어볼 값은 있다: `renderer/drawTray.js`
+(canvas → 트레이 이미지, Windows 필수 경로)와 `main.js`의 팝오버 위치 계산
+(`tray.getBounds()` + 디스플레이 경계 클램프). 둘 다 import가 아니라 보고 새로 쓰는 것이다.
 
 ### 왜 Electron인가
 
