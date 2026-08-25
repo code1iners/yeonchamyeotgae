@@ -19,3 +19,14 @@ Blocked by: 05
 
 - [05번 티켓](05-shell-framework-adr.md)의 결론(Tauri or Electron)에 따라 `apps/desktop`의 모양이 갈린다.
 - `codebase-design` Skill이 코어 패키지의 인터페이스를 깊은 모듈로 설계하는 데 도움이 된다.
+
+## Comments
+
+### 05번 결정에서 넘어온 것 (2026-08-25)
+
+셸은 **Electron**으로 확정됐다([05번](05-shell-framework-adr.md)). Q1(모노레포 여부)에
+들어가는 사실 하나: 프로토타입에서 **렌더러가 트레이 아이콘 이미지를 그렸다**.
+canvas는 렌더러에만 있으므로, Windows에서 트레이 숫자를 띄우는 경로가
+`renderer → IPC → main`을 반드시 지난다. 즉 main·preload·renderer 셋이 같은 타입을 공유해야
+하고, 이게 구조 결정의 실제 압력이다. 프로토타입의 최소 구성은
+`main.js` + `preload.js` + `renderer/`(Vite root) + `vite.config.mjs`였다.
