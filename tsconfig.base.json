@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"target": "ES2023",
+		"module": "preserve",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"skipLibCheck": true,
+		"noEmit": true
+	}
+}

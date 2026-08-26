@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+  - apps/*
+# 전체 설치(electron-builder 포함)를 한 번 돌려 pnpm이 써넣은 플레이스홀더 전부를
+# 실측으로 확정한 값이다(스펙 9절 6번). electron은 42부터 postinstall이 없어
+# 플래그되지 않으므로 항목을 두지 않는다.
+allowBuilds:
+  electron-winstaller: false
+  esbuild: true

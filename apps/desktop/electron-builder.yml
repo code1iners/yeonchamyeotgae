@@ -1,0 +1,15 @@
+# 패키징 상세(타깃·artifactName 등)는 28번 티켓에서 채운다.
+appId: dev.yeoncha.desktop
+productName: 연차몇개
+directories:
+  output: release
+files:
+  - out/**
+mac:
+  # 서명 억제(스펙 8.4절). identity: null이어야 키체인 조회 자체가 일어나지 않는다.
+  # 인증서를 꽂을 때 이 줄을 지운다.
+  identity: null
+  hardenedRuntime: false
+win:
+  # signAndEditExecutable: false가 아니다 — 그쪽은 아이콘 리소스 편집까지 꺼진다.
+  signExecutable: false

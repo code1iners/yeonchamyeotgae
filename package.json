@@ -1,0 +1,22 @@
+{
+	"name": "yeonchamyeotgae",
+	"private": true,
+	"packageManager": "pnpm@11.24.0",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"verify": "turbo run lint typecheck test",
+		"build": "turbo run build",
+		"dev": "pnpm --filter @yeoncha/desktop dev",
+		"format": "biome check --write .",
+		"lint": "turbo run lint",
+		"typecheck": "turbo run typecheck",
+		"test": "turbo run test"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "~2.5.10",
+		"turbo": "^2.10.11",
+		"typescript": "^7.0.2"
+	}
+}
