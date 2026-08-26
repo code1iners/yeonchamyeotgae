@@ -1,7 +1,7 @@
 # 13. 스캐폴딩과 검증 파이프라인
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 없음 (바로 시작할 수 있다)
 
 ## What to build
