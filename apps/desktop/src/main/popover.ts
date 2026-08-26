@@ -1,0 +1,151 @@
+import path from "node:path";
+import type { Display, Rectangle } from "electron";
+import { BrowserWindow, ipcMain, screen } from "electron";
+
+/** 팝오버 고정 폭(5.6절) — 달력 한 주가 7칸 × 48px로 들어가는 최소 폭. */
+const POPOVER_WIDTH = 380;
+/** 렌더러가 높이를 보고하기 전에 쓰는 초기 높이. */
+const INITIAL_HEIGHT = 240;
+/** 렌더러가 보고한 높이의 하한. 0이나 음수가 와도 창이 사라지지 않게 한다. */
+const MIN_HEIGHT = 80;
+/** 트레이와 팝오버 사이 간격(px). */
+const TRAY_GAP = 4;
+/**
+ * 트레이 클릭으로 팝오버가 blur → 숨김 처리된 직후, 같은 클릭의 click 이벤트가
+ * 팝오버를 곧바로 다시 열지 않게 하는 유예 시간(ms).
+ */
+const REOPEN_SUPPRESS_MS = 250;
+
+let popover: BrowserWindow | null = null;
+/** 마지막으로 blur로 숨긴 시각(epoch ms). 토글 클릭의 재열림 억제에 쓴다. */
+let hiddenAt = 0;
+/** 마지막 클릭의 트레이 아이콘 영역. 위치 계산의 기준점이다. */
+let anchorBounds: Rectangle | null = null;
+
+/** 팝오버 창을 만든다. 숨긴 채로 만들고 트레이 클릭이 열어준다. */
+export function createPopover(): BrowserWindow {
+	popover = new BrowserWindow({
+		width: POPOVER_WIDTH,
+		height: INITIAL_HEIGHT,
+		show: false,
+		frame: false,
+		resizable: false,
+		movable: false,
+		minimizable: false,
+		maximizable: false,
+		fullscreenable: false,
+		skipTaskbar: true,
+		webPreferences: {
+			preload: path.join(import.meta.dirname, "../preload/index.mjs"),
+			// ESM preload는 sandbox와 병존하지 않는다. contextIsolation은 기본값(true)이다.
+			sandbox: false,
+		},
+	});
+
+	// 포커스를 잃으면 닫힌다 — 팝오버의 정의다.
+	popover.on("blur", () => {
+		hidePopover();
+	});
+
+	// 렌더러가 내용 높이를 보고하면 창 높이를 맞춘다(5.6절 — 높이는 내용에 맞춘다).
+	ipcMain.on("popover:content-height", (_event, height: number) => {
+		resizeToContent(height);
+	});
+
+	/** electron-vite dev 서버가 있으면 그쪽을, 없으면(프로덕션 빌드) 번들된 파일을 연다. */
+	const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+	if (rendererUrl) {
+		popover.loadURL(rendererUrl);
+	} else {
+		popover.loadFile(path.join(import.meta.dirname, "../renderer/index.html"));
+	}
+	return popover;
+}
+
+/** 트레이 클릭용 토글. 열려 있으면 닫고, 닫혀 있으면 트레이 위치에 연다. */
+export function togglePopover(trayBounds?: Rectangle): void {
+	if (!popover) {
+		return;
+	}
+	if (trayBounds) {
+		anchorBounds = trayBounds;
+	}
+	if (popover.isVisible()) {
+		hidePopover();
+		return;
+	}
+	// 트레이 클릭이 blur를 먼저 일으켜 이미 닫혔다면, 같은 클릭으로 다시 열지 않는다(토글 유지).
+	if (Date.now() - hiddenAt < REOPEN_SUPPRESS_MS) {
+		return;
+	}
+	showPopover();
+}
+
+/** 팝오버를 무조건 연다. 두 번째 인스턴스 실행이 이 경로를 탄다. */
+export function showPopover(): void {
+	if (!popover) {
+		return;
+	}
+	positionPopover(popover);
+	popover.show();
+}
+
+/** 팝오버를 숨기고 숨긴 시각을 기록한다. */
+function hidePopover(): void {
+	if (!popover?.isVisible()) {
+		return;
+	}
+	popover.hide();
+	hiddenAt = Date.now();
+}
+
+/** 렌더러가 보고한 내용 높이로 창 크기를 맞추고, 열려 있으면 위치도 다시 잡는다. */
+function resizeToContent(height: number): void {
+	if (!popover) {
+		return;
+	}
+	/** 화면 작업 영역을 넘지 않게 자른 목표 높이. */
+	const maxHeight = displayFor(anchorBounds).workArea.height;
+	const next = Math.min(Math.max(Math.round(height), MIN_HEIGHT), maxHeight);
+	popover.setContentSize(POPOVER_WIDTH, next);
+	if (popover.isVisible()) {
+		positionPopover(popover);
+	}
+}
+
+/** 트레이 아이콘에 붙여 팝오버 위치를 잡는다. 메뉴 막대(상단)면 아래로, 작업 표시줄(하단)이면 위로 연다. */
+function positionPopover(window: BrowserWindow): void {
+	const { width, height } = window.getBounds();
+	const display = displayFor(anchorBounds);
+	const area = display.workArea;
+
+	let x: number;
+	let y: number;
+	if (anchorBounds && anchorBounds.width > 0) {
+		x = Math.round(anchorBounds.x + anchorBounds.width / 2 - width / 2);
+		/** 트레이가 화면 위쪽 절반에 있는가(macOS 메뉴 막대 = 위, Windows 작업 표시줄 = 대개 아래). */
+		const trayOnTop =
+			anchorBounds.y + anchorBounds.height / 2 <
+			display.bounds.y + display.bounds.height / 2;
+		y = trayOnTop
+			? anchorBounds.y + anchorBounds.height + TRAY_GAP
+			: anchorBounds.y - height - TRAY_GAP;
+	} else {
+		// 트레이 위치를 모르면(두 번째 인스턴스가 클릭 전에 열 때) 작업 영역 우상단에 둔다.
+		x = area.x + area.width - width - TRAY_GAP;
+		y = area.y + TRAY_GAP;
+	}
+
+	// 작업 영역 밖으로 나가지 않게 자른다.
+	x = Math.min(Math.max(x, area.x), area.x + area.width - width);
+	y = Math.min(Math.max(y, area.y), area.y + area.height - height);
+	window.setPosition(x, y);
+}
+
+/** 기준점이 속한 디스플레이. 기준점이 없으면 주 디스플레이. */
+function displayFor(bounds: Rectangle | null): Display {
+	if (bounds && bounds.width > 0) {
+		return screen.getDisplayMatching(bounds);
+	}
+	return screen.getPrimaryDisplay();
+}
