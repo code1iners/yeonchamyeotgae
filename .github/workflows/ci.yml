@@ -22,8 +22,11 @@ jobs:
       - uses: actions/checkout@v7
       # install: false — pnpm의 CI 자동 감지에 맡기지 않고 --frozen-lockfile을
       # 손으로 적어 로그에 보이게 한다(스펙 8.6절).
+      # version 입력은 적지 않는다 — 루트 package.json의 packageManager(pnpm@11.24.0)와
+      # 병존하면 pnpm/setup@v2가 "Multiple versions of pnpm specified"로 실패한다
+      # (run 32944881644 실측). 버전 고정은 packageManager의 정확 핀이 대신한다.
       - uses: pnpm/setup@v2
-        with: { version: 11, runtime: node@24, cache: true, install: false }
+        with: { runtime: node@24, cache: true, install: false }
       - run: pnpm install --frozen-lockfile
       # turbo 캐시(actions/cache의 .turbo, 원격 캐시)는 붙이지 않는다 — 매번 새 러너라
       # 저장·복원 비용이 pnpm verify 콜드(1.19초)보다 비싸다(스펙 8.2절).
