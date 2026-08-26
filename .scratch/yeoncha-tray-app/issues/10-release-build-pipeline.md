@@ -40,3 +40,28 @@ AI 에이전트가 main에 푸시하면서 macOS·Windows 실행 파일을 GitHu
   DMG 두 개 / arm64만. **이 티켓에서 결정해야 한다.**
 - **출력 경로가 vite 출력과 충돌하지 않게 해야 한다.** 프로토타입에서 둘 다 `dist/`를 써서
   asar가 자기 자신을 삼켜 320MB가 됐다. `directories.output`을 분리한다.
+
+### 09번 결정에서 넘어온 것 (2026-08-26)
+
+[09번](09-project-structure.md)이 툴체인 전체를 확정했다. 이 티켓이 받아야 할 것들이다.
+
+- **워크플로가 부를 명령은 두 개다**: `pnpm verify`(lint·typecheck·test)와 `pnpm build`
+  (= `turbo run build`). 후자가 이미 lint·typecheck·코어 테스트를 `dependsOn`으로 물고 있어
+  **검증이 통과하지 못하면 산출물이 만들어지지 않는다.** 워크플로에서 검증을 따로 앞세울지,
+  `pnpm build` 하나에 맡길지는 이 티켓의 판단이다.
+- **turbo 캐시는 git 저장소가 있어야 동작한다.** `actions/checkout`의 기본 `fetch-depth: 1`에서
+  turbo가 캐시를 제대로 쓰는지 확인해야 한다. 원격 캐시는 켜지 않는다(개인 도구).
+- **TypeScript 7은 플랫폼별 바이너리다.** `@typescript/typescript-win32-x64`가 lockfile에
+  들어 있어야 `windows-latest` 잡에서 `typecheck`가 돈다. `esbuild`·`electron`도 마찬가지다.
+  `pnpm install --frozen-lockfile`이 러너별로 성공하는지가 실제 확인 지점이다.
+- **`pnpm-workspace.yaml`의 `allowBuilds`에 `electron`과 `esbuild`가 있어야 한다.**
+  빠지면 CI에서 `ERR_PNPM_IGNORED_BUILDS`로 설치가 실패한다.
+- **`minimumReleaseAge` 공급망 정책이 CI에서도 적용된다.** 갓 릴리스된 버전이 lockfile에 들어가면
+  러너에서 설치가 거부된다. 의존성 갱신 시 `minimumReleaseAgeExclude`를 함께 손봐야 한다.
+- **Node는 24 LTS(Krypton)다.** `actions/setup-node`의 `node-version`을 여기 맞춘다.
+  Node 26은 `Temporal`이 네이티브지만 09번이 폴리필을 쓰기로 해 이유가 사라졌다.
+- **빌드 도구는 `electron-vite` 5 + Vite 7이다.** 출력이 `out/`이고 `electron-builder`의
+  `directories.output`은 그와 겹치지 않게 `release/`로 둔다(프로토타입에서 둘 다 `dist/`를 써
+  asar가 자기 자신을 삼킨 사고의 대응).
+- **09번이 실행하지 못한 것**: `electron-vite` 통합 자체와 Windows. 이 티켓이 CI에서 처음
+  확인하게 된다.
