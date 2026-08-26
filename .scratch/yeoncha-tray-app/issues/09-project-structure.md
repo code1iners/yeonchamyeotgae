@@ -1,7 +1,7 @@
 # 09. 프로젝트 구조와 날짜 라이브러리 결정
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by: 05
 
 ## Question
