@@ -1,7 +1,7 @@
 # 14. CI 워크플로 — 커밋마다 양 OS 검증
 
 Type: task
-Status: ready-for-agent
+Status: claimed
 Blocked by: 13
 
 ## What to build
