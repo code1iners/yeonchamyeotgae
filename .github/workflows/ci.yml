@@ -1,0 +1,31 @@
+# 커밋마다 macOS·Windows 양쪽에서 검증만 돈다. 패키징(electron-builder)은
+# release.yml의 몫이다 — 여기서 부르면 Electron 배포본을 매 커밋 내려받는다(스펙 8.1절).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    strategy:
+      # Windows 검증이 이 워크플로의 존재 이유다 — macOS가 먼저 실패해 Windows 잡이
+      # 취소되면 정확히 보고 싶었던 것을 못 본다(스펙 8.1절).
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # fetch-depth는 기본값 — CI는 turbo 캐시에 기대지 않으므로 조정할 이유가 없다(스펙 9절 1번).
+      - uses: actions/checkout@v7
+      # install: false — pnpm의 CI 자동 감지에 맡기지 않고 --frozen-lockfile을
+      # 손으로 적어 로그에 보이게 한다(스펙 8.6절).
+      - uses: pnpm/setup@v2
+        with: { version: 11, runtime: node@24, cache: true, install: false }
+      - run: pnpm install --frozen-lockfile
+      # turbo 캐시(actions/cache의 .turbo, 원격 캐시)는 붙이지 않는다 — 매번 새 러너라
+      # 저장·복원 비용이 pnpm verify 콜드(1.19초)보다 비싸다(스펙 8.2절).
+      - run: pnpm verify
+      - run: pnpm build
