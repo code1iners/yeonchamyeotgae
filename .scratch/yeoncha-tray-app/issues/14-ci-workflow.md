@@ -1,7 +1,7 @@
 # 14. CI 워크플로 — 커밋마다 양 OS 검증
 
 Type: task
-Status: claimed
+Status: resolved
 Blocked by: 13
 
 ## What to build
@@ -25,7 +25,26 @@ main 푸시와 PR마다 **macOS와 Windows 양쪽에서** 검증이 도는 워�
 - [x] Windows 잡의 `--frozen-lockfile`이 그냥 성공한다 — `supportedArchitectures`를 설정하지 않는다(9절 8번)
 - [x] `actions/cache`로 `.turbo`를 잡지 않고 원격 캐시도 쓰지 않는다(8.2절 마지막 항목)
 - [x] `actions/checkout`은 기본 `fetch-depth`를 쓴다(CI는 turbo 캐시에 기대지 않는다)
-- [ ] 실제로 한 번 돌려 양 OS 잡이 초록인 것을 확인했다 — **블로커, 아래 Comments 참조**
+- [x] 실제로 한 번 돌려 양 OS 잡이 초록인 것을 확인했다 — run 32981755002, `verify (macos-latest)`·`verify (windows-latest)` 모두 success
+
+## Answer
+
+커밋 73b575e(작성) → 262adcc·639548d(실측 수정)로 완료. run 32981755002에서
+양 OS 잡 초록을 확인했다. 첫 실행까지 실측으로 두 가지가 스펙과 달랐고,
+둘 다 이 워크플로가 잡으라고 만든 종류의 문제였다:
+
+1. **`pnpm/setup@v2`의 `version` 입력은 `packageManager`와 병존 불가.**
+   스펙 8.6절 스니펫의 `version: 11`을 그대로 쓰면 루트 `package.json`의
+   `packageManager: "pnpm@11.24.0"`와 충돌해 "Multiple versions of pnpm
+   specified"로 양 OS 셋업이 실패한다(run 32944881644). `version`을 빼고
+   `packageManager`의 정확 핀에 맡겼다 — 버전 고정이라는 스펙 취지는 유지된다.
+   **스펙 8.6절 스니펫은 이 방향으로 고쳐야 한다.**
+2. **`.gitattributes` 없이는 Windows 린트가 깨진다.** Windows 러너의 git
+   autocrlf가 체크아웃 시 CRLF로 변환해 Biome이 모든 줄 끝 CR을 오류로
+   잡는다(run 32981496069). `* text=auto eol=lf`로 고정했다. 저장소 내용은
+   이미 전부 LF라 renormalize 변경분은 없었다. 스펙 9절 함정 목록에 없는
+   신규 Windows 함정 — **9절에 추가할 후보다.** macOS만 쓰던 구멍이 첫
+   Windows 실행에서 곧바로 드러난 사례로, 이 티켓의 존재 이유가 실증됐다.
 
 ## Comments
 
