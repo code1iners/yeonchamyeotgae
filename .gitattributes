@@ -1,0 +1,4 @@
+# Windows 체크아웃에서 git autocrlf가 LF→CRLF 변환을 하면 Biome 포매터가
+# 모든 줄 끝 CR을 오류로 잡는다(CI run 32981496069 실측). 텍스트 파일은
+# 플랫폼과 무관하게 LF로 고정한다. 바이너리는 text=auto가 알아서 제외한다.
+* text=auto eol=lf
