@@ -16,6 +16,7 @@ const TRAY_GAP = 4;
  */
 const REOPEN_SUPPRESS_MS = 250;
 
+/** 단 하나뿐인 팝오버 창. 닫힘은 숨김이며 파괴하지 않는다. */
 let popover: BrowserWindow | null = null;
 /** 마지막으로 blur로 숨긴 시각(epoch ms). 토글 클릭의 재열림 억제에 쓴다. */
 let hiddenAt = 0;
@@ -63,13 +64,11 @@ export function createPopover(): BrowserWindow {
 }
 
 /** 트레이 클릭용 토글. 열려 있으면 닫고, 닫혀 있으면 트레이 위치에 연다. */
-export function togglePopover(trayBounds?: Rectangle): void {
+export function togglePopover(trayBounds: Rectangle): void {
 	if (!popover) {
 		return;
 	}
-	if (trayBounds) {
-		anchorBounds = trayBounds;
-	}
+	anchorBounds = trayBounds;
 	if (popover.isVisible()) {
 		hidePopover();
 		return;
@@ -121,7 +120,7 @@ function positionPopover(window: BrowserWindow): void {
 
 	let x: number;
 	let y: number;
-	if (anchorBounds && anchorBounds.width > 0) {
+	if (hasAnchor(anchorBounds)) {
 		x = Math.round(anchorBounds.x + anchorBounds.width / 2 - width / 2);
 		/** 트레이가 화면 위쪽 절반에 있는가(macOS 메뉴 막대 = 위, Windows 작업 표시줄 = 대개 아래). */
 		const trayOnTop =
@@ -144,8 +143,13 @@ function positionPopover(window: BrowserWindow): void {
 
 /** 기준점이 속한 디스플레이. 기준점이 없으면 주 디스플레이. */
 function displayFor(bounds: Rectangle | null): Display {
-	if (bounds && bounds.width > 0) {
+	if (hasAnchor(bounds)) {
 		return screen.getDisplayMatching(bounds);
 	}
 	return screen.getPrimaryDisplay();
+}
+
+/** 위치 계산에 쓸 수 있는 기준점인가 — 트레이 클릭 전이거나 빈 bounds면 아니다. */
+function hasAnchor(bounds: Rectangle | null): bounds is Rectangle {
+	return bounds !== null && bounds.width > 0;
 }

@@ -5,7 +5,11 @@ import { drawGlyph } from "./glyph";
 /** 입사일 미설정 상태의 툴팁(4절). 잔여 표시는 19번 티켓에서 들어온다. */
 const TOOLTIP_UNSET = "연차몇개 — 입사일을 입력하세요";
 
-let tray: Tray | null = null;
+/**
+ * 앱 수명 동안 유지되는 트레이 인스턴스. 읽는 곳은 없지만 참조를 잡아두지
+ * 않으면 GC가 트레이를 거둬 아이콘이 사라진다 — 삭제하면 안 된다.
+ */
+let _tray: Tray | null = null;
 
 /** 트레이를 만들고 클릭 핸들러를 건다. 초기 표시는 입사일 미설정 대시다. */
 export function createTray(onClick: (trayBounds: Rectangle) => void): Tray {
@@ -15,7 +19,7 @@ export function createTray(onClick: (trayBounds: Rectangle) => void): Tray {
 		// 합성 클릭(접근성 등)은 bounds가 비어 올 수 있어 트레이에서 직접 읽어 보완한다.
 		onClick(bounds.width > 0 ? bounds : created.getBounds());
 	});
-	tray = created;
+	_tray = created;
 	return created;
 }
 
@@ -56,9 +60,11 @@ function createMacTemplateImage(): NativeImage {
  * 테마 변경 시 다시 그리기는 21번 티켓의 `nativeTheme.on('updated')`가 맡는다.
  */
 function createWindowsSquareImage(): NativeImage {
-	/** 알림 영역 아이콘의 기준 크기 16px × 표시 배율. 기하 공식이 짝수를 전제하므로 짝수로 올린다. */
-	let size = Math.round(16 * screen.getPrimaryDisplay().scaleFactor);
-	size += size % 2;
+	// 크기는 SM_CXSMICON과 정확히 맞춰야 한다 — 어긋나면 OS 리샘플링이
+	// 전 픽셀에 안티에일리어싱을 만든다. 홀수 크기(비표준 배율)의 반 픽셀
+	// 중심 이탈은 glyph 쪽이 내림으로 흡수한다.
+	/** 알림 영역 아이콘의 기준 크기 16px × 표시 배율. */
+	const size = Math.round(16 * screen.getPrimaryDisplay().scaleFactor);
 	/** 다크 테마 배경에는 흰 잉크, 라이트 테마에는 검정 잉크. */
 	const tone = nativeTheme.shouldUseDarkColors ? "dark" : "light";
 	return drawGlyph(size, tone);

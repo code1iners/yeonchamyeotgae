@@ -34,14 +34,17 @@ export function drawGlyph(size: number, tone: GlyphTone): NativeImage {
  * 정렬되어 안티에일리어싱이 0이 된다. `round(size * 0.125)`로 단순화하면
  * 20px에서 두께 3px이 나와 반 픽셀이 남는다 — 단순화 금지(9절 15번).
  */
-export function renderGlyphBitmap(size: number, tone: GlyphTone): Buffer {
+function renderGlyphBitmap(size: number, tone: GlyphTone): Buffer {
 	/** 대시 폭(짝수 강제). */
 	const w = Math.max(2, Math.round((size * 0.56) / 2) * 2);
 	/** 대시 두께(짝수 강제). */
 	const h = Math.max(2, Math.round((size * 0.125) / 2) * 2);
-	/** 대시 좌상단 좌표 — size·w·h가 모두 짝수라 항상 정수다. */
-	const x = (size - w) / 2;
-	const y = (size - h) / 2;
+	// 좌표는 내림으로 정수화한다. 6.1절 표의 짝수 size에서는 나눗셈이 이미
+	// 정수라 동작이 같고, 홀수 size(Windows 비표준 배율)에서는 반 픽셀
+	// 중심 이탈을 감수하는 대신 안티에일리어싱 0을 지킨다.
+	/** 대시 좌상단 좌표. */
+	const x = Math.floor((size - w) / 2);
+	const y = Math.floor((size - h) / 2);
 
 	const [r, g, b] = INK[tone];
 	const bitmap = Buffer.alloc(size * size * 4);
