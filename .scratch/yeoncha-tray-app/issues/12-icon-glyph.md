@@ -1,7 +1,7 @@
 # 12. 앱·트레이 아이콘 글리프 확정
 
 Type: prototype
-Status: open
+Status: claimed
 Blocked by: -
 
 ## Question
