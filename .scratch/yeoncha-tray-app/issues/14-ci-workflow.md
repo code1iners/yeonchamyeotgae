@@ -53,3 +53,10 @@ Electron Framework 바이너리(192MB)가 GitHub 100MB 제한에 걸려 **main �
 참고: `prototype-electron-tray/dist`도 같은 커밋에 딸려 들어와 추적 중이다
 (`.gitignore`의 `dist/`와 모순). 작아서 푸시를 막지는 않지만 재작성 때 함께
 빼는 것을 고려할 만하다.
+
+**2026-08-26, 구현 에이전트(후속).** 사용자 승인을 받아 위 절차를 실행했다.
+`filter-branch`로 `prototype-electron-tray/node_modules`를 히스토리에서 제거했고,
+전 커밋 트리에 잔존 없음·푸시 범위 내 50MB 초과 blob 없음을 확인했다.
+주요 SHA 매핑(구→신): 854bd43→838ec66(12번), e62db10→2b57ee2(13번 스캐폴딩),
+2a70e67→73b575e(ci.yml). 13번 티켓 Answer의 SHA 참조는 고쳤다.
+`prototype-electron-tray/dist`는 승인 범위를 좁게 지켜 이번 재작성에서 빼지 않았다.
