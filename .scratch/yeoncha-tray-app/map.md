@@ -17,7 +17,7 @@ v1은 macOS·Windows 트레이 앱이며, 연차 산정 코어는 플랫폼 독�
 - **확정된 전제** (재논의 금지, 목적지 재설정 시에만):
   - 코어 계산 엔진은 **순수 TypeScript 패키지**. Rust/WASM 아님. 브라우저·Node·웹뷰 어디서든 동작해야 한다.
   - UI는 **React**.
-  - 배포는 **GitHub Release**. AI 에이전트가 main 푸시 시 OS별 바이너리를 함께 업로드한다.
+  - 배포는 **GitHub Release**. AI 에이전트가 OS별 바이너리를 함께 업로드한다. (정하는 것은 *누가 하는가*이지 이벤트가 아니다 — [10번](issues/10-release-build-pipeline.md)이 릴리스 트리거를 `v*` 태그 푸시로, main 푸시는 검증 전용으로 갈랐다. 태그를 미는 것도 에이전트다.)
   - v2는 Next.js 기반 **PWA**가 유력하다. 코어 패키지가 그대로 넘어갈 수 있어야 한다.
   - **잔여 = 발생 − (사용 + 예정)**. 예정된 휴가도 잔여에서 차감한다.
   - **진짜 단순한 앱이다.** 기능을 늘려 복잡해지는 것을 명시적으로 거부한다. 기능 추가 제안은 "이게 없으면 잔여가 틀리는가"를 통과해야 한다.
@@ -37,9 +37,11 @@ v1은 macOS·Windows 트레이 앱이며, 연차 산정 코어는 플랫폼 독�
 
 - [09. 프로젝트 구조와 날짜 라이브러리 결정](issues/09-project-structure.md): **pnpm workspace + Turborepo, 패키지 둘**(`packages/core` + `apps/desktop`)이고 코어는 **빌드하지 않는다** — `exports`가 `./src/index.ts`를 직접 가리키는 Just-in-Time 패키지다. 워크스페이스를 고른 근거는 패키지 수가 아니라 **경계를 pnpm이 강제한다**는 것이다(코어가 `electron`을, 셸이 미선언 의존성을 import하면 `TS2307`로 막히는 것을 실측했다). `apps/web`이 나중에 붙는 것은 이 선택을 흔들지 않고 더 세게 만든다 — 소비자가 늘수록 "코어를 다시 빌드하는 것을 잊어 **잔여**만 조용히 틀리는" 함정이 는다. 날짜는 **Temporal**(`temporal-polyfill`을 정식 의존성으로, 네이티브가 있는 렌더러에서도 써서 환경 분기 0)이며 04번 케이스 M·완성 개월 수·윤년 `+1년 −1일`이 **예외 코드 0줄로** 통과하는 것을 돌려 확인했다. date-fns·dayjs 기각 사유는 크기가 아니라 `Date`가 시각과 시간대를 끌고 온다는 것이다. **"오늘"은 고정 `Asia/Seoul`** — v1과 v2가 같은 파일에서 같은 숫자를 내야 하기 때문이다. 셸 빌드는 `electron-vite` 5 + Vite 7(6은 베타뿐이고 Vite 8이 주는 게 없다), 테스트는 Vitest 4로 **코어만**(seam 셋: 계산·표시·직렬화), 린트·포맷은 Biome, 타입체크는 TS 7.0.2, 런타임은 Node 24 LTS. 검증은 `pnpm verify` 하나(웜 0.49s)이고 **`turbo run build`는 lint·typecheck·코어 테스트를 전부 통과해야** 산출물을 낸다 — lint를 turbo 태스크로 둘지에 대한 내 최초 판단은 실측으로 뒤집혔다. 스캐폴딩에서 반드시 밟는 함정 7개를 기록했다(turbo 캐시는 git 저장소가 있어야 동작한다, `allowImportingTsExtensions`, Biome이 `.gitignore`를 안 본다 등). `electron-vite` 통합과 Windows는 실행하지 못했다.
 
+- [10. GitHub Release 빌드 파이프라인 설계](issues/10-release-build-pipeline.md): **워크플로 둘**이다 — `ci.yml`이 main 푸시·PR마다 macOS·Windows 양쪽에서 `pnpm verify` + `pnpm build`를 돌리고(`fail-fast: false`), `release.yml`이 `v*` 태그 푸시에만 패키징한다. main 푸시마다 릴리스하지 않는 이유는 소음이 아니라 **버전**이다(같은 버전의 릴리스가 여럿 생긴다). 태그에만 걸면 main이 무검증이 되므로 검증을 따로 뗀 것이고, 그 Windows 잡이 05·06·07·09번이 공통으로 남긴 "Windows에서 아무것도 실행하지 못했다"를 커밋 단위로 좁히는 유일한 장치다. **구조적 결정은 "쓰는 잡이 하나"**다 — `gitHubPublisher.ts`의 `createRelease()`에 422 `already_exists` 재시도가 없어(422 처리는 에셋 업로드 경로에만 있다) 두 러너가 동시에 publish하면 확률적으로 한쪽이 죽는다. 그래서 빌드 잡은 `--publish never` + 아티팩트만 올리고, 수집 잡 하나가 `softprops/action-gh-release@v3`으로 만든다(에이전트가 실패한 워크플로를 **재실행**하는 것이 멱등이어야 해서 `gh release create`가 아니다). 산출물은 **macOS arm64 DMG 하나 + Windows NSIS 하나** — universal은 arm64 러너에서 두 번 패키징 후 병합이라 **x64 사용자 0명을 위해 실제 사용자의 다운로드만 키우고**, x64 러너는 유료 large 계열인 데다 pnpm 11이 darwin-x64 바이너리를 배포하지 않아 09번 툴체인이 그 경로를 막는다. 서명은 `mac.identity: null`(환경변수가 아니다 — 소스상 키체인 조회 **전에** 반환하므로 05번의 자동 서명 사고가 로컬·CI 양쪽에서 막힌다) + `win.signExecutable: false`(`signAndEditExecutable: false`는 12번 아이콘까지 꺼진다). **켤 때 `identity: null`을 지우지 않으면 `CSC_LINK`를 넣어도 조용히 서명되지 않는다.** 버전의 유일한 출처는 `apps/desktop/package.json`이고 태그는 `v` + 그 값이며 릴리스 잡이 일치를 검사한다. **09번을 두 군데 교정한다**: 플랫폼별 lockfile 문제는 **존재하지 않고**(pnpm이 win32 optional 패키지를 전부 lockfile에 적는 것을 실측), `allowBuilds`에 필요한 건 `electron`이 아니라 **`esbuild: true`**다(Electron 42부터 postinstall이 없다 / 없으면 install이 종료 코드 1). 그리고 `@yeoncha/core`를 **`devDependencies`에 두면** electron-builder의 `--prod` 수집과 09번 5절의 `externalizeDepsPlugin` 함정이 **한 줄로 동시에 풀린다** — `apps/desktop`의 런타임 `dependencies`가 비는 것이 검사 가능한 불변식이 된다. 워크플로를 실제로 돌리지 못했고 Windows는 여전히 미검증이다. 1차 자료는 [`research/10-release-pipeline-findings.md`](research/10-release-pipeline-findings.md).
+
 ## Not yet specified
 
-<!-- 비어 있다. 09번이 마지막 안개(테스트 전략의 seam 위치)를 걷었다. 남은 티켓은 전부 명세되어 있다. -->
+<!-- 비어 있다. 09번이 마지막 안개(테스트 전략의 seam 위치)를 걷었고, 10번은 새 안개를 만들지 않았다 — 남긴 것은 전부 결정이 아니라 첫 CI 실행이 확인할 실측 항목이라 11번 스펙의 함정 절로 간다. 남은 티켓은 12번과 11번뿐이다. -->
 
 ## Out of scope
 
