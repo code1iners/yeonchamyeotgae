@@ -407,3 +407,92 @@ button.link:hover:not(:disabled) {
 	flex: none;
 	text-align: right;
 }
+
+/* ── 휴가 등록 시트(25번) ─────────────────────────────────── */
+
+/* 시트 머리 — 제목과 닫기가 한 줄이다. 팝오버를 덮는 모드라 자기 문이 필요하다(5.2절). */
+.sheet-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	padding-right: 8px;
+}
+.sheet-head .sec-title {
+	margin-top: 4px;
+}
+
+/* 달력 위의 안내 한 줄 — 지금 무엇을 고르는 중인지가 여기 있다. */
+.cal-hint {
+	margin: 0;
+	padding: 2px 12px 0;
+	font-size: 11.5px;
+}
+.cal-hint .mini {
+	margin-left: 6px;
+}
+
+.cal {
+	padding: 4px 10px 0;
+}
+.cal-nav {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 2px 0 4px;
+}
+.cal-title {
+	font-weight: 600;
+	min-width: 92px;
+	text-align: center;
+}
+
+/* 한 주 7칸 × 48px(5.6절) — 이 격자가 폭 380px의 근거다. */
+.cal-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 48px);
+	justify-content: center;
+}
+.cal-dow {
+	font-size: 11px;
+	text-align: center;
+	padding-bottom: 2px;
+}
+.cal-day {
+	height: 30px;
+	border: none;
+	background: none;
+	border-radius: 6px;
+	text-align: center;
+	padding: 0;
+}
+.cal-day:hover:not(:disabled) {
+	background: var(--hover);
+}
+.cal-day:disabled {
+	opacity: 0.35;
+}
+.cal-day.cal-today {
+	font-weight: 700;
+	color: var(--accent);
+}
+.cal-day.cal-selected {
+	background: var(--accent);
+	color: var(--on-accent);
+}
+
+/* 단위 선택 — 종일/반차/반반차가 한 몸으로 붙은 segmented control이다. */
+.seg {
+	display: flex;
+	flex: 1;
+	gap: 2px;
+}
+.seg button {
+	flex: 1;
+	border-color: transparent;
+	background: var(--fill);
+}
+.seg button[aria-pressed="true"] {
+	background: var(--accent);
+	color: var(--on-accent);
+}

@@ -1,5 +1,6 @@
 import type { Balance } from "@yeoncha/core";
 import { useEffect, useRef, useState } from "react";
+import { LeaveEntrySheet } from "./LeaveEntrySheet";
 import { SettingsTab } from "./SettingsTab";
 import { SummaryTab } from "./SummaryTab";
 import { UnreadableScreen } from "./UnreadableScreen";
@@ -47,6 +48,8 @@ export function App() {
 		tab: "summary",
 		openAdjustment: false,
 	});
+	/** 휴가 등록 시트가 열려 있는가. 열리면 팝오버 전체를 덮는다 — 모드 전환이다(5.2절). */
+	const [entryOpen, setEntryOpen] = useState(false);
 
 	useEffect(function reportContentHeightEffect() {
 		const root = rootRef.current;
@@ -98,6 +101,14 @@ export function App() {
 			 */}
 			{state?.read.status === "error" ? (
 				<UnreadableScreen kind={state.read.kind} />
+			) : entryOpen && state?.balance ? (
+				/* 등록 시트는 탭 위에 겹치는 레이어가 아니라 팝오버 전체를 대신한다(5.2절).
+				   잔여가 계산되는 상태에서만이다 — 온보딩·읽기 실패로 떨어지면 시트도 접힌다. */
+				<LeaveEntrySheet
+					entries={state.entries}
+					today={state.today}
+					onClose={() => setEntryOpen(false)}
+				/>
 			) : (
 				state && (
 					<>
@@ -143,6 +154,7 @@ export function App() {
 									onAddAdjustment={() =>
 										setSelected({ tab: "settings", openAdjustment: true })
 									}
+									onAddEntry={() => setEntryOpen(true)}
 								/>
 							)}
 							{tab === "history" && <PendingPane />}

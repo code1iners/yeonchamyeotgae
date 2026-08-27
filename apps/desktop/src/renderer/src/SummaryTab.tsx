@@ -8,6 +8,8 @@ type Props = {
 	today: string;
 	/** `조정을 추가` 링크 — 설정 탭으로 넘어가며 조정 폼이 열린 채로 도착한다(5.1절). */
 	onAddAdjustment: () => void;
+	/** `[휴가 등록]` — 팝오버를 덮는 등록 시트가 열린다(5.2절). */
+	onAddEntry: () => void;
 };
 
 /**
@@ -52,7 +54,12 @@ const SOURCE_LABEL: Record<GrantSource, string> = {
  * 표시도 하지 않고 OS 알림도 없으므로, 발생분 행의 D-day 배지가 사라질 연차를 말하는
  * 두 자리 중 하나다.
  */
-export function SummaryTab({ balance, today, onAddAdjustment }: Props) {
+export function SummaryTab({
+	balance,
+	today,
+	onAddAdjustment,
+	onAddEntry,
+}: Props) {
 	/** 조회일에 살아 있는 발생분. 소멸 임박 순으로 정렬되어 온다(3.4절). */
 	const grants = livingGrants({ grants: balance.grants, today });
 	/** 초과가 있는가 — 초과 행과 상단의 원인 한 줄이 이 값에 달려 있다. */
@@ -109,9 +116,8 @@ export function SummaryTab({ balance, today, onAddAdjustment }: Props) {
 					</div>
 				))
 			)}
-			{/* 시트는 25번이다. 자리와 동선을 먼저 고정해둔다. */}
 			<div className="cta">
-				<button type="button" className="primary" disabled>
+				<button type="button" className="primary" onClick={onAddEntry}>
 					휴가 등록
 				</button>
 			</div>
