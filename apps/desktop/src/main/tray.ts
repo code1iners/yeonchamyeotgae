@@ -55,6 +55,11 @@ let _tray: Tray | null = null;
  * 비동기로 오므로, 늦게 끝난 옛 그리기가 새 값을 덮지 않게 막는다.
  */
 let renderSeq = 0;
+/**
+ * 마지막으로 그린 트레이 상태. 테마가 바뀌면 **이 값을 그대로** 다시 그린다 —
+ * 재계산이 아니라 재그리기다(6.2절). 초깃값은 `createTray`가 처음 그리는 대시다.
+ */
+let lastView: TrayView = { kind: "unset" };
 
 /** 트레이를 만들고 클릭 핸들러를 건다. 초기 표시는 입사일 미설정 대시다. */
 export function createTray(onClick: (trayBounds: Rectangle) => void): Tray {
@@ -81,6 +86,7 @@ export function updateTray(view: TrayView): void {
 		return;
 	}
 	renderSeq += 1;
+	lastView = view;
 
 	// 잔여를 띄울 수 없나요? 숫자가 들어갈 자리를 대시가 지킨다(4.4절).
 	if (view.kind !== "balance") {
@@ -115,6 +121,24 @@ export function updateTray(view: TrayView): void {
 			// 그리기가 실패하면 직전 이미지가 남는다 — 툴팁은 이미 정확한 값을 갖고 있다.
 			console.error("트레이 숫자를 그리지 못했다", error);
 		});
+}
+
+/**
+ * Windows에서 테마가 바뀌면 트레이를 **다시 그린다**(6.2절).
+ *
+ * 4.5절의 재계산 트리거와 **다른 축이다** — 저쪽은 값이 바뀌는 것이고 이쪽은 같은
+ * 값을 다시 그리는 것이다. **섞지 않는다.** macOS는 템플릿 이미지 한 장을 OS가
+ * 반전해 주므로 이 리스너 자체가 필요 없다.
+ *
+ * 이 이벤트는 값이 실제로 바뀔 때만 오므로 무조건 다시 그려도 낭비가 없다.
+ */
+export function startThemeRedraw(): void {
+	if (process.platform === "darwin") {
+		return;
+	}
+	nativeTheme.on("updated", () => {
+		updateTray(lastView);
+	});
 }
 
 /** 트레이 이미지와 제목을 한 번에 반영한다. 렌더링만이고 표기 규칙은 없다. */
@@ -168,7 +192,7 @@ function windowsIconSize(): number {
 
 /**
  * Windows 잉크 톤 — 다크 테마 배경에는 흰 잉크, 라이트 테마에는 검정 잉크.
- * 테마 변경 시 다시 그리기는 21번 티켓의 `nativeTheme.on('updated')`가 맡는다.
+ * 이 값이 바뀐 것을 트레이에 반영하는 것은 `startThemeRedraw`다.
  */
 function windowsTone(): GlyphTone {
 	return nativeTheme.shouldUseDarkColors ? "dark" : "light";
