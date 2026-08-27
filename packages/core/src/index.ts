@@ -1,4 +1,14 @@
-// 코어 공개 API. allocate / computeBalance가 다음 티켓(18번)에서 여기로 들어온다.
+// 코어 공개 API. 계산 · 표시 문자열 · 직렬화 세 seam이 전부 여기로 나간다.
+export {
+	type Allocation,
+	type AllocationResult,
+	allocate,
+	type Balance,
+	computeBalance,
+	type Draw,
+	type Excess,
+	type GrantDetail,
+} from "./balance.ts";
 export { computeGrants, type Grant, type GrantSource } from "./grants.ts";
 export {
 	type Adjustment,
