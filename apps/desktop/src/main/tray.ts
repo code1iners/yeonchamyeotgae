@@ -1,15 +1,60 @@
+import { formatTrayLabel } from "@yeoncha/core";
 import type { NativeImage, Rectangle } from "electron";
 import { nativeImage, nativeTheme, screen, Tray } from "electron";
-import { drawGlyph } from "./glyph";
-
-/** 입사일 미설정 상태의 툴팁(4절). 잔여 표시는 19번 티켓에서 들어온다. */
-const TOOLTIP_UNSET = "연차몇개 — 입사일을 입력하세요";
+import { drawGlyph, type GlyphTone } from "./glyph";
+import { drawNumber } from "./tray-number";
 
 /**
- * 앱 수명 동안 유지되는 트레이 인스턴스. 읽는 곳은 없지만 참조를 잡아두지
- * 않으면 GC가 트레이를 거둬 아이콘이 사라진다 — 삭제하면 안 된다.
+ * 트레이가 그리는 상태 셋. 잔여를 띄우지 못하는 이유가 둘이라 `null` 하나로
+ * 뭉치지 않는다 — 대시는 양쪽 다 맞지만(숫자가 들어갈 자리인데 아직 계산할 수
+ * 없다) 툴팁은 갈린다.
+ */
+export type TrayView =
+	/** 잔여를 띄운다. */
+	| { kind: "balance"; balance: number }
+	/** 입사일 미설정 — 파일이 없다. */
+	| { kind: "unset" }
+	/** 저장 파일을 읽지 못했다. */
+	| { kind: "unreadable" };
+
+/** 입사일 미설정 상태의 툴팁(4절). */
+const TOOLTIP_UNSET = "연차몇개 — 입사일을 입력하세요";
+/**
+ * 저장 파일을 읽지 못한 상태의 툴팁. 4절이 정의한 두 문구 중 어느 쪽도 사실이
+ * 아니라서 셋째가 필요하다 — 입사일은 있는데 파일을 못 읽는 것이고, 그 자리에
+ * "입사일을 입력하세요"를 띄우면 툴팁이 거짓말을 한다. 무엇이 잘못됐고 무엇을
+ * 고를 수 있는지는 눌러서 열리는 오류 화면이 말한다(23번).
+ */
+const TOOLTIP_UNREADABLE = "연차몇개 — 저장 파일을 읽지 못했습니다";
+
+/**
+ * macOS 트레이의 글리프 예산 — 네이티브 텍스트라 제한이 없다(4.3절).
+ * 잔여가 `12.75`면 트레이에 `12.75`가 그대로 뜬다.
+ */
+const MAC_MAX_GLYPHS = Number.POSITIVE_INFINITY;
+/**
+ * Windows 트레이의 글리프 예산 — 부호 한 글자 + 숫자 두 글자(4.3절).
+ * 16px 정사각에서 편하게 읽히는 것이 두 글자이고, 최악인 `-25`가 세 글자다.
+ */
+const WINDOWS_MAX_GLYPHS = 3;
+
+/**
+ * 이 셸의 글리프 예산. **플랫폼 지식이 위 상수 둘로 끝난다** — 표기 규칙 자체는
+ * 코어의 `formatTrayLabel` 한 곳에만 있고 셸에 포매팅 분기가 없다(4.3절).
+ */
+const MAX_GLYPHS =
+	process.platform === "darwin" ? MAC_MAX_GLYPHS : WINDOWS_MAX_GLYPHS;
+
+/**
+ * 앱 수명 동안 유지되는 트레이 인스턴스. 갱신에도 쓰지만, 그것과 별개로 참조를
+ * 잡아두지 않으면 GC가 트레이를 거둬 아이콘이 사라진다 — 삭제하면 안 된다.
  */
 let _tray: Tray | null = null;
+/**
+ * 마지막으로 요청한 그리기의 순번. Windows 숫자 이미지는 숨은 렌더러를 거쳐
+ * 비동기로 오므로, 늦게 끝난 옛 그리기가 새 값을 덮지 않게 막는다.
+ */
+let renderSeq = 0;
 
 /** 트레이를 만들고 클릭 핸들러를 건다. 초기 표시는 입사일 미설정 대시다. */
 export function createTray(onClick: (trayBounds: Rectangle) => void): Tray {
@@ -23,12 +68,68 @@ export function createTray(onClick: (trayBounds: Rectangle) => void): Tray {
 	return created;
 }
 
+/**
+ * 트레이에 잔여를 띄운다. `null`은 입사일 미설정이며 대시가 그 자리를 지킨다(4.4절).
+ *
+ * **툴팁은 양쪽 다 정확한 값을 갖는다**(4절). Windows에서 트레이 숫자와 팝오버
+ * 숫자가 갈리는 유일한 경우이고, 그 간극을 메우는 것이 툴팁의 존재 이유다.
+ */
+export function updateTray(view: TrayView): void {
+	/** 갱신 대상 트레이. */
+	const tray = _tray;
+	if (!tray) {
+		return;
+	}
+	renderSeq += 1;
+
+	// 잔여를 띄울 수 없나요? 숫자가 들어갈 자리를 대시가 지킨다(4.4절).
+	if (view.kind !== "balance") {
+		tray.setToolTip(view.kind === "unset" ? TOOLTIP_UNSET : TOOLTIP_UNREADABLE);
+		renderTray(tray, createGlyphImage(), "");
+		return;
+	}
+
+	/** 잔여. */
+	const { balance } = view;
+	tray.setToolTip(`연차몇개 — 잔여 ${balance}일`);
+	/** 트레이 문자열. 예산에 담기면 정확한 표기, 담기지 않으면 내림 정수다. */
+	const label = formatTrayLabel(balance, { maxGlyphs: MAX_GLYPHS });
+
+	// macOS는 네이티브 텍스트라 여기서 끝난다.
+	if (process.platform === "darwin") {
+		renderTray(tray, nativeImage.createEmpty(), label);
+		return;
+	}
+
+	// Windows는 문자열을 정사각 이미지로 그려야 한다 — 숨은 렌더러를 거쳐 온다.
+	/** 이 그리기의 순번. 돌아왔을 때 아직 최신인지 확인한다. */
+	const seq = renderSeq;
+	drawNumber(label, windowsIconSize(), windowsTone())
+		.then((image) => {
+			// 그 사이 더 새로운 값이 들어왔나요?
+			if (seq === renderSeq) {
+				renderTray(tray, image, label);
+			}
+		})
+		.catch((error: unknown) => {
+			// 그리기가 실패하면 직전 이미지가 남는다 — 툴팁은 이미 정확한 값을 갖고 있다.
+			console.error("트레이 숫자를 그리지 못했다", error);
+		});
+}
+
+/** 트레이 이미지와 제목을 한 번에 반영한다. 렌더링만이고 표기 규칙은 없다. */
+function renderTray(tray: Tray, image: NativeImage, title: string): void {
+	tray.setImage(image);
+	// setTitle은 macOS 전용이다. 다른 플랫폼에서는 no-op이라 분기가 필요 없다.
+	tray.setTitle(title);
+}
+
 /** 플랫폼별 트레이 글리프 이미지를 만든다(6.2절). */
 function createGlyphImage(): NativeImage {
 	if (process.platform === "darwin") {
 		return createMacTemplateImage();
 	}
-	return createWindowsSquareImage();
+	return drawGlyph(windowsIconSize(), windowsTone());
 }
 
 /**
@@ -55,17 +156,20 @@ function createMacTemplateImage(): NativeImage {
 }
 
 /**
- * Windows: 정사각 비트맵을 표시 배율에 맞는 크기로 직접 그려 넘긴다.
- * `Tray.setImage`는 파일 경로가 없으면 크기를 맞춰주지 않는다(4.1절).
+ * Windows 알림 영역 아이콘의 크기(device px).
+ *
+ * `SM_CXSMICON`과 정확히 맞춰야 한다 — 어긋나면 OS 리샘플링이 전 픽셀에
+ * 안티에일리어싱을 만든다. 홀수 크기(비표준 배율)의 반 픽셀 중심 이탈은
+ * 글리프 쪽이 내림으로 흡수한다.
+ */
+function windowsIconSize(): number {
+	return Math.round(16 * screen.getPrimaryDisplay().scaleFactor);
+}
+
+/**
+ * Windows 잉크 톤 — 다크 테마 배경에는 흰 잉크, 라이트 테마에는 검정 잉크.
  * 테마 변경 시 다시 그리기는 21번 티켓의 `nativeTheme.on('updated')`가 맡는다.
  */
-function createWindowsSquareImage(): NativeImage {
-	// 크기는 SM_CXSMICON과 정확히 맞춰야 한다 — 어긋나면 OS 리샘플링이
-	// 전 픽셀에 안티에일리어싱을 만든다. 홀수 크기(비표준 배율)의 반 픽셀
-	// 중심 이탈은 glyph 쪽이 내림으로 흡수한다.
-	/** 알림 영역 아이콘의 기준 크기 16px × 표시 배율. */
-	const size = Math.round(16 * screen.getPrimaryDisplay().scaleFactor);
-	/** 다크 테마 배경에는 흰 잉크, 라이트 테마에는 검정 잉크. */
-	const tone = nativeTheme.shouldUseDarkColors ? "dark" : "light";
-	return drawGlyph(size, tone);
+function windowsTone(): GlyphTone {
+	return nativeTheme.shouldUseDarkColors ? "dark" : "light";
 }

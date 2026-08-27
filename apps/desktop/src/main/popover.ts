@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Display, Rectangle } from "electron";
 import { BrowserWindow, ipcMain, screen } from "electron";
+import { type AppState, IPC } from "../shared/ipc";
 
 /** 팝오버 고정 폭(5.6절) — 달력 한 주가 7칸 × 48px로 들어가는 최소 폭. */
 const POPOVER_WIDTH = 380;
@@ -49,7 +50,7 @@ export function createPopover(): BrowserWindow {
 	});
 
 	// 렌더러가 내용 높이를 보고하면 창 높이를 맞춘다(5.6절 — 높이는 내용에 맞춘다).
-	ipcMain.on("popover:content-height", (_event, height: number) => {
+	ipcMain.on(IPC.CONTENT_HEIGHT, (_event, height: number) => {
 		resizeToContent(height);
 	});
 
@@ -78,6 +79,16 @@ export function togglePopover(trayBounds: Rectangle): void {
 		return;
 	}
 	showPopover();
+}
+
+/**
+ * 셸이 다시 낸 상태를 팝오버 렌더러에 밀어준다.
+ *
+ * 렌더러가 스스로 다시 묻지 않는 이유는 값이 바뀌는 계기가 렌더러 밖에 있기
+ * 때문이다 — 자정과 절전 복귀(21번), 그리고 다른 경로의 커밋이다.
+ */
+export function sendStateToPopover(state: AppState): void {
+	popover?.webContents.send(IPC.STATE_CHANGED, state);
 }
 
 /** 팝오버를 무조건 연다. 두 번째 인스턴스 실행이 이 경로를 탄다. */

@@ -16,6 +16,12 @@ const INK: Record<GlyphTone, [number, number, number]> = {
 	dark: [255, 255, 255],
 };
 
+/** 톤에 해당하는 CSS 잉크 색. 캔버스로 글자를 그리는 쪽이 쓴다. */
+export function inkColor(tone: GlyphTone): string {
+	const [r, g, b] = INK[tone];
+	return `rgb(${r}, ${g}, ${b})`;
+}
+
 /**
  * "입사일 미설정" 상태의 가로 대시 글리프를 런타임에 그린다(6절).
  * 파일 자산이 아니라 함수다 — 16px 아이콘 파일을 만들지 않는다(6.3절).
