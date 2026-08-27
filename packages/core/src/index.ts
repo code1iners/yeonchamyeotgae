@@ -1,5 +1,12 @@
 // 코어 공개 API. 계산 · 표시 문자열 · 직렬화 세 seam이 전부 여기로 나간다.
 export {
+	type AdjustmentDraft,
+	type AdjustmentDraftResult,
+	type AdjustmentIssue,
+	type AdjustmentValue,
+	validateAdjustmentDraft,
+} from "./adjustment-input.ts";
+export {
 	type Allocation,
 	type AllocationResult,
 	allocate,
@@ -8,6 +15,7 @@ export {
 	type Draw,
 	type Excess,
 	type GrantDetail,
+	latestLivingExpiry,
 } from "./balance.ts";
 export { computeGrants, type Grant, type GrantSource } from "./grants.ts";
 export {

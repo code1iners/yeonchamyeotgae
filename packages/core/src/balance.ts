@@ -290,6 +290,36 @@ export function computeBalance({
 	};
 }
 
+/**
+ * 조회일에 살아 있는 발생분 중 가장 늦은 소멸일 — 조정 소멸일의 기본값이다(스펙 3.7절).
+ *
+ * 살아 있는 것이 하나도 없으면 `null`이고 입력 폼은 그 자리를 비워둔다. **규칙이 날짜를
+ * 지어내지 않는다** — 이월 사용기한은 회사마다 다르고(1년 더 / 6개월 / 무기한), 규칙이
+ * 정하면 조용히 틀린다.
+ */
+export function latestLivingExpiry({
+	grants,
+	today,
+}: {
+	grants: Grant[];
+	today: string;
+}): string | null {
+	/** 지금까지 찾은 가장 늦은 소멸일. */
+	let latest: string | null = null;
+
+	for (const grant of grants) {
+		// 조회일에 유효한 레코드인가요? 아직 발생하지 않은 것은 살아 있는 것이 아니다.
+		if (!isValidOn(grant, today)) {
+			continue;
+		}
+		if (latest === null || compareDate(grant.expiryDate, latest) > 0) {
+			latest = grant.expiryDate;
+		}
+	}
+
+	return latest;
+}
+
 /** 그 발생분이 대상일에 유효한가 — `발생일 <= 대상일 <= 소멸일`(스펙 3.3절). */
 function isValidOn(grant: Grant, date: string): boolean {
 	return (

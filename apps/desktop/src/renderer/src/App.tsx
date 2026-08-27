@@ -110,7 +110,14 @@ export function App() {
 					<div role="tabpanel">
 						{tab === "summary" && <PendingPane />}
 						{tab === "history" && <PendingPane />}
-						{tab === "settings" && <SettingsTab settings={state.settings} />}
+						{tab === "settings" && (
+							<SettingsTab
+								settings={state.settings}
+								adjustments={state.adjustments}
+								grants={state.balance?.grants ?? []}
+								today={state.today}
+							/>
+						)}
 					</div>
 				</>
 			)}

@@ -1,6 +1,6 @@
 import { Temporal } from "temporal-polyfill";
 import { describe, expect, test } from "vitest";
-import { allocate, computeBalance } from "./balance.ts";
+import { allocate, computeBalance, latestLivingExpiry } from "./balance.ts";
 import { computeGrants, type Grant } from "./grants.ts";
 import type { Adjustment, LeaveEntry, Settings } from "./storage.ts";
 
@@ -614,5 +614,50 @@ describe("computeBalance — 내역과 4줄 표 (스펙 1절·5.1절)", () => {
 
 		expect(used).toBe(1);
 		expect(planned).toBe(0);
+	});
+});
+
+describe("latestLivingExpiry — 소멸일 기본값 (스펙 3.7절)", () => {
+	test("그 시점 살아 있는 발생분 중 가장 늦은 소멸일이다", () => {
+		expect(
+			latestLivingExpiry({
+				grants: [
+					grantOf("2024-02-01", "2024-12-31", 1, "monthly"),
+					grantOf("2025-01-01", "2025-12-31", 15),
+				],
+				today: "2025-11-05",
+			}),
+		).toBe("2025-12-31");
+	});
+
+	test("아직 발생하지 않은 레코드는 세지 않는다 — 미래 예정이 만든 발생분이 기본값을 밀지 않는다", () => {
+		expect(
+			latestLivingExpiry({
+				grants: [
+					grantOf("2025-01-01", "2025-12-31", 15),
+					grantOf("2026-01-01", "2026-12-31", 15),
+				],
+				today: "2025-11-05",
+			}),
+		).toBe("2025-12-31");
+	});
+
+	test("소멸일 당일은 아직 살아 있다(3.3절)", () => {
+		expect(
+			latestLivingExpiry({
+				grants: [grantOf("2025-01-01", "2025-12-31", 15)],
+				today: "2025-12-31",
+			}),
+		).toBe("2025-12-31");
+	});
+
+	test("살아 있는 발생분이 없으면 null이다 — 규칙이 날짜를 지어내지 않는다", () => {
+		expect(
+			latestLivingExpiry({
+				grants: [grantOf("2025-01-01", "2025-12-31", 15)],
+				today: "2026-01-05",
+			}),
+		).toBeNull();
+		expect(latestLivingExpiry({ grants: [], today: "2026-01-05" })).toBeNull();
 	});
 });

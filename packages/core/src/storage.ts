@@ -1,4 +1,4 @@
-import { Temporal } from "temporal-polyfill";
+import { isIsoDate } from "./iso-date.ts";
 
 /** 앱이 읽고 쓸 수 있는 저장 형식 버전. 파일의 schemaVersion이 이보다 높으면 거부한다. */
 export const APP_SCHEMA_VERSION = 1;
@@ -109,15 +109,8 @@ function requireNumber(value: unknown, where: string): number {
 /** YYYY-MM-DD 형식과 실재하는 날짜인지 확인한다. Temporal.PlainDate와 1:1이어야 한다. */
 function requireIsoDate(value: unknown, where: string): string {
 	const text = requireString(value, where);
-	// Temporal.PlainDate.from은 다른 ISO 변형("20240101" 등)도 받으므로 형식은 따로 본다.
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-		mismatch(`${where}가 YYYY-MM-DD 형식이 아니다`);
-	}
-	// 기본 overflow(constrain)는 2024-02-30을 2024-02-29로 고쳐 통과시키므로 reject로 본다.
-	try {
-		Temporal.PlainDate.from(text, { overflow: "reject" });
-	} catch {
-		mismatch(`${where}가 실재하는 날짜가 아니다`);
+	if (!isIsoDate(text)) {
+		mismatch(`${where}가 YYYY-MM-DD 형식의 실재하는 날짜가 아니다`);
 	}
 	return text;
 }
