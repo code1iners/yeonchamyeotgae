@@ -31,7 +31,8 @@ if (!isPrimaryInstance) {
 		loadStore();
 		registerDataIpc();
 		createPopover();
-		createTray((trayBounds) => {
+		/** 트레이. 첫 실행에서 팝오버를 붙일 기준점을 여기서 얻는다. */
+		const tray = createTray((trayBounds) => {
 			togglePopover(trayBounds);
 		});
 
@@ -40,7 +41,17 @@ if (!isPrimaryInstance) {
 			updateTray(trayView(state));
 			sendStateToPopover(state);
 		});
-		updateTray(trayView(getState()));
+
+		/** 부팅 시점의 트레이 표시. */
+		const initialView = trayView(getState());
+		updateTray(initialView);
+
+		// 입사일이 없나요? 첫 실행에서 팝오버가 스스로 열린다 — 사용자가 무엇부터
+		// 해야 하는지 찾지 않게 하는 것이 온보딩의 요구다. 대시를 눌러 들어온 것과
+		// 같은 상태이므로 열리는 것은 설정 탭이다(4.4절).
+		if (initialView.kind === "unset") {
+			showPopover(tray.getBounds());
+		}
 	});
 
 	app.on("window-all-closed", () => {

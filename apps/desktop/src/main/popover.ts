@@ -91,10 +91,18 @@ export function sendStateToPopover(state: AppState): void {
 	popover?.webContents.send(IPC.STATE_CHANGED, state);
 }
 
-/** 팝오버를 무조건 연다. 두 번째 인스턴스 실행이 이 경로를 탄다. */
-export function showPopover(): void {
+/**
+ * 팝오버를 무조건 연다. 두 번째 인스턴스 실행과 첫 실행 온보딩이 이 경로를 탄다.
+ *
+ * `anchor`를 주면 그 자리에 붙여 연다 — 클릭 전이라 기준점이 없는 경로에서
+ * 트레이 위치를 넘겨줄 수 있다.
+ */
+export function showPopover(anchor?: Rectangle): void {
 	if (!popover) {
 		return;
+	}
+	if (anchor) {
+		anchorBounds = anchor;
 	}
 	positionPopover(popover);
 	popover.show();
