@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type LeaveData, ParseError, parse, serialize } from "@yeoncha/core";
-import { app } from "electron";
+import { app, shell } from "electron";
 import type { ReadState } from "../shared/ipc";
 import { writeFileAtomic } from "./atomic-write";
 
@@ -106,6 +106,72 @@ export function backupDataFile(): void {
 
 	parse(raw);
 	writeFileAtomic(backupFilePath(), raw);
+}
+
+/**
+ * 저장 파일이 있는 폴더를 OS 파일 관리자에서 연다(23번).
+ *
+ * 저장 경로를 설정값으로 열지 않는 대신 두는 통로다(2절). 파일이 아직 없으면
+ * (입사일을 넣기 전) 폴더만 연다 — 없는 파일을 가리키면 아무 일도 일어나지 않아
+ * 사용자에게는 버튼이 죽은 것처럼 보인다.
+ */
+export function revealDataFile(): void {
+	if (readRaw(dataFilePath()) === null) {
+		shell.openPath(app.getPath("userData"));
+		return;
+	}
+	shell.showItemInFolder(dataFilePath());
+}
+
+/**
+ * 저장 파일을 그대로 복사해 내보낸다(23번).
+ *
+ * **내보내기 파일 = 저장 파일이다**(2절). 다시 직렬화하지 않고 원문을 옮기므로
+ * 별도 포맷이 생길 자리가 없고, 내보낸 파일을 그대로 가져올 수 있다.
+ *
+ * 여기만 원자적으로 쓰지 않는다 — 원자적 쓰기가 지키는 것은 "덮어쓰다 죽어도 옛
+ * 파일이 남는 것"인데, 내보내기는 덮을 옛 파일이 없고 실패하면 사용자가 다시 누른다.
+ * 대신 사용자가 고른 폴더에 `.tmp` 잔여물을 남기지 않는다.
+ */
+export function exportDataFile(targetPath: string): void {
+	/** 저장 파일 원문. */
+	const raw = readRaw(dataFilePath());
+	if (raw === null) {
+		throw new Error("내보낼 저장 파일이 아직 없습니다");
+	}
+	writeFileSync(targetPath, raw, "utf8");
+}
+
+/** 가져올 파일을 읽어 구조를 판정한다. 판정은 저장 파일과 같은 파서 한 벌이다(2절). */
+export function readImportFile(sourcePath: string): LeaveData {
+	/** 고른 파일의 원문. */
+	const raw = readRaw(sourcePath);
+	if (raw === null) {
+		throw new Error("고른 파일을 찾지 못했습니다");
+	}
+	return parse(raw);
+}
+
+/**
+ * `data.json.bak`을 저장 파일 자리로 되돌린다(23번의 `[백업에서 복구]`).
+ *
+ * **백업을 남기지 않는다.** 이 경로를 타는 시점의 원본은 읽지 못하는 파일이고,
+ * 그것으로 백업을 덮으면 되돌아갈 곳이 사라진다. **읽지 못하던 원본은 이 쓰기로
+ * 사라진다** — 조용히 덮지 않는다는 규칙(사용자 스토리 47)이 막는 것은 앱이 혼자
+ * 덮는 것이고, 여기까지는 사용자가 오류 화면에서 직접 고른 길이다. 원본을 먼저
+ * 챙기고 싶으면 같은 화면의 `[파일 위치 열기]`가 그 경로다.
+ *
+ * 백업 자체가 깨져 있으면 쓰지 않고 던진다. 깨진 백업으로 깨진 원본을 덮으면
+ * 오류 화면만 한 번 더 볼 뿐이다.
+ */
+export function restoreBackupFile(): void {
+	/** 백업 원문. */
+	const raw = readRaw(backupFilePath());
+	if (raw === null) {
+		throw new Error("복구할 백업 파일이 없습니다");
+	}
+	parse(raw);
+	writeFileAtomic(dataFilePath(), raw);
 }
 
 /** 파일 원문을 읽는다. 파일이 없으면 `null`이고 그 밖의 실패는 그대로 던진다. */

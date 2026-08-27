@@ -19,6 +19,11 @@ export {
 } from "./balance.ts";
 export { computeGrants, type Grant, type GrantSource } from "./grants.ts";
 export {
+	type HireDateSplit,
+	type HireDateSplitInput,
+	splitRecordsByHireDate,
+} from "./hire-date-change.ts";
+export {
 	type Adjustment,
 	APP_SCHEMA_VERSION,
 	type LeaveData,

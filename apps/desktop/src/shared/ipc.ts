@@ -16,7 +16,29 @@ export const IPC = {
 	COMMIT: "data:commit",
 	/** 셸이 상태를 다시 낸 것을 렌더러에 밀어준다(커밋·자정·절전 복귀). */
 	STATE_CHANGED: "data:state-changed",
+	/** 저장 파일이 있는 폴더를 OS 파일 관리자에서 연다(23번). */
+	REVEAL_FILE: "data:reveal-file",
+	/** 저장 파일을 그대로 복사해 내보낸다(23번). */
+	EXPORT: "data:export",
+	/** 고른 파일로 전체를 교체한다(23번). */
+	IMPORT: "data:import",
+	/** `data.json.bak`을 되돌린다(23번). */
+	RESTORE_BACKUP: "data:restore-backup",
+	/** 입사일 변경에 따른 기록 삭제(23번). 백업을 남기는 자리 둘 중 하나다. */
+	DROP_BEFORE_HIRE_DATE: "data:drop-before-hire-date",
 } as const;
+
+/**
+ * 내보내기·가져오기의 결과.
+ *
+ * **취소를 실패와 갈라 둔다** — 파일 고르기를 그만두는 것은 흔한 일이고, 실패로
+ * 다루면 아무 잘못 없는 조작에 빨간 문구가 뜬다. 깨진 파일을 고르는 것도 예외가
+ * 아니라 결과의 한 갈래다(2절의 세 갈래를 그대로 문구로 옮긴다).
+ */
+export type TransferResult =
+	| { status: "done"; path: string }
+	| { status: "canceled" }
+	| { status: "failed"; message: string };
 
 /**
  * 저장 파일 읽기 결과(스펙 2절 표).
@@ -58,4 +80,22 @@ export type LeaveDataChange = {
 	entries?: LeaveEntry[];
 	/** 조정 레코드 전체. */
 	adjustments?: Adjustment[];
+};
+
+/**
+ * 입사일 변경에 따른 기록 삭제 한 번(23번).
+ *
+ * **커밋과 통로를 나눈 이유는 백업 때문이다.** 백업은 파괴적 조작 직전에만 남기고
+ * 그 자리는 둘뿐인데(2절), 커밋에 `backup: true` 같은 스위치를 두면 어느 호출자든
+ * 켤 수 있어 규칙을 주석만이 지킨다. 남은 하나(가져오기 교체)도 자기 통로가 따로 있다.
+ *
+ * 세 필드가 전부 필수다 — 남길 것을 함께 보내지 않으면 무엇을 지웠는지가 셸에 없다.
+ */
+export type HireDateDrop = {
+	/** 새 입사일과 기준방식. */
+	settings: Settings;
+	/** 새 입사일 이후라 남길 휴가 기록. */
+	entries: LeaveEntry[];
+	/** 새 입사일 이후라 남길 조정 레코드. */
+	adjustments: Adjustment[];
 };

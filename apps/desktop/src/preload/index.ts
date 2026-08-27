@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppState, LeaveDataChange } from "../shared/ipc";
+import type {
+	AppState,
+	HireDateDrop,
+	LeaveDataChange,
+	TransferResult,
+} from "../shared/ipc";
 import { IPC } from "../shared/ipc";
 
 /** 렌더러에 노출하는 셸 API. 렌더러가 셸에 닿는 통로는 이것뿐이다. */
@@ -23,6 +28,43 @@ const yeonchaApi = {
 	 */
 	commit(change: LeaveDataChange): Promise<AppState> {
 		return ipcRenderer.invoke(IPC.COMMIT, change);
+	},
+
+	/**
+	 * 입사일 변경에 따른 기록 삭제를 커밋한다. **지우기 직전에 백업이 남는다**(2절).
+	 * 커밋과 통로가 다른 이유는 백업을 남기는 자리가 둘뿐이기 때문이다(23번).
+	 */
+	dropRecordsBeforeHireDate(change: HireDateDrop): Promise<AppState> {
+		return ipcRenderer.invoke(IPC.DROP_BEFORE_HIRE_DATE, change);
+	},
+
+	/**
+	 * 저장 파일이 있는 폴더를 OS 파일 관리자에서 연다(23번).
+	 * 저장 경로를 설정값으로 열지 않는 대신 두는 통로이므로 인자가 없다(2절).
+	 */
+	revealDataFile(): Promise<void> {
+		return ipcRenderer.invoke(IPC.REVEAL_FILE);
+	},
+
+	/** 저장 파일을 그대로 복사해 내보낸다. 파일 고르기는 셸의 대화상자가 한다. */
+	exportData(): Promise<TransferResult> {
+		return ipcRenderer.invoke(IPC.EXPORT);
+	},
+
+	/**
+	 * 고른 파일로 전체를 교체한다. 교체 직전에 백업이 남는다.
+	 * "지금 데이터가 대체됩니다"를 먼저 말하는 것은 부르는 화면의 몫이다(23번).
+	 */
+	importData(): Promise<TransferResult> {
+		return ipcRenderer.invoke(IPC.IMPORT);
+	},
+
+	/**
+	 * `data.json.bak`을 되돌린다. 읽기 실패 화면의 `[백업에서 복구]`가 부른다.
+	 * 성공하면 갱신된 상태가 오고, 백업이 없거나 그것마저 깨졌으면 거부된다.
+	 */
+	restoreBackup(): Promise<AppState> {
+		return ipcRenderer.invoke(IPC.RESTORE_BACKUP);
 	},
 
 	/**

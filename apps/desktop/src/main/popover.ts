@@ -23,6 +23,11 @@ let popover: BrowserWindow | null = null;
 let hiddenAt = 0;
 /** 마지막 클릭의 트레이 아이콘 영역. 위치 계산의 기준점이다. */
 let anchorBounds: Rectangle | null = null;
+/**
+ * 열려 있는 네이티브 대화상자의 수. 하나라도 있으면 blur 숨김을 미룬다.
+ * 불리언이면 중첩된 안쪽이 끝날 때 바깥의 붙잡음까지 풀어버린다.
+ */
+let openDialogs = 0;
 
 /** 팝오버 창을 만든다. 숨긴 채로 만들고 트레이 클릭이 열어준다. */
 export function createPopover(): BrowserWindow {
@@ -44,8 +49,11 @@ export function createPopover(): BrowserWindow {
 		},
 	});
 
-	// 포커스를 잃으면 닫힌다 — 팝오버의 정의다.
+	// 포커스를 잃으면 닫힌다 — 팝오버의 정의다. 단 하나의 예외가 대화상자다.
 	popover.on("blur", () => {
+		if (openDialogs > 0) {
+			return;
+		}
 		hidePopover();
 	});
 
@@ -106,6 +114,25 @@ export function showPopover(anchor?: Rectangle): void {
 	}
 	positionPopover(popover);
 	popover.show();
+}
+
+/**
+ * 네이티브 대화상자를 여는 동안 팝오버를 붙잡아 둔다(23번의 내보내기·가져오기).
+ *
+ * 대화상자가 뜨면 팝오버가 blur로 닫히고, 그러면 파일을 고른 뒤 결과를 보여줄
+ * 화면이 사라진다. 대화상자가 닫힌 뒤 포커스를 되돌려 놓는 것까지가 한 벌이다 —
+ * 그러지 않으면 다음 바깥 클릭에 blur가 오지 않아 팝오버가 계속 떠 있는다.
+ */
+export async function withPopoverHeld<T>(run: () => Promise<T>): Promise<T> {
+	openDialogs += 1;
+	try {
+		return await run();
+	} finally {
+		openDialogs -= 1;
+		if (openDialogs === 0 && popover?.isVisible()) {
+			popover.focus();
+		}
+	}
 }
 
 /** 팝오버를 숨기고 숨긴 시각을 기록한다. */

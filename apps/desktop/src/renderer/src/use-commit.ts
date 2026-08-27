@@ -1,10 +1,16 @@
 import { useState } from "react";
-import type { LeaveDataChange } from "../../shared/ipc";
+import type { AppState, HireDateDrop, LeaveDataChange } from "../../shared/ipc";
+import { failureReason } from "./failure-reason";
 
 /** 커밋 한 번을 감싼 결과. */
 type Commit = {
 	/** 변경을 커밋한다. 성공 여부를 돌려준다. */
 	commit: (change: LeaveDataChange) => Promise<boolean>;
+	/**
+	 * 입사일 변경에 따른 기록 삭제를 커밋한다. 성공 여부를 돌려준다.
+	 * 백업이 남는 조작이라 통로가 따로 있다(23번).
+	 */
+	dropBeforeHireDate: (change: HireDateDrop) => Promise<boolean>;
 	/** 커밋이 오가는 중인가. 같은 저장을 두 번 보내지 않게 막는다. */
 	saving: boolean;
 	/** 마지막 실패 문구. 성공하면 비워진다. */
@@ -26,11 +32,11 @@ export function useCommit(): Commit {
 	/** 저장 실패 문구. */
 	const [error, setError] = useState<string | null>(null);
 
-	/** 커밋 실행. */
-	const commit = async (change: LeaveDataChange): Promise<boolean> => {
+	/** 셸 호출 한 번. 잠금과 실패 문구가 통로마다 갈라지지 않게 여기 하나로 모은다. */
+	const send = async (call: () => Promise<AppState>): Promise<boolean> => {
 		setSaving(true);
 		try {
-			await window.yeoncha.commit(change);
+			await call();
 			setError(null);
 			return true;
 		} catch (cause) {
@@ -42,22 +48,12 @@ export function useCommit(): Commit {
 		}
 	};
 
-	return { commit, saving, error, clearError: () => setError(null) };
-}
-
-/**
- * 커밋 거부 사유에서 화면에 옮길 한 줄을 뽑는다.
- *
- * `invoke`의 reject는 메인의 오류 문구를 그대로 실어 오지만 Electron이 채널 안내를
- * 앞에 붙인다. 사용자에게 뜻이 없는 그 접두만 걷어낸다.
- */
-function failureReason(cause: unknown): string {
-	/** 원본 오류 문구. */
-	const message = cause instanceof Error ? cause.message : String(cause);
-	return (
-		message
-			.replace(/^Error invoking remote method '[^']*':\s*/, "")
-			.replace(/^Error:\s*/, "")
-			.trim() || "알 수 없는 오류"
-	);
+	return {
+		commit: (change) => send(() => window.yeoncha.commit(change)),
+		dropBeforeHireDate: (change) =>
+			send(() => window.yeoncha.dropRecordsBeforeHireDate(change)),
+		saving,
+		error,
+		clearError: () => setError(null),
+	};
 }

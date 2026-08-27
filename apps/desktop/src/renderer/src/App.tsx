@@ -1,6 +1,7 @@
 import type { Balance } from "@yeoncha/core";
 import { useEffect, useRef, useState } from "react";
 import { SettingsTab } from "./SettingsTab";
+import { UnreadableScreen } from "./UnreadableScreen";
 import { useAppState } from "./use-app-state";
 
 /** 팝오버의 탭 셋(5절). 배열 순서가 곧 탭 막대의 순서다. */
@@ -54,12 +55,6 @@ export function App() {
 	 * 연다(4.4절) — 셸이 탭을 지정해 보내지 않아도 상태 하나로 정해진다.
 	 */
 	const onboarding = state !== null && state.settings === null;
-	/**
-	 * 저장 파일을 읽지 못했는가. 온보딩과 뭉뚱그리면 화면이 거짓말을 한다 — 입사일은
-	 * 있는데 파일이 깨진 것이므로 `입사일을 넣으면…`이 사실이 아니다. 팝오버 전체를
-	 * 차지하는 오류 화면과 복구 버튼 둘은 5.5절대로 23번이 만든다.
-	 */
-	const unreadable = state?.read.status === "error";
 	/** 실제로 그릴 탭. */
 	const tab: TabKey = onboarding ? "settings" : selectedTab;
 
@@ -74,52 +69,62 @@ export function App() {
 		[onboarding],
 	);
 
+	// 높이를 재는 뿌리 요소는 하나로 둔다 — 화면을 갈아끼울 때 이 요소까지 바뀌면
+	// 마운트 때 건 ResizeObserver가 떨어져 나간 노드를 계속 보게 된다.
 	return (
 		<div ref={rootRef}>
-			{state && (
-				<>
-					{/* 온보딩에는 헤더를 두지 않는다 — 잔여 자리에 들어갈 대시는 방금 눌러
+			{/*
+			 * 저장 파일을 읽지 못했나요? **탭 구조 자체를 그리지 않는다**(5.5절).
+			 * 온보딩과 뭉뚱그리면 화면이 거짓말을 한다 — 입사일은 있는데 파일이 깨진
+			 * 것이라 `입사일을 넣으면…`이 사실이 아니고, 탭을 띄우면 쓸 수 없는 입력이
+			 * 열린다.
+			 */}
+			{state?.read.status === "error" ? (
+				<UnreadableScreen kind={state.read.kind} />
+			) : (
+				state && (
+					<>
+						{/* 온보딩에는 헤더를 두지 않는다 — 잔여 자리에 들어갈 대시는 방금 눌러
 					    들어온 트레이 글리프와 같은 것이고(6절), 이 화면이 말할 것은 한 줄뿐이다. */}
-					{!onboarding && (
-						<div className="head">
-							<span>잔여</span>
-							<b className="num">{formatBalance(state.balance)}</b>
-						</div>
-					)}
-					<div className="tabs" role="tablist">
-						{TABS.map(({ key, label }) => (
-							<button
-								key={key}
-								type="button"
-								role="tab"
-								aria-selected={tab === key}
-								disabled={onboarding && key !== "settings"}
-								onClick={() => setSelectedTab(key)}
-							>
-								{label}
-							</button>
-						))}
-					</div>
-					{onboarding &&
-						(unreadable ? (
-							<p className="error">저장 파일을 읽지 못했습니다.</p>
-						) : (
-							<p className="onboarding">입사일을 넣으면 연차를 계산합니다.</p>
-						))}
-					{/* 요약(24번)과 이력(26번)의 내용은 뒤 티켓이다 — 여기는 탭 전환까지다. */}
-					<div role="tabpanel">
-						{tab === "summary" && <PendingPane />}
-						{tab === "history" && <PendingPane />}
-						{tab === "settings" && (
-							<SettingsTab
-								settings={state.settings}
-								adjustments={state.adjustments}
-								grants={state.balance?.grants ?? []}
-								today={state.today}
-							/>
+						{!onboarding && (
+							<div className="head">
+								<span>잔여</span>
+								<b className="num">{formatBalance(state.balance)}</b>
+							</div>
 						)}
-					</div>
-				</>
+						<div className="tabs" role="tablist">
+							{TABS.map(({ key, label }) => (
+								<button
+									key={key}
+									type="button"
+									role="tab"
+									aria-selected={tab === key}
+									disabled={onboarding && key !== "settings"}
+									onClick={() => setSelectedTab(key)}
+								>
+									{label}
+								</button>
+							))}
+						</div>
+						{onboarding && (
+							<p className="onboarding">입사일을 넣으면 연차를 계산합니다.</p>
+						)}
+						{/* 요약(24번)과 이력(26번)의 내용은 뒤 티켓이다 — 여기는 탭 전환까지다. */}
+						<div role="tabpanel">
+							{tab === "summary" && <PendingPane />}
+							{tab === "history" && <PendingPane />}
+							{tab === "settings" && (
+								<SettingsTab
+									settings={state.settings}
+									entries={state.entries}
+									adjustments={state.adjustments}
+									grants={state.balance?.grants ?? []}
+									today={state.today}
+								/>
+							)}
+						</div>
+					</>
+				)
 			)}
 		</div>
 	);
