@@ -481,6 +481,43 @@ button.link:hover:not(:disabled) {
 	color: var(--on-accent);
 }
 
+/* 이력 달력의 장식(26번) — 숫자 아래의 점(예정 파랑 / 사용 회색)과 소멸 빨간 밑줄. */
+.cal-day {
+	position: relative;
+}
+.cal-day.cal-dot-planned::after,
+.cal-day.cal-dot-used::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 4px;
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	transform: translateX(-50%);
+}
+.cal-day.cal-dot-planned::after {
+	background: var(--accent);
+}
+.cal-day.cal-dot-used::after {
+	background: var(--fg-2);
+}
+/* 고른 칸에서는 파란 배경에 묻히지 않게 점이 흰색이 된다. */
+.cal-day.cal-selected::after {
+	background: var(--on-accent);
+}
+.cal-day.cal-expired::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	width: 16px;
+	height: 2px;
+	border-radius: 1px;
+	transform: translateX(-50%);
+	background: var(--danger);
+}
+
 /* 단위 선택 — 종일/반차/반반차가 한 몸으로 붙은 segmented control이다. */
 .seg {
 	display: flex;
@@ -495,4 +532,132 @@ button.link:hover:not(:disabled) {
 .seg button[aria-pressed="true"] {
 	background: var(--accent);
 	color: var(--on-accent);
+}
+
+/* ── 이력(26번) ───────────────────────────────────────────── */
+
+/* 뷰 전환 한 줄. 세그먼트가 탭처럼 화면을 다 먹지 않게 폭을 잡아둔다. */
+.hist-head {
+	display: flex;
+	padding: 4px 12px 6px;
+}
+.hist-views {
+	flex: none;
+	width: 148px;
+}
+
+/* 이력 리스트만 스크롤한다(5.3절) — 팝오버 높이가 내용을 따르므로 여기서만 자른다. */
+.hist-scroll {
+	max-height: 356px;
+	overflow-y: auto;
+}
+
+/* 연차 연도 섹션 머리 — 접기·펼치기 한 줄. 행과 같은 리듬으로 세운다. */
+button.hist-year {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	min-height: 25px;
+	padding: 4px 12px;
+	border: none;
+	border-radius: 0;
+	background: none;
+	text-align: left;
+}
+button.hist-year:hover:not(:disabled) {
+	background: var(--hover);
+}
+.hist-chevron {
+	width: 10px;
+	flex: none;
+	color: var(--fg-2);
+	font-size: 10px;
+}
+
+/* 기록 행 — 수정·삭제는 올렸을 때만 보인다. 자리는 항상 잡아둬 행이 흔들리지 않는다. */
+.hist-row .hist-actions {
+	display: flex;
+	gap: 2px;
+	margin-left: auto;
+	visibility: hidden;
+}
+.hist-row:hover {
+	background: var(--hover);
+}
+.hist-row:hover .hist-actions {
+	visibility: visible;
+}
+.hist-note {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11.5px;
+}
+
+/* 파란 예정 태그(5.3절). 색은 강조색 하나에서만 나온다. */
+.tag-planned {
+	flex: none;
+	padding: 0 5px;
+	border-radius: 4px;
+	font-size: 10.5px;
+	font-weight: 600;
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* 그 자리 수정 폼 — 행 하나가 폼이 된다. 카드를 겹치지 않고 배경 한 톤으로만 가른다. */
+.hist-edit {
+	padding: 4px 12px 6px;
+	background: var(--fill);
+}
+.hist-edit-fields {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.hist-edit-fields input {
+	flex: none;
+	width: 132px;
+}
+.hist-edit .error {
+	padding-left: 0;
+	padding-right: 0;
+}
+.hist-edit-cta {
+	display: flex;
+	justify-content: flex-end;
+	gap: 2px;
+	padding-top: 4px;
+}
+
+/* 소멸 섹션의 날짜 열 — 문구 오른쪽 끝에 흐리게 선다. */
+.hist-loss-date {
+	margin-left: auto;
+}
+
+/* 달력에서 누른 그날 — 격자와 hairline으로만 갈라둔다. */
+.hist-day {
+	margin-top: 6px;
+	border-top: 1px solid var(--line);
+	padding-bottom: 2px;
+}
+.hist-day .sec-title {
+	margin-top: 6px;
+}
+.hist-day-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+}
+.hist-day-units {
+	flex: none;
+	width: 108px;
+}
+.hist-day-units button {
+	padding: 1px 0;
+	font-size: 11.5px;
 }

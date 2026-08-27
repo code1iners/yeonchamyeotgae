@@ -1,4 +1,5 @@
 import type { Grant, GrantSource } from "./grants.ts";
+import { compareDate } from "./iso-date.ts";
 import type { LeaveEntry } from "./storage.ts";
 
 /**
@@ -329,8 +330,16 @@ export function latestLivingExpiry({
 	return latest;
 }
 
-/** 그 발생분이 대상일에 유효한가 — `발생일 <= 대상일 <= 소멸일`(스펙 3.3절). */
-function isValidOn(grant: Grant, date: string): boolean {
+/**
+ * 그 발생분이 대상일에 유효한가 — `발생일 <= 대상일 <= 소멸일`(스펙 3.3절).
+ *
+ * 3.3절 규칙의 유일한 구현이다. 이력의 연차 연도 파생(history.ts)도 이것을 쓴다 —
+ * 같은 규칙을 두 모듈이 각자 들면 한쪽만 고쳐지는 날이 온다.
+ */
+export function isValidOn(
+	grant: Pick<Grant, "grantDate" | "expiryDate">,
+	date: string,
+): boolean {
 	return (
 		compareDate(grant.grantDate, date) <= 0 &&
 		compareDate(date, grant.expiryDate) <= 0
@@ -413,12 +422,4 @@ function excessExpiryOn(grants: Grant[], date: string): string | null {
 	}
 
 	return latest ?? nextExpiry;
-}
-
-/** YYYY-MM-DD 두 개의 시간순 비교. 길이가 같은 ISO 날짜라 사전순이 곧 시간순이다. */
-function compareDate(a: string, b: string): number {
-	if (a < b) {
-		return -1;
-	}
-	return a > b ? 1 : 0;
 }

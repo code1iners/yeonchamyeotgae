@@ -2,6 +2,7 @@ import type { LeaveEntry } from "@yeoncha/core";
 import { useState } from "react";
 import { CalendarGrid } from "./CalendarGrid";
 import { expandEntryDates } from "./entry-dates";
+import { UNITS } from "./units";
 import { useCommit } from "./use-commit";
 
 type Props = {
@@ -23,13 +24,6 @@ type Step =
 	| { kind: "pick-start" }
 	| { kind: "pick-end"; start: string }
 	| { kind: "detail"; start: string; end: string | null };
-
-/** 단위 선택지(스펙 3.9절). 열거형이 아니라 소수 일수로 저장한다. */
-const UNITS = [
-	{ label: "종일", days: 1 },
-	{ label: "반차", days: 0.5 },
-	{ label: "반반차", days: 0.25 },
-] as const;
 
 /**
  * 휴가 등록 시트 — 팝오버를 덮는 모드 전환이다(스펙 5.2절). 하루가 3클릭, 기간이

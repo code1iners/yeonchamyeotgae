@@ -10,6 +10,10 @@ export type DayDecoration = {
 	disabled?: boolean;
 	/** 고른 날로 표시한다. 종료일을 고르는 동안의 시작일이 여기로 온다. */
 	selected?: boolean;
+	/** 숫자 아래의 점 — 그날 휴가 기록이 예정(파랑)인지 사용(회색)인지(5.3절). */
+	dot?: "planned" | "used";
+	/** 숫자 아래의 빨간 밑줄 — 그날 미사용분이 소멸했다(5.7절). */
+	expired?: boolean;
 };
 
 type Props = {
@@ -89,6 +93,8 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 								"cal-day num",
 								date === today ? "cal-today" : "",
 								mark?.selected ? "cal-selected" : "",
+								mark?.dot ? `cal-dot-${mark.dot}` : "",
+								mark?.expired ? "cal-expired" : "",
 							].join(" ")}
 							disabled={mark?.disabled}
 							onClick={() => onPick(date)}

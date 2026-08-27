@@ -1,5 +1,6 @@
 import type { Balance } from "@yeoncha/core";
 import { useEffect, useRef, useState } from "react";
+import { HistoryTab } from "./HistoryTab";
 import { LeaveEntrySheet } from "./LeaveEntrySheet";
 import { SettingsTab } from "./SettingsTab";
 import { SummaryTab } from "./SummaryTab";
@@ -145,7 +146,6 @@ export function App() {
 						{onboarding && (
 							<p className="onboarding">입사일을 넣으면 연차를 계산합니다.</p>
 						)}
-						{/* 이력(26번)의 내용은 뒤 티켓이다. */}
 						<div role="tabpanel">
 							{tab === "summary" && state.balance && (
 								<SummaryTab
@@ -157,7 +157,14 @@ export function App() {
 									onAddEntry={() => setEntryOpen(true)}
 								/>
 							)}
-							{tab === "history" && <PendingPane />}
+							{tab === "history" && state.balance && (
+								<HistoryTab
+									entries={state.entries}
+									balance={state.balance}
+									adjustments={state.adjustments}
+									today={state.today}
+								/>
+							)}
 							{tab === "settings" && (
 								<SettingsTab
 									settings={state.settings}
@@ -185,13 +192,4 @@ export function App() {
  */
 function formatBalance(balance: Balance | null): string {
 	return balance ? `${balance.balance}일` : "—";
-}
-
-/** 아직 내용이 없는 탭. 탭 전환과 높이 변화를 확인할 수 있을 만큼만 그린다. */
-function PendingPane() {
-	return (
-		<div className="pane">
-			<div className="row dim">이 탭은 아직 비어 있습니다.</div>
-		</div>
-	);
 }

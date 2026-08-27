@@ -1,5 +1,13 @@
 import { Temporal } from "temporal-polyfill";
 
+/** YYYY-MM-DD 두 개의 시간순 비교. 길이가 같은 ISO 날짜라 사전순이 곧 시간순이다. */
+export function compareDate(a: string, b: string): number {
+	if (a < b) {
+		return -1;
+	}
+	return a > b ? 1 : 0;
+}
+
 /**
  * `YYYY-MM-DD` 형식이면서 실재하는 날짜인가. `Temporal.PlainDate`와 1:1인 것만 통과한다.
  *

@@ -24,6 +24,13 @@ export {
 	splitRecordsByHireDate,
 } from "./hire-date-change.ts";
 export {
+	type ExpiryLoss,
+	expiryLosses,
+	groupHistory,
+	type HistorySections,
+	type LeaveYearSection,
+} from "./history.ts";
+export {
 	type Adjustment,
 	APP_SCHEMA_VERSION,
 	type LeaveData,
