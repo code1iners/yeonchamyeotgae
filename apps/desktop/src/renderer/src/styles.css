@@ -305,3 +305,105 @@ button.mini:hover:not(:disabled) {
 	padding-left: 0;
 	padding-right: 0;
 }
+
+/* ── 요약(24번) ───────────────────────────────────────────── */
+
+/* 경고색 한 겹. `.dim`과 같은 자리의 유틸이며 헤더 숫자·원인 한 줄·배지가 함께 쓴다. */
+.warn {
+	color: var(--danger);
+}
+
+/*
+ * 초과의 원인 한 줄과 조치 링크. 원인 표시와 조치가 한 동선이어야 해서 둘이 붙어 있다(5.1절).
+ * 확인 블록(.confirm)과 층위가 달라 배경을 깔지 않는다 — 여기서 고를 것은 없다.
+ */
+.alert {
+	padding: 4px 12px 2px;
+}
+.alert p {
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
+/* 본문 안에 놓는 조치 링크. 버튼 모양을 벗겨 문장 다음 줄에 그대로 붙인다. */
+button.link {
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--accent);
+	font-size: 11.5px;
+	text-decoration: underline;
+}
+button.link:hover:not(:disabled) {
+	background: none;
+	filter: brightness(1.15);
+}
+
+/*
+ * 4줄 표 — 라벨 · 숫자 · 설명. 숫자 열의 폭을 고정해 발생부터 잔여까지 자릿수가
+ * 한 줄에 서고, 그래야 검산이 눈으로 된다(5.1절).
+ */
+.row.sum {
+	min-height: 22px;
+	padding-top: 1px;
+	padding-bottom: 1px;
+}
+.sum-label {
+	width: 30px;
+	flex: none;
+	color: var(--fg-2);
+}
+.row.sum b {
+	width: 46px;
+	flex: none;
+	text-align: right;
+	font-weight: 600;
+}
+.sum-note {
+	font-size: 11.5px;
+}
+
+/* 잔여 위의 hairline — 위의 항들을 더하고 빼면 이 줄이 나온다는 표시다. */
+.row.sum-total {
+	margin-top: 3px;
+	padding-top: 4px;
+	border-top: 1px solid var(--line);
+}
+
+/* 표와 리스트 사이의 각주. 4줄에 담기지 않는 사실 하나가 여기 산다. */
+.footnote {
+	margin: 4px 0 0;
+	padding: 0 12px;
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
+/* 살아 있는 발생분 한 줄 — 출처 · 남은 양/총량 · 소멸일. */
+.grant {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 3px 12px;
+	min-height: 21px;
+}
+.grant:hover {
+	background: var(--hover);
+}
+.grant-amount {
+	margin-left: auto;
+	font-weight: 600;
+}
+/* 소멸 임박 배지. 소멸을 알아채는 두 경로 중 하나다(5.7절). */
+.badge {
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+/* 소멸일 열 — 날짜와 배지가 같은 자리에서 갈리므로 폭이 같다. */
+.grant-expiry,
+.grant .badge {
+	width: 84px;
+	flex: none;
+	text-align: right;
+}

@@ -15,6 +15,8 @@ type Props = {
 	grants: GrantDetail[];
 	/** 조회일. 발생일 기본값이자 소멸 여부를 가르는 날이다. */
 	today: string;
+	/** 추가 폼을 연 채로 시작하는가. 요약 탭의 `조정을 추가`로 들어온 경로다(5.1절). */
+	openOnMount: boolean;
 };
 
 /** 빈 초안 — 폼을 닫아둔 동안의 값이다. */
@@ -32,11 +34,18 @@ const EMPTY_DRAFT: AdjustmentDraft = {
  * **계산이 만든 발생 레코드(월차·연차)는 이 화면에 나오지 않는다** — 조정은 덮어쓰기가
  * 아니라 덧붙이기이므로 고칠 대상 자체가 없다(3.7절).
  */
-export function AdjustmentsSection({ adjustments, grants, today }: Props) {
+export function AdjustmentsSection({
+	adjustments,
+	grants,
+	today,
+	openOnMount,
+}: Props) {
 	/** 폼에 들어 있는 값. 폼이 닫혀 있으면 빈 초안이다. */
-	const [draft, setDraft] = useState<AdjustmentDraft>(EMPTY_DRAFT);
+	const [draft, setDraft] = useState<AdjustmentDraft>(() =>
+		openOnMount ? addDraft({ grants, today }) : EMPTY_DRAFT,
+	);
 	/** 폼이 열려 있는가. */
-	const [open, setOpen] = useState(false);
+	const [open, setOpen] = useState(openOnMount);
 	/** 수정 중인 레코드의 `id`. `null`이면 추가다. */
 	const [editingId, setEditingId] = useState<string | null>(null);
 	/** 마지막 검증에서 걸린 것들. */
@@ -44,14 +53,9 @@ export function AdjustmentsSection({ adjustments, grants, today }: Props) {
 	/** 셸에 변경을 커밋하는 통로 — 진행 중 잠금과 실패 문구가 함께 온다. */
 	const { commit, saving, error, clearError } = useCommit();
 
-	/** 추가 폼 열기 핸들러. 네 필드 중 발생일과 소멸일이 기본값으로 채워진다(3.7절). */
+	/** 추가 폼 열기 핸들러. */
 	const handleOpenAdd = () => {
-		setDraft({
-			...EMPTY_DRAFT,
-			grantDate: today,
-			// 살아 있는 발생분이 없으면 비워둔다 — 규칙이 소멸일을 지어내면 조용히 틀린다.
-			expiryDate: latestLivingExpiry({ grants, today }) ?? "",
-		});
+		setDraft(addDraft({ grants, today }));
 		setEditingId(null);
 		setIssues([]);
 		setOpen(true);
@@ -237,6 +241,19 @@ export function AdjustmentsSection({ adjustments, grants, today }: Props) {
 			)}
 		</>
 	);
+}
+
+/** 추가 폼의 초안 — 네 필드 중 발생일과 소멸일이 기본값으로 채워진다(스펙 3.7절). */
+function addDraft({
+	grants,
+	today,
+}: Pick<Props, "grants" | "today">): AdjustmentDraft {
+	return {
+		...EMPTY_DRAFT,
+		grantDate: today,
+		// 살아 있는 발생분이 없으면 비워둔다 — 규칙이 소멸일을 지어내면 조용히 틀린다.
+		expiryDate: latestLivingExpiry({ grants, today }) ?? "",
+	};
 }
 
 /** 그 필드가 이번 검증에 걸렸는가. */

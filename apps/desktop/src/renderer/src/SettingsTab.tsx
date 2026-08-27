@@ -22,6 +22,8 @@ type Props = {
 	grants: GrantDetail[];
 	/** 조회일. */
 	today: string;
+	/** 조정 폼을 연 채로 그릴 것인가. 요약 탭의 `조정을 추가`로 들어온 경로다(5.1절). */
+	openAdjustment: boolean;
 };
 
 /** 기준방식 선택지(CONTEXT.md) — 코어의 `grantBasis` 값과 화면 문구를 잇는다. */
@@ -49,6 +51,7 @@ export function SettingsTab({
 	adjustments,
 	grants,
 	today,
+	openAdjustment,
 }: Props) {
 	/** 입력 중인 입사일. 저장하기 전까지는 파일에 없다. */
 	const [hireDate, setHireDate] = useState(settings?.hireDate ?? "");
@@ -204,7 +207,13 @@ export function SettingsTab({
 				</div>
 			)}
 			{settings && (
+				/*
+				 * 설정 탭은 탭을 옮길 때마다 통째로 다시 서므로 열림이 마운트 시점의 초기
+				 * 상태로 정해진다(5.1절). 효과로 여는 것보다 이쪽이 맞다 — 나중에 맞춰야
+				 * 할 값이 아니다.
+				 */
 				<AdjustmentsSection
+					openOnMount={openAdjustment}
 					adjustments={adjustments}
 					grants={grants}
 					today={today}

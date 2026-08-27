@@ -1,83 +1,14 @@
-import { Temporal } from "temporal-polyfill";
 import { describe, expect, test } from "vitest";
-import { allocate, computeBalance, latestLivingExpiry } from "./balance.ts";
-import { computeGrants, type Grant } from "./grants.ts";
-import type { Adjustment, LeaveEntry, Settings } from "./storage.ts";
-
-/** 검증 케이스 한 건의 입력 — 스펙 Testing Decisions의 표 한 줄에 그대로 대응한다. */
-type Scenario = {
-	/** 입사일. */
-	hireDate: string;
-	/** 기준방식. */
-	grantBasis: Settings["grantBasis"];
-	/** 휴가 이력. */
-	entries?: LeaveEntry[];
-	/** 조정 레코드. */
-	adjustments?: Adjustment[];
-	/** 조회일. */
-	today: string;
-};
-
-/** 조회일만 빼둔 시나리오 — 같은 데이터를 여러 조회일로 훑는 케이스가 이것을 편다. */
-type Snapshot = Omit<Scenario, "today">;
-
-/** 시나리오에서 발생 목록을 거쳐 잔여까지 한 번에 낸다(계산 seam 전체). */
-function balanceOf({
-	hireDate,
-	grantBasis,
-	entries = [],
-	adjustments = [],
-	today,
-}: Scenario) {
-	/** 설정. */
-	const settings: Settings = { hireDate, grantBasis };
-	/** 조회일 기준 발생 레코드. */
-	const grants = computeGrants({ settings, entries, adjustments, today });
-	return computeBalance({ grants, entries, today });
-}
-
-/** 연속한 날짜의 휴가 기록 — 하루 1건 불변식대로 하루씩 끊어 만든다. */
-function entriesFrom(start: string, count: number, days = 1): LeaveEntry[] {
-	/** 만들어진 기록. */
-	const entries: LeaveEntry[] = [];
-	/** 시작일을 하루씩 밀며 쓰는 커서. */
-	let date = start;
-	for (let n = 0; n < count; n += 1) {
-		entries.push({ id: `entry-${date}`, date, days, note: "" });
-		date = nextDate(date);
-	}
-	return entries;
-}
-
-/** YYYY-MM-DD의 다음 날. 테스트 데이터를 만드는 데만 쓴다. */
-function nextDate(date: string): string {
-	return Temporal.PlainDate.from(date).add({ days: 1 }).toString();
-}
-
-/** 조정 레코드 1건. */
-function adjustmentOf(
-	grantDate: string,
-	expiryDate: string,
-	days: number,
-): Adjustment {
-	return {
-		id: `adjustment-${grantDate}-${days}`,
-		grantDate,
-		expiryDate,
-		days,
-		note: "",
-	};
-}
-
-/** 발생 레코드 1건 — allocate만 단독으로 볼 때 쓴다. */
-function grantOf(
-	grantDate: string,
-	expiryDate: string,
-	days: number,
-	source: Grant["source"] = "annual",
-): Grant {
-	return { grantDate, source, days, expiryDate };
-}
+import { allocate, latestLivingExpiry } from "./balance.ts";
+import type { LeaveEntry } from "./storage.ts";
+import {
+	adjustmentOf,
+	balanceOf,
+	entriesFrom,
+	grantOf,
+	type Scenario,
+	type Snapshot,
+} from "./test-scenarios.ts";
 
 describe("검증 케이스 1부 — 기본 (2024-01-01 입사, 입사일 기준, 휴가 기록 없음)", () => {
 	/** 1부 공통 시나리오 — 조회일만 바뀐다. */
@@ -493,6 +424,7 @@ describe("computeBalance — 내역과 4줄 표 (스펙 1절·5.1절)", () => {
 			remaining: 13,
 			expiryDate: "2025-12-31",
 			expired: false,
+			living: true,
 		});
 	});
 
@@ -659,5 +591,62 @@ describe("latestLivingExpiry — 소멸일 기본값 (스펙 3.7절)", () => {
 			}),
 		).toBeNull();
 		expect(latestLivingExpiry({ grants: [], today: "2026-01-05" })).toBeNull();
+	});
+});
+
+/*
+ * 요약 탭 4줄 표(5.1절)가 검산되는가 — `발생 − 사용 − 예정 − 초과 = 잔여`.
+ *
+ * `예정`에 **배정된 몫만** 들어가는 것이 이 항등식의 전제다(24번). 등록 총량을 쓰면
+ * 미래 발생분에서 나가는 예정이 있는 순간 좌변이 어긋나고, 그때 4줄은 대조표가 아니라
+ * 그냥 숫자 넷이 된다. 각주가 그 차이를 말하는 몫이다.
+ */
+describe("요약 4줄의 검산 (스펙 5.1절)", () => {
+	test.each([
+		[
+			"케이스 J — 미래 발생분에서 나가는 예정이 있어도 어긋나지 않는다",
+			{
+				hireDate: "2024-01-01",
+				grantBasis: "hireDate",
+				entries: [
+					...entriesFrom("2025-05-01", 10),
+					...entriesFrom("2026-02-10", 3),
+				],
+				today: "2025-12-01",
+			},
+		],
+		[
+			"케이스 K — 초과가 있으면 초과 행까지 넣어야 맞는다",
+			{
+				hireDate: "2024-01-01",
+				grantBasis: "hireDate",
+				entries: entriesFrom("2025-03-03", 18),
+				today: "2025-06-01",
+			},
+		],
+		[
+			"케이스 L — 음수가 아닌 조정이 섞여도 맞는다",
+			{
+				hireDate: "2024-01-01",
+				grantBasis: "hireDate",
+				entries: entriesFrom("2025-03-03", 18),
+				adjustments: [adjustmentOf("2025-01-01", "2025-12-31", 5)],
+				today: "2025-11-05",
+			},
+		],
+		[
+			"음수 조정도 발생 항으로 들어가 그대로 검산된다",
+			{
+				hireDate: "2024-01-01",
+				grantBasis: "hireDate",
+				entries: entriesFrom("2025-03-03", 5),
+				adjustments: [adjustmentOf("2025-01-01", "2025-12-31", -3)],
+				today: "2025-11-05",
+			},
+		],
+	] as [string, Scenario][])("%s", (_name, scenario) => {
+		const { granted, used, planned, excess, balance } = balanceOf(scenario);
+
+		expect(granted - used - planned - excess).toBe(balance);
 	});
 });

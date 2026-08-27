@@ -34,4 +34,5 @@ export {
 	type Settings,
 	serialize,
 } from "./storage.ts";
+export { type LivingGrant, livingGrants } from "./summary.ts";
 export { formatTrayLabel } from "./tray-label.ts";

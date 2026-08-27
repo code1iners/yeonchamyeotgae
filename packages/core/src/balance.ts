@@ -64,6 +64,14 @@ export type GrantDetail = {
 	expiryDate: string;
 	/** 소멸 여부 — 조회일이 소멸일을 지났는가. */
 	expired: boolean;
+	/**
+	 * 살아 있는가 — `발생일 <= 조회일 <= 소멸일`(3.3절).
+	 *
+	 * **소멸하지 않은 것과 다르다.** 아직 오지 않은 발생분도 `expired`는 거짓이므로,
+	 * 소멸 여부만 보면 내년 발생분이 올해 리스트에 섞여 든다(케이스 J). 요약 탭의
+	 * 발생분 리스트가 이 값으로 걸러진다(5.1절).
+	 */
+	living: boolean;
 };
 
 /** 조회일 기준 잔여와 내역(스펙 3.5절·5.1절). */
@@ -256,6 +264,7 @@ export function computeBalance({
 			remaining,
 			expiryDate: grant.expiryDate,
 			expired: compareDate(today, grant.expiryDate) > 0,
+			living: valid,
 		};
 	});
 
