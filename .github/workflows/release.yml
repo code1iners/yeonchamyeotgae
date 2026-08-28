@@ -1,0 +1,102 @@
+# v* 태그 푸시에서 양 OS 바이너리를 패키징해 하나의 GitHub Release로 올린다.
+#
+# 릴리스를 쓰는 잡은 release 하나다 — electron-builder 내장 publish로 되돌리면 깨진다(스펙 8.2절).
+# electron-publish의 getOrCreateRelease()는 draft가 없으면 createRelease()를 부르는데,
+# createRelease()에는 422 already_exists 재시도가 없다(422 처리는 에셋 업로드 경로에만 있다).
+# macOS 잡과 Windows 잡은 거의 동시에 시작하므로 둘 다 "draft 없음"을 보고 둘 다 생성을
+# 시도할 수 있고, 한쪽이 그냥 실패한다 — 실패가 확률적이라 더 나쁘다. 쓰는 잡이 하나면
+# 이 경쟁 조건은 존재하지 않는다. 방어가 아니라 제거다.
+#
+# 코드 서명을 나중에 켤 때의 4단계(스펙 8.4절):
+#   1. electron-builder.yml에서 mac.identity: null을 지운다. ← 가장 중요하다. 지우지 않으면
+#      CSC_LINK를 넣어도 그 앞에서 반환해 조용히 서명되지 않는다.
+#   2. mac.hardenedRuntime: true로 되돌린다(공증의 전제다).
+#   3. mac.notarize: true를 켠다.
+#   4. 리포지토리 시크릿을 넣고 build 잡의 env:에 연결한다 —
+#      CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
+#   빈 시크릿을 미리 env:에 꽂아두지 않는다 — 존재하지 않는 시크릿은 빈 문자열로 렌더되고
+#   electron-builder가 빈 CSC_LINK를 미설정으로 취급하는지 확인되지 않았다(스펙 8.4절).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# 쓰기 권한은 release 잡에만 준다. 워크플로 수준을 read로 박아두면
+# build 잡은 리포지토리 설정과 무관하게 읽기만 갖는다(스펙 8.2절).
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      # 한쪽이 깨져도 다른 쪽은 끝까지 돌린다 — 재태깅 전에 고칠 것이
+      # 몇 개인지 한 번에 보기 위해서다(ci.yml과 같은 이유).
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        # 릴리스 자산은 dmg·exe 정확히 둘이다 — blockmap 등 부산물은 올리지 않는다(스펙 8.3절).
+        include:
+          - os: macos-latest
+            asset: '*.dmg'
+          - os: windows-latest
+            asset: '*.exe'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      # version 입력은 적지 않는다 — 루트 package.json의 packageManager 핀과 병존하면
+      # pnpm/setup@v2가 "Multiple versions of pnpm specified"로 실패한다(ci.yml 실측).
+      - uses: pnpm/setup@v2
+        with: { runtime: node@24, cache: true, install: false }
+      - run: pnpm install --frozen-lockfile
+      # 검증을 패키징보다 앞세워 별도 스텝으로 둔다 — CI 로그에서 "검증에서 깨졌다"와
+      # "패키징에서 깨졌다"가 스텝 이름으로 갈린다(스펙 8.2절).
+      - name: 검증
+        run: pnpm verify
+      # --publish never를 명시한다 — 암묵적 publish는 v27에서 제거 예정이라
+      # 자동 감지에 기대면 업그레이드 때 조용히 깨진다(스펙 8.2절).
+      # apps/desktop에서 실행해야 electron-builder가 그 package.json을 메타데이터로 읽는다(스펙 8.3절).
+      - name: 패키징
+        working-directory: apps/desktop
+        run: pnpm build && pnpm exec electron-builder --publish never
+      # 아티팩트 이름은 매트릭스마다 다르게 — v4부터 아티팩트가 불변이라 같은 이름
+      # 재업로드가 실패한다. overwrite는 잡 재실행(새 attempt)이 이전 attempt의
+      # 아티팩트에 걸려 죽는 것을 풀어 재실행을 멱등하게 만든다.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.os }}
+          path: apps/desktop/release/${{ matrix.asset }}
+          if-no-files-found: error
+          overwrite: true
+
+  release:
+    needs: build
+    # 파일을 옮겨 붙일 뿐이라 Node도 pnpm도 필요 없다(스펙 8.2절).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # 체크아웃은 버전 검사(apps/desktop/package.json)와 릴리스 본문(RELEASE_BODY.md)을 읽기 위한 것.
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      # 이 검사가 없으면 태그는 v1.2.0인데 앱이 자기를 1.1.0이라고 말하는 릴리스가
+      # 아무 오류 없이 나간다(스펙 8.3절). 버전의 유일한 출처는 apps/desktop/package.json이다.
+      - name: 태그와 앱 버전 일치 검사
+        run: |
+          app_version="$(jq -r .version apps/desktop/package.json)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$app_version" != "$tag_version" ]; then
+            echo "::error::태그(${GITHUB_REF_NAME})와 apps/desktop/package.json의 version(${app_version})이 다릅니다."
+            exit 1
+          fi
+      # softprops v3는 생성·업로드 양쪽의 already_exists를 처리하고 overwrite_files
+      # 기본값이 true라 실패한 워크플로 재실행이 멱등이다(스펙 8.2절).
+      # draft로 만들지 않고 바로 publish한다 — 통제 지점은 이미 "태그를 미는 것"이다.
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          body_path: .github/RELEASE_BODY.md
