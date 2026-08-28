@@ -1,7 +1,7 @@
 # 29. 릴리스 워크플로와 배포 안내
 
 Type: task
-Status: ready-for-agent
+Status: done
 Blocked by: 14, 28
 
 ## What to build
@@ -41,17 +41,17 @@ build (windows-latest) ─┤  --publish never  → upload-artifact: dist-window
 
 ## Acceptance criteria
 
-- [ ] `release.yml`의 트리거가 `push: tags: ['v*']`다
-- [ ] 빌드 잡이 macOS·Windows 매트릭스이고 **`--publish never`를 명시**하며 아티팩트 이름을 `dist-${{ matrix.os }}`로 매트릭스마다 다르게 준다(v4부터 아티팩트가 불변이라 같은 이름 재업로드가 실패한다)
-- [ ] 빌드 잡이 `pnpm verify` → 패키징 순서다(CI 로그에서 "검증에서 깨졌다"와 "패키징에서 깨졌다"가 스텝 이름으로 갈린다)
-- [ ] 수집 잡이 `ubuntu-latest`이고 `pattern: dist-*` + `merge-multiple: true`로 내려받는다(Node도 pnpm도 필요 없다)
-- [ ] 수집 잡이 `apps/desktop/package.json`의 `version`과 `GITHUB_REF_NAME`에서 `v`를 뗀 값을 비교해 다르면 **실패시킨다**
-- [ ] 릴리스 생성이 `softprops/action-gh-release@v3`이고 **draft가 아니라 바로 publish**된다
-- [ ] **`permissions: contents: write`가 릴리스 잡에만** 있다(빌드 잡은 읽기만 갖는다)
-- [ ] 릴리스 본문이 `.github/RELEASE_BODY.md`에서 온다
-- [ ] 실패한 워크플로를 **재실행해도 같은 결과가 된다**(멱등)를 실제로 확인했다
-- [ ] 릴리스에 붙는 자산이 정확히 둘이다 — `yeonchamyeotgae-<version>-arm64.dmg`와 `yeonchamyeotgae-<version>-x64.exe`
-- [ ] `README.md`를 새로 만들었고 설치 절에 8.5절의 우회 안내가 있다(스크린샷은 없다)
-- [ ] 워크플로에 "릴리스를 쓰는 잡은 하나" 이유 주석과 서명 활성화 4단계 주석이 있다. 빈 시크릿을 `env:`에 꽂아두지 않았다
-- [ ] 액션 버전이 8.6절 그대로다 — `actions/checkout@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `pnpm/setup@v2`, `softprops/action-gh-release@v3`
-- [ ] 실제로 태그를 밀어 릴리스가 하나 만들어지는 것을 확인했다
+- [x] `release.yml`의 트리거가 `push: tags: ['v*']`다
+- [x] 빌드 잡이 macOS·Windows 매트릭스이고 **`--publish never`를 명시**하며 아티팩트 이름을 `dist-${{ matrix.os }}`로 매트릭스마다 다르게 준다(v4부터 아티팩트가 불변이라 같은 이름 재업로드가 실패한다)
+- [x] 빌드 잡이 `pnpm verify` → 패키징 순서다(CI 로그에서 "검증에서 깨졌다"와 "패키징에서 깨졌다"가 스텝 이름으로 갈린다)
+- [x] 수집 잡이 `ubuntu-latest`이고 `pattern: dist-*` + `merge-multiple: true`로 내려받는다(Node도 pnpm도 필요 없다)
+- [x] 수집 잡이 `apps/desktop/package.json`의 `version`과 `GITHUB_REF_NAME`에서 `v`를 뗀 값을 비교해 다르면 **실패시킨다**
+- [x] 릴리스 생성이 `softprops/action-gh-release@v3`이고 **draft가 아니라 바로 publish**된다
+- [x] **`permissions: contents: write`가 릴리스 잡에만** 있다(빌드 잡은 읽기만 갖는다)
+- [x] 릴리스 본문이 `.github/RELEASE_BODY.md`에서 온다
+- [x] 실패한 워크플로를 **재실행해도 같은 결과가 된다**(멱등)를 실제로 확인했다
+- [x] 릴리스에 붙는 자산이 정확히 둘이다 — `yeonchamyeotgae-<version>-arm64.dmg`와 `yeonchamyeotgae-<version>-x64.exe`
+- [x] `README.md`를 새로 만들었고 설치 절에 8.5절의 우회 안내가 있다(스크린샷은 없다)
+- [x] 워크플로에 "릴리스를 쓰는 잡은 하나" 이유 주석과 서명 활성화 4단계 주석이 있다. 빈 시크릿을 `env:`에 꽂아두지 않았다
+- [x] 액션 버전이 8.6절 그대로다 — `actions/checkout@v7`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, `pnpm/setup@v2`, `softprops/action-gh-release@v3`
+- [x] 실제로 태그를 밀어 릴리스가 하나 만들어지는 것을 확인했다
