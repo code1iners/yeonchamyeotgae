@@ -53,12 +53,15 @@ jobs:
       # "패키징에서 깨졌다"가 스텝 이름으로 갈린다(스펙 8.2절).
       - name: 검증
         run: pnpm verify
+      - name: 앱 빌드
+        working-directory: apps/desktop
+        run: pnpm build
       # --publish never를 명시한다 — 암묵적 publish는 v27에서 제거 예정이라
       # 자동 감지에 기대면 업그레이드 때 조용히 깨진다(스펙 8.2절).
       # apps/desktop에서 실행해야 electron-builder가 그 package.json을 메타데이터로 읽는다(스펙 8.3절).
       - name: 패키징
         working-directory: apps/desktop
-        run: pnpm build && pnpm exec electron-builder --publish never
+        run: pnpm exec electron-builder --publish never
       # 아티팩트 이름은 매트릭스마다 다르게 — v4부터 아티팩트가 불변이라 같은 이름
       # 재업로드가 실패한다. overwrite는 잡 재실행(새 attempt)이 이전 attempt의
       # 아티팩트에 걸려 죽는 것을 풀어 재실행을 멱등하게 만든다.
