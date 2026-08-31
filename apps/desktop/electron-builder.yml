@@ -1,13 +1,18 @@
 appId: dev.yeoncha.desktop
-# 사용자에게 보이는 이름(메뉴 막대·시작 메뉴·DMG 볼륨)은 한국어를 유지한다.
-productName: 연차몇개
-# 파일 이름은 ASCII로 뽑는다 — 기본 매크로가 다운로드 파일명이 되면
-# 릴리스 URL이 퍼센트 인코딩으로 덮인다(스펙 8.3절).
-executableName: yeonchamyeotgae
+# productName은 파일명 안전(ASCII)이어야 한다. macOS 헬퍼 앱(Contents/Frameworks/*.app,
+# 그 안의 실행 파일)의 이름이 여기서 곧이곧대로 파생되는데, electron-builder는 이 파생을
+# productName에서 직접 하고 executableName으로 대신할 수 없다(31번 티켓). 한글을 쓰면
+# 정상적인 Finder 복사(DMG → 응용 프로그램)에서조차 헬퍼 실행 파일 이름의 유니코드 표현이
+# 바뀌어(NFC↔NFD) Info.plist의 CFBundleExecutable과 어긋나고, 앱이 실행 직후
+# SIGTRAP(종료 코드 133)으로 죽는다 — 사용자가 설치 *이후에* 매번 새로 만드는 문제라
+# 빌드 시점 훅으로는 고칠 수 없다. CFBundleName이 ASCII가 되는 부작용은
+# mac.extendInfo.CFBundleDisplayName으로 메운다(아래 참고) — NSRunningApplication의
+# localizedName(강제 종료·Activity Monitor가 쓰는 "실행 중인 앱 이름")은 실측상 이
+# 값을 그대로 따라간다. 그 외에 사용자에게 보이는 한글 이름은 DMG 볼륨 제목(dmg.title)·
+# Windows 시작 메뉴 이름(nsis.shortcutName)에서 따로 준다 — 메뉴 막대 텍스트는 이들과
+# 무관하게 Tray API로 직접 그린다.
+productName: yeonchamyeotgae
 artifactName: "yeonchamyeotgae-${version}-${arch}.${ext}"
-# mac 헬퍼 이름의 NFD/NFC 불일치를 고친다 — 없으면 패키징된 앱이 시작 직후
-# 무음 SIGTRAP으로 죽는다. 상세는 훅 파일 주석에.
-afterPack: scripts/fix-helper-nfd.cjs
 directories:
   # out/(electron-vite 빌드)과 갈라져 있어야 한다 — 같은 디렉터리를 쓰면
   # asar가 이전 산출물을 자기 안에 삼킨다.
@@ -20,20 +25,20 @@ mac:
   target:
     - target: dmg
       arch: [arm64]
+  extendInfo:
+    # 실측(31번 티켓): NSRunningApplication.localizedName(강제 종료·Activity Monitor)은
+    # 이 값을 그대로 돌려준다 — CFBundleName이 ASCII가 된 것을 여기서 보완한다.
+    # 반면 Finder의 파일 표시 이름(NSURL.localizedNameKey)에는 반영되지 않는다 —
+    # Finder는 서명 안 된 이 앱에서 여전히 파일명(yeonchamyeotgae)을 보여주는데, 이건
+    # CFBundleName이 한글이던 이번 변경 이전에도 마찬가지였으므로 회귀는 아니다.
+    CFBundleDisplayName: 연차몇개
   # 서명 억제(스펙 8.4절). identity: null이어야 키체인 조회 자체가 일어나지 않는다.
   # 인증서를 꽂을 때 이 줄을 지운다.
   identity: null
   hardenedRuntime: false
 dmg:
-  # 볼륨 이름 기본값은 productName이 아니라 productFilename에서 오는데,
-  # executableName을 두면 productFilename이 ASCII가 된다(appInfo.js).
-  # 사용자가 보는 볼륨 이름은 한국어여야 하므로 명시한다.
-  title: "${productName} ${version}"
-  # 기본 HFS+는 파일명을 NFD로 강제 정규화해 afterPack 훅이 고친 헬퍼
-  # 이름을 되돌린다 — 설치본이 다시 SIGTRAP으로 죽는다. APFS는 NFC를
-  # 보존한다. 최소 지원(macOS 13)이 APFS 요건(10.13+)을 넉넉히 넘고,
-  # electron-builder도 다음 메이저에서 APFS를 기본값으로 예고했다.
-  filesystem: APFS
+  # productName이 ASCII라 매크로로는 한글 볼륨 이름이 안 나온다 — 리터럴로 적는다.
+  title: "연차몇개 ${version}"
 win:
   # portable이 아니다 — 저장 파일이 userData 고정이라 portable exe는
   # 실제로 portable하지 않다. oneClick: true 기본값을 그대로 쓴다.
@@ -44,3 +49,7 @@ win:
       arch: [x64]
   # signAndEditExecutable: false가 아니다 — 그쪽은 아이콘 리소스 편집까지 꺼진다.
   signExecutable: false
+nsis:
+  # 시작 메뉴·바탕화면 바로가기 이름. 기본값은 productName인데 그게 ASCII라
+  # (위 참고) 명시하지 않으면 시작 메뉴에 "yeonchamyeotgae"가 뜬다.
+  shortcutName: 연차몇개
