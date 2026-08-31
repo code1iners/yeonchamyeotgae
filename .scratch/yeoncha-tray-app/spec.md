@@ -1020,11 +1020,26 @@ build (windows-latest) ─┤  --publish never  → upload-artifact: dist-window
   저장 파일이 `userData` 고정이므로 portable exe는 **실제로 portable하지 않다** — 파일을 옮겨도
   데이터는 따라오지 않는다. 이름이 약속을 지키지 못하는 선택지다. 트레이 앱은 계속 떠 있는
   물건이라 안정된 설치 위치와 제거 경로가 있는 편이 맞다. `oneClick: true` 기본값을 쓴다.
-- **파일 이름은 ASCII로 뽑는다.** `productName`은 한국어 `연차몇개`를 쓰지만 기본
-  `artifactName` 매크로가 그대로 다운로드 파일명이 되면 릴리스 URL이 퍼센트 인코딩으로 덮인다.
-  `artifactName: "yeonchamyeotgae-${version}-${arch}.${ext}"`로 분리하고 `executableName`도
-  ASCII로 둔다. **사용자에게 보이는 이름(메뉴 막대, 시작 메뉴, DMG 볼륨)은 `productName`에서
-  나오므로 한국어가 유지된다.**
+- **파일 이름(`artifactName`)은 ASCII로 뽑는다.** 기본 매크로가 그대로 다운로드 파일명이
+  되면 릴리스 URL이 퍼센트 인코딩으로 덮이므로 `artifactName:
+  "yeonchamyeotgae-${version}-${arch}.${ext}"`로 분리한다.
+- **`productName`도 ASCII다 — 이 절의 원래 결정(한국어 `productName` + ASCII `executableName`)은
+  31번 티켓에서 뒤집혔다.** macOS 헬퍼 번들(Contents/Frameworks/\*.app) 이름은
+  `productName`에서만 파생되고 `executableName`으로 대체할 수 없어, 한글을 쓰면 Finder 복사
+  (DMG → 응용 프로그램) 후 헬퍼 실행 파일 이름의 유니코드 정규화(NFC/NFD)가 `Info.plist`의
+  `CFBundleExecutable`과 어긋나 앱이 실행 직후 `SIGTRAP`(종료 코드 133)으로 죽는다 — 빌드
+  시점 훅으로는 고칠 수 없는 설치 시점 문제라, 정규화가 애초에 갈릴 수 없게 `productName`
+  자체를 ASCII(`yeonchamyeotgae`)로 바꿨다. 최상위 `executableName`은 더 이상 두지 않는다
+  (`productName`이 이미 ASCII라 기본값이 곧 ASCII다).
+- **사용자에게 보이는 이름(메뉴 막대, 시작 메뉴, DMG 볼륨, macOS `.app` 표시 이름)은 더 이상
+  `productName`에서 나오지 않는다** — 각각 `mac.executableName`, `nsis.shortcutName`,
+  `dmg.title`(리터럴), 그리고 `mac.extendInfo.CFBundleDisplayName`(강제 종료·Activity
+  Monitor용)으로 개별 지정해 한국어를 유지한다. `mac.executableName`은 헬퍼와 분리된 파생
+  경로라 한글이어도 SIGTRAP과 무관하지만, Finder 복사 시 같은 NFD 재정규화를 겪는다는 사실은
+  남아 있다 — 크래시가 없는 이유는 "이미 떠 있는 메인 프로세스는 자기 실행 경로를 재검증하지
+  않는다"는 관찰 하나에 기댄 것으로, Electron/Chromium/macOS가 바뀌면 조용히 재발할 수 있는
+  가정이다. 전체 조사와 실측 근거는
+  [`31번 티켓`](issues/31-macos-finder-install-launch.md)을 본다.
 
 **버전의 유일한 출처는 `apps/desktop/package.json`의 `version`이다.** electron-builder는
 `<projectDir>/package.json`을 읽고, `apps/desktop`에서 실행하면 그 파일이 곧 메타데이터다.
