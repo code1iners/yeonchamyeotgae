@@ -2,8 +2,8 @@
      같은 안내가 README.md 설치 절에도 있다 — 둘 중 하나를 고치면 다른 쪽도 고친다. -->
 아래에서 자기 OS용 파일 하나를 내려받으세요.
 
-- **macOS (Apple Silicon)**: `YeonchaMyeotgae-<버전>-arm64.dmg`
-- **Windows (x64)**: `YeonchaMyeotgae-<버전>-x64.exe`
+- **macOS (Apple Silicon)**: `yeonchamyeotgae-<버전>-arm64.dmg`
+- **Windows (x64)**: `yeonchamyeotgae-<버전>-x64.exe`
 
 ## 설치 안내
 

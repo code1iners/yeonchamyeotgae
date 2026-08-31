@@ -9,8 +9,8 @@
 [Releases 페이지](https://github.com/code1iners/yeonchamyeotgae/releases)에서 자기 OS용 파일
 하나를 내려받습니다.
 
-- **macOS (Apple Silicon)**: `YeonchaMyeotgae-<버전>-arm64.dmg`
-- **Windows (x64)**: `YeonchaMyeotgae-<버전>-x64.exe`
+- **macOS (Apple Silicon)**: `yeonchamyeotgae-<버전>-arm64.dmg`
+- **Windows (x64)**: `yeonchamyeotgae-<버전>-x64.exe`
 
 이 앱은 코드 서명을 하지 않아 처음 실행할 때 OS 보안 경고가 뜹니다. 아래 순서로 통과합니다.
 

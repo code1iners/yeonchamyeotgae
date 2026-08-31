@@ -3,8 +3,8 @@ appId: dev.yeoncha.desktop
 productName: 연차몇개
 # 파일 이름은 ASCII로 뽑는다 — 기본 매크로가 다운로드 파일명이 되면
 # 릴리스 URL이 퍼센트 인코딩으로 덮인다(스펙 8.3절).
-executableName: YeonchaMyeotgae
-artifactName: "YeonchaMyeotgae-${version}-${arch}.${ext}"
+executableName: yeonchamyeotgae
+artifactName: "yeonchamyeotgae-${version}-${arch}.${ext}"
 # mac 헬퍼 이름의 NFD/NFC 불일치를 고친다 — 없으면 패키징된 앱이 시작 직후
 # 무음 SIGTRAP으로 죽는다. 상세는 훅 파일 주석에.
 afterPack: scripts/fix-helper-nfd.cjs
