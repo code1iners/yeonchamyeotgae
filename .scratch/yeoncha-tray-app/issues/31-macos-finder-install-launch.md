@@ -98,3 +98,37 @@ Apple 공식 지원 문서 기준 실제 버튼 이름 **"그래도 열기"**로
 다이얼로그의 **"열기"** 버튼 단계도 빠져 있어 추가했다.
 
 `pnpm verify` 6/6 통과.
+
+### 후속: 설치된 `.app`이 Finder에 "yeonchamyeotgae"로 보이는 문제 (사용자 피드백)
+
+위 수정을 실제 설치해본 사용자가 Finder에 앱이 여전히 `yeonchamyeotgae`(ASCII)로 보인다며
+`연차몇개`로 보이길 원했다. 처음 고칠 때는 이걸 회귀로 보지 않았다 — git stash로 대조군을
+확인해 이 ASCII 표시가 28번 시점부터 이미 그랬다는 걸 알고 있었기 때문이다. 하지만 "이미
+그랬다"가 "이대로 둬도 된다"는 아니었다 — 사용자가 원치 않는 것으로 확인됐으니 고친다.
+
+**추가로 확인한 사실**: mac 앱 본체(.app 폴더 이름·`Contents/MacOS`의 실행 파일·
+`CFBundleExecutable`)는 `productName`이 아니라 `mac.executableName`(설정하지 않으면
+`productFilename`으로 대체)에서 파생된다(`appInfo.js`, `macPackager.js`의
+`applyCommonInfo`) — **헬퍼 이름이 파생되는 경로(`productName` → `sanitizedProductName`,
+`executableName` 무시)와 완전히 분리된 별도 경로다.** 즉 `productName`을 ASCII로 유지해
+헬퍼 이름을 안전하게 두면서, `mac.executableName`만 한글로 바꿔 앱 본체 이름을 되돌릴 수
+있다 — 이 둘을 하나로 묶어서 생각한 게 처음 수정의 사각지대였다.
+
+**위험 요소를 먼저 실측했다**: `mac.executableName: 연차몇개`로 바꾸면 앱 본체 실행 파일도
+헬퍼와 똑같이 한글 리프 파일이 되어, 이론상 같은 Finder NFD 재정규화에 노출된다. 실제로
+Finder로 복사해보니 이 실행 파일도 NFD로 바뀌어 `Info.plist`의 `CFBundleExecutable`(NFC)과
+바이트가 어긋났다 — 헬퍼 때와 똑같은 불일치다. 그런데도 `open`(LaunchServices 경로)으로
+정상 실행되고 크래시가 없었다. 헬퍼 크래시의 진짜 원인은 파일 조회 실패가 아니라(APFS는
+정규화-무관 조회라 문제없이 찾는다 — 앞서 확인함) **Chromium이 헬퍼를 스폰할 때 내부적으로
+Info.plist 경로와 디스크 목록을 다시 대조하는 로직**이었는데, 메인 프로세스는 이미 떠 있는
+자기 자신의 실행 파일 경로를 그렇게 재검증하지 않기 때문에 이 불일치가 무해했다.
+
+`mac.executableName: 연차몇개`를 `mac:` 아래로 한정해 Windows는 건드리지 않았다(그쪽은
+이 문제와 무관하고, `nsis.shortcutName`이 이미 시작 메뉴 이름을 담당한다).
+
+**검증**: 새 DMG를 Finder로 복사 → `open`으로 실행 → main·GPU·network·renderer 헬퍼 전부
+생존, 크래시 없음. `Contents/Frameworks` 안의 헬퍼 파일명은 여전히 전부 ASCII임을 재확인.
+Finder의 `.app` 표시 이름(`NSURL.localizedNameKey`)이 이제 "연차몇개"로 나오는 것을 확인했다
+(폴더 자체 이름이 한글이라 이번엔 실제로 반영된다 — 앞서 무효였던 `CFBundleDisplayName`
+꼼수와 달리 이건 파일명 자체를 바꾼 것이다). `npx asar list` 불변식도 재확인. `pnpm verify`
+6/6 통과.
