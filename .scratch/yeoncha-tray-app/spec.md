@@ -1424,7 +1424,12 @@ B → C에서 잔여가 11에서 15로 **하루 만에 갈아치워진다.** 누
    번들해 세 타깃 빌드와 개발 루프를 대신 확인했다.
 4. **워크플로를 실제로 돌리지 않았다.** `allowBuilds`의 완전한 목록도 첫 전체 설치에서 확정된다.
 5. **`hardenedRuntime: false`가 `identity: null`에도 필요한지**(8.4절). 문서 경고문이 모호해
-   안전한 쪽으로 뒀다. 첫 macOS 빌드가 실행되는지가 검증이다.
+   안전한 쪽으로 뒀다. 32번 티켓에서 `hardenedRuntime: false` + ad-hoc 서명(afterPack 훅)
+   조합으로 만든 v0.1.3 릴리스 DMG가 `codesign --verify --deep --strict` 통과, `spctl`
+   "rejected"(정상적인 미서명 거부, "damaged" 아님)로 확인됐다 — 지금 조합이 실행을 막지는
+   않는다는 근거는 생겼다. 다만 이 경고문은 원래 **공증(notarization)** 문맥의 것이라,
+   실제로 유료 서명·공증을 켤 때(8.4절의 "나중에 켤 때의 4단계") `hardenedRuntime: true`가
+   필요한지는 여전히 별도로 확인해야 한다 — 그 시점까지는 열려 있다.
 6. **macOS 메뉴바에서 템플릿 반전을 눈으로 확인하지 못했다.** `setTemplateImage(true)`는
    검증된 메커니즘이고 캡처는 CSS `invert`로 흉내 낸 것이다.
 7. **`.dmg`/`.zip`의 quarantine 차이와 `nsis`/`portable`의 SmartScreen 차이.** 어느 1차 문서에서도
