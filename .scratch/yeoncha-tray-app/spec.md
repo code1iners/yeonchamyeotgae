@@ -1079,6 +1079,18 @@ win:
 - `hardenedRuntime: false`는 문서 경고("서명을 끄면 Hardened Runtime도 꺼라")를 따른 것인데
   그 경고문이 ad-hoc 서명 문맥이라 `identity: null`에도 적용되는지 문면상 모호하다. **확인되지
   않았으므로 안전한 쪽으로 둔다.**
+- **`identity: null`은 "서명 안 함"이 아니라 "electron-builder의 서명 단계를 건너뜀"이다 —
+  이 둘은 다르다(32번 티켓).** 서명 단계를 건너뛰면 `.app` 번들 전체를 감싸는
+  `_CodeSignature/CodeResources` 봉인이 아예 생기지 않고, `codesign --verify --deep
+  --strict`가 `code has no resources but signature indicates they must be present`로
+  실패하는 상태로 나간다. 로컬 Finder 복사 + `open` 검증은 격리 속성이 없어 이 문제를
+  드러내지 않지만, 실제 GitHub Release 다운로드는 격리 속성이 붙어 Gatekeeper가 이 검증을
+  강제하고 **"손상되었기 때문에 열 수 없습니다"로 거부한다** — README가 안내하는
+  "확인되지 않은 개발자" 흐름조차 뜨지 못하는, 더 나쁜 실패다. 그래서 `afterPack` 훅
+  (`scripts/adhoc-sign.cjs`)이 패키징 직후 `codesign --deep --force --sign -`로 번들
+  전체를 직접 ad-hoc 서명해 봉인을 채운다. `identity: null` 자체(키체인 인증서 자동
+  탐색 억제)는 그대로 유지된다 — 이 훅은 `-`(인증서 없음)로만 서명해 진짜 인증서를
+  집어 쓰는 사고와 무관하다.
 
 **나중에 켤 때의 4단계 — 이게 "서명 훅"의 실체다.** 워크플로 YAML에는 주석 블록 하나만 둔다.
 
