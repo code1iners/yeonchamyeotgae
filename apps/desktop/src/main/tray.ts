@@ -91,6 +91,7 @@ export function createTray({
 
 	// setContextMenu가 아니라 right-click + popUpContextMenu다(4.6절) — setContextMenu는
 	// Windows에서 좌클릭도 가로채 팝오버 토글을 죽인다. macOS에서는 발현하지 않는다.
+	/** 우클릭 메뉴(항목 하나, `[종료]`). */
 	const menu = buildContextMenu(onQuit);
 	created.on("right-click", () => {
 		onWillShowMenu();
