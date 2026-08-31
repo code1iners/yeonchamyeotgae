@@ -3,6 +3,7 @@ import type { AppState } from "../shared/ipc";
 import { registerDataIpc } from "./data-ipc";
 import {
 	createPopover,
+	hidePopover,
 	sendStateToPopover,
 	showPopover,
 	togglePopover,
@@ -38,8 +39,19 @@ if (!isPrimaryInstance) {
 		registerDataIpc();
 		createPopover();
 		/** 트레이. 첫 실행에서 팝오버를 붙일 기준점을 여기서 얻는다. */
-		const tray = createTray((trayBounds) => {
-			togglePopover(trayBounds);
+		const tray = createTray({
+			onClick: (trayBounds) => {
+				togglePopover(trayBounds);
+			},
+			// 우클릭 메뉴가 뜨기 직전에 팝오버를 닫는다 — popUpContextMenu가 동기 호출이라
+			// blur에 기대면 메뉴가 떠 있는 동안 팝오버가 그대로 남는다(4.6절).
+			onWillShowMenu: () => {
+				hidePopover();
+			},
+			// 앱의 수명 주기는 index.ts의 몫이다(4.6절) — tray.ts는 app을 import하지 않는다.
+			onQuit: () => {
+				app.quit();
+			},
 		});
 
 		// 데이터가 바뀌면 트레이와 팝오버가 같은 값을 본다 — 4.5절 재계산 트리거의 1번이다.

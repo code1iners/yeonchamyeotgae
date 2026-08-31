@@ -1,6 +1,6 @@
 import { formatTrayLabel } from "@yeoncha/core";
 import type { NativeImage, Rectangle } from "electron";
-import { nativeImage, nativeTheme, screen, Tray } from "electron";
+import { Menu, nativeImage, nativeTheme, screen, Tray } from "electron";
 import { drawGlyph, type GlyphTone } from "./glyph";
 import { drawNumber } from "./tray-number";
 
@@ -61,16 +61,54 @@ let renderSeq = 0;
  */
 let lastView: TrayView = { kind: "unset" };
 
-/** 트레이를 만들고 클릭 핸들러를 건다. 초기 표시는 입사일 미설정 대시다. */
-export function createTray(onClick: (trayBounds: Rectangle) => void): Tray {
+/** {@link createTray}가 받는 옵션. 항목이 늘면 콜백이 늘 뿐, 위치 인자로 두지 않는다(4.6절). */
+export interface CreateTrayOptions {
+	/** 좌클릭 — 팝오버를 토글한다. */
+	onClick: (trayBounds: Rectangle) => void;
+	/**
+	 * 우클릭 메뉴를 띄우기 직전에 부른다. `popUpContextMenu`는 동기 호출이라 메뉴가
+	 * 떠 있는 동안 JS 이벤트 루프가 막혀 `blur`가 돌 기회가 없다 — 팝오버가 열려
+	 * 있으면 그 blur에 기대지 않고 이 콜백에서 먼저 닫아야 한다(4.6절, 실물 검증이
+	 * 뒤집은 가정).
+	 */
+	onWillShowMenu: () => void;
+	/** 우클릭 메뉴의 `[종료]` — 앱을 끈다. 실제로 부르는 것은 `index.ts`다. */
+	onQuit: () => void;
+}
+
+/** 트레이를 만들고 좌클릭·우클릭 핸들러를 건다. 초기 표시는 입사일 미설정 대시다. */
+export function createTray({
+	onClick,
+	onWillShowMenu,
+	onQuit,
+}: CreateTrayOptions): Tray {
 	const created = new Tray(createGlyphImage());
 	created.setToolTip(TOOLTIP_UNSET);
 	created.on("click", (_event, bounds) => {
 		// 합성 클릭(접근성 등)은 bounds가 비어 올 수 있어 트레이에서 직접 읽어 보완한다.
 		onClick(bounds.width > 0 ? bounds : created.getBounds());
 	});
+
+	// setContextMenu가 아니라 right-click + popUpContextMenu다(4.6절) — setContextMenu는
+	// Windows에서 좌클릭도 가로채 팝오버 토글을 죽인다. macOS에서는 발현하지 않는다.
+	const menu = buildContextMenu(onQuit);
+	created.on("right-click", () => {
+		onWillShowMenu();
+		created.popUpContextMenu(menu);
+	});
+
 	_tray = created;
 	return created;
+}
+
+/**
+ * 트레이 우클릭 메뉴(4.6절). 항목은 `[종료]` 하나이고 문구는 양 OS 모두 같다 —
+ * 트레이에서 연 메뉴는 무엇을 종료하는지 모호할 자리가 없어 macOS의 `Quit AppName`
+ * 관례(애플리케이션 메뉴의 관례)를 따를 이유가 없다. 확인 대화상자는 없다 — 저장이
+ * 전부 동기라 종료가 쓰기를 끊지 않고, 종료로 잃을 것이 없다.
+ */
+function buildContextMenu(onQuit: () => void): Menu {
+	return Menu.buildFromTemplate([{ label: "종료", click: onQuit }]);
 }
 
 /**

@@ -135,8 +135,13 @@ export async function withPopoverHeld<T>(run: () => Promise<T>): Promise<T> {
 	}
 }
 
-/** 팝오버를 숨기고 숨긴 시각을 기록한다. */
-function hidePopover(): void {
+/**
+ * 팝오버를 숨기고 숨긴 시각을 기록한다.
+ *
+ * 트레이 우클릭 메뉴가 뜨기 직전에도 이 함수가 불린다(4.6절) — `blur`가 먼저 돌
+ * 것이라는 가정이 실물 검증에서 뒤집혀, 명시적으로 닫는 쪽으로 바꿨다.
+ */
+export function hidePopover(): void {
 	if (!popover?.isVisible()) {
 		return;
 	}
