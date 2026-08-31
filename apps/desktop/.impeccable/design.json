@@ -1,0 +1,273 @@
+{
+	"schemaVersion": 2,
+	"generatedAt": "2026-08-31T07:30:37Z",
+	"title": "Design System: 연차몇개",
+	"extensions": {
+		"colorMeta": {
+			"ink": {
+				"role": "neutral",
+				"displayName": "Graphite",
+				"canonical": "#1d1d1f",
+				"tonalRamp": ["#050506", "#0b0b0c", "#121214", "#1d1d1f", "#343437", "#5a5a5e", "#9b9ba0", "#f5f5f7"]
+			},
+			"ink-dark": {
+				"role": "neutral",
+				"displayName": "Graphite on Dark",
+				"canonical": "#f5f5f7",
+				"tonalRamp": ["#1d1d1f", "#343437", "#5a5a5e", "#88888d", "#b0b0b5", "#d0d0d4", "#e7e7ea", "#f5f5f7"]
+			},
+			"muted": {
+				"role": "neutral",
+				"displayName": "Muted Graphite",
+				"canonical": "#6e6e73",
+				"tonalRamp": ["#1f1f21", "#3f3f42", "#5b5b5f", "#6e6e73", "#8d8d92", "#b1b1b5", "#d5d5d8", "#f5f5f7"]
+			},
+			"muted-dark": {
+				"role": "neutral",
+				"displayName": "Muted Graphite on Dark",
+				"canonical": "#a1a1a6",
+				"tonalRamp": ["#242426", "#444448", "#69696d", "#818186", "#a1a1a6", "#c2c2c6", "#dfdfe2", "#f5f5f7"]
+			},
+			"accent": {
+				"role": "primary",
+				"displayName": "System Blue",
+				"canonical": "#007aff",
+				"tonalRamp": ["#001a33", "#00345f", "#00578f", "#007aff", "#3995ff", "#75b4ff", "#abd1ff", "#e6f3ff"]
+			},
+			"accent-dark": {
+				"role": "primary",
+				"displayName": "System Blue on Dark",
+				"canonical": "#0a84ff",
+				"tonalRamp": ["#001d38", "#003b70", "#0063ad", "#0a84ff", "#4b9fff", "#82bbff", "#b5d6ff", "#e9f4ff"]
+			},
+			"on-accent": {
+				"role": "neutral",
+				"displayName": "Accent Text",
+				"canonical": "#fff",
+				"tonalRamp": ["#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#999999", "#cccccc", "#ffffff"]
+			},
+			"danger": {
+				"role": "tertiary",
+				"displayName": "Signal Red",
+				"canonical": "#d70015",
+				"tonalRamp": ["#3a0006", "#67000d", "#a00011", "#d70015", "#ed3a43", "#f77a7f", "#ffb4b7", "#ffe7e8"]
+			},
+			"danger-dark": {
+				"role": "tertiary",
+				"displayName": "Signal Red on Dark",
+				"canonical": "#ff453a",
+				"tonalRamp": ["#3a0503", "#6f0d0b", "#b3201d", "#ff453a", "#ff7068", "#ff9e98", "#ffc9c5", "#ffebe9"]
+			},
+			"canvas": {
+				"role": "neutral",
+				"displayName": "Light Canvas",
+				"canonical": "#f5f5f7",
+				"tonalRamp": ["#1d1d1f", "#343437", "#6e6e73", "#a1a1a6", "#c7c7cc", "#e2e2e5", "#f0f0f2", "#f5f5f7"]
+			},
+			"canvas-dark": {
+				"role": "neutral",
+				"displayName": "Dark Canvas",
+				"canonical": "#1e1e1e",
+				"tonalRamp": ["#000000", "#0b0b0b", "#1e1e1e", "#2c2c2e", "#48484a", "#636366", "#8e8e93", "#f5f5f7"]
+			},
+			"line": {
+				"role": "neutral",
+				"displayName": "Light Hairline",
+				"canonical": "rgba(0, 0, 0, 0.09)",
+				"tonalRamp": ["rgba(0, 0, 0, 0.18)", "rgba(0, 0, 0, 0.16)", "rgba(0, 0, 0, 0.13)", "rgba(0, 0, 0, 0.09)", "rgba(0, 0, 0, 0.07)", "rgba(0, 0, 0, 0.05)", "rgba(0, 0, 0, 0.03)", "transparent"]
+			},
+			"line-dark": {
+				"role": "neutral",
+				"displayName": "Dark Hairline",
+				"canonical": "rgba(255, 255, 255, 0.12)",
+				"tonalRamp": ["rgba(255, 255, 255, 0.22)", "rgba(255, 255, 255, 0.19)", "rgba(255, 255, 255, 0.16)", "rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.09)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.03)", "transparent"]
+			},
+			"line-strong": {
+				"role": "neutral",
+				"displayName": "Light Strong Hairline",
+				"canonical": "rgba(0, 0, 0, 0.16)",
+				"tonalRamp": ["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.26)", "rgba(0, 0, 0, 0.22)", "rgba(0, 0, 0, 0.16)", "rgba(0, 0, 0, 0.12)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.02)"]
+			},
+			"line-strong-dark": {
+				"role": "neutral",
+				"displayName": "Dark Strong Hairline",
+				"canonical": "rgba(255, 255, 255, 0.2)",
+				"tonalRamp": ["rgba(255, 255, 255, 0.3)", "rgba(255, 255, 255, 0.26)", "rgba(255, 255, 255, 0.23)", "rgba(255, 255, 255, 0.2)", "rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.03)"]
+			},
+			"hover": {
+				"role": "neutral",
+				"displayName": "Light Hover Fill",
+				"canonical": "rgba(0, 0, 0, 0.05)",
+				"tonalRamp": ["rgba(0, 0, 0, 0.12)", "rgba(0, 0, 0, 0.1)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.05)", "rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.03)", "rgba(0, 0, 0, 0.015)", "transparent"]
+			},
+			"hover-dark": {
+				"role": "neutral",
+				"displayName": "Dark Hover Fill",
+				"canonical": "rgba(255, 255, 255, 0.07)",
+				"tonalRamp": ["rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.07)", "rgba(255, 255, 255, 0.05)", "rgba(255, 255, 255, 0.03)", "rgba(255, 255, 255, 0.015)", "transparent"]
+			},
+			"fill": {
+				"role": "neutral",
+				"displayName": "Light Utility Fill",
+				"canonical": "rgba(0, 0, 0, 0.04)",
+				"tonalRamp": ["rgba(0, 0, 0, 0.1)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.06)", "rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.03)", "rgba(0, 0, 0, 0.02)", "rgba(0, 0, 0, 0.01)", "transparent"]
+			},
+			"fill-dark": {
+				"role": "neutral",
+				"displayName": "Dark Utility Fill",
+				"canonical": "rgba(255, 255, 255, 0.06)",
+				"tonalRamp": ["rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.08)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.04)", "rgba(255, 255, 255, 0.03)", "rgba(255, 255, 255, 0.015)", "transparent"]
+			},
+			"field": {
+				"role": "neutral",
+				"displayName": "Light Field",
+				"canonical": "rgba(255, 255, 255, 0.7)",
+				"tonalRamp": ["rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.25)", "rgba(255, 255, 255, 0.35)", "rgba(255, 255, 255, 0.5)", "rgba(255, 255, 255, 0.7)", "rgba(255, 255, 255, 0.8)", "rgba(255, 255, 255, 0.9)", "#ffffff"]
+			},
+			"field-dark": {
+				"role": "neutral",
+				"displayName": "Dark Field",
+				"canonical": "rgba(255, 255, 255, 0.08)",
+				"tonalRamp": ["rgba(255, 255, 255, 0.02)", "rgba(255, 255, 255, 0.04)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.08)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.2)"]
+			}
+		},
+		"typographyMeta": {
+			"title": {
+				"displayName": "Popover Title",
+				"purpose": "현재 잔여와 팝오버의 맥락을 잡는 헤더 텍스트."
+			},
+			"body": {
+				"displayName": "System Body",
+				"purpose": "버튼, 입력, 일반 행의 기본 텍스트."
+			},
+			"supporting": {
+				"displayName": "Supporting Text",
+				"purpose": "설명, 메모, 오류, 보조 날짜처럼 우선순위가 낮은 정보."
+			},
+			"label": {
+				"displayName": "Section Label",
+				"purpose": "섹션 제목과 필드 라벨."
+			},
+			"mono": {
+				"displayName": "Utility Mono",
+				"purpose": "저장 파일명과 코드성 값을 읽기 위한 고정폭 텍스트."
+			}
+		},
+		"shadows": [],
+		"motion": [],
+		"breakpoints": []
+	},
+	"components": [
+		{
+			"name": "Primary Button",
+			"kind": "button",
+			"refersTo": "button-primary",
+			"description": "저장·등록·복구처럼 다음 행동이 분명한 주요 조작.",
+			"html": "<button class=\"ds-btn-primary\" type=\"button\">저장</button>",
+			"css": ".ds-btn-primary { font: inherit; color: var(--on-accent); background: var(--accent); border: 1px solid transparent; border-radius: 6px; padding: 3px 9px; cursor: default; } .ds-btn-primary:hover:not(:disabled) { filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-btn-primary:disabled { opacity: 0.4; }"
+		},
+		{
+			"name": "Neutral Button",
+			"kind": "button",
+			"refersTo": "button-neutral",
+			"description": "취소·보조 작업에 쓰는 조용한 기본 버튼.",
+			"html": "<button class=\"ds-btn-neutral\" type=\"button\">취소</button>",
+			"css": ".ds-btn-neutral { font: inherit; color: var(--fg); background: var(--field); border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 9px; cursor: default; } .ds-btn-neutral:hover:not(:disabled) { background: var(--hover); } .ds-btn-neutral:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-btn-neutral:disabled { opacity: 0.4; }"
+		},
+		{
+			"name": "Mini Button",
+			"kind": "button",
+			"refersTo": "button-mini",
+			"description": "목록 행 안의 수정·삭제·닫기 손잡이.",
+			"html": "<button class=\"ds-btn-mini\" type=\"button\">수정</button>",
+			"css": ".ds-btn-mini { font: inherit; color: var(--fg-2); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 1px 5px; font-size: 11.5px; cursor: default; } .ds-btn-mini:hover:not(:disabled) { background: var(--fill); } .ds-btn-mini:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-btn-mini:disabled { opacity: 0.4; }"
+		},
+		{
+			"name": "Text Field",
+			"kind": "input",
+			"refersTo": "text-field",
+			"description": "입사일·메모·조정 값을 받는 기본 입력.",
+			"html": "<input class=\"ds-field\" type=\"text\" placeholder=\"메모\" />",
+			"css": ".ds-field { font: inherit; color: var(--fg); background: var(--field); border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 6px; min-width: 0; } .ds-field:focus { outline: 2px solid var(--accent); outline-offset: -1px; }"
+		},
+		{
+			"name": "Tab Bar",
+			"kind": "nav",
+			"refersTo": "tab-selected",
+			"description": "요약·이력·설정의 현재 위치를 표시하는 세 탭.",
+			"html": "<nav class=\"ds-tabs\" role=\"tablist\"><button type=\"button\" role=\"tab\" aria-selected=\"true\">요약</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">이력</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">설정</button></nav>",
+			"css": ".ds-tabs { display: flex; gap: 2px; padding: 0 10px 8px; border-bottom: 1px solid var(--line); } .ds-tabs button { flex: 1; font: inherit; color: var(--fg); border: 1px solid transparent; border-radius: 6px; background: var(--fill); padding: 3px 9px; cursor: default; } .ds-tabs button:hover:not(:disabled) { background: var(--hover); } .ds-tabs button[aria-selected=\"true\"] { background: var(--accent); color: var(--on-accent); } .ds-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }"
+		},
+		{
+			"name": "Segmented Control",
+			"kind": "custom",
+			"refersTo": "tab-selected",
+			"description": "휴가 단위와 리스트·달력 뷰처럼 배타적 선택을 표현한다.",
+			"html": "<div class=\"ds-segment\"><button type=\"button\" aria-pressed=\"true\">종일</button><button type=\"button\" aria-pressed=\"false\">반차</button><button type=\"button\" aria-pressed=\"false\">반반차</button></div>",
+			"css": ".ds-segment { display: flex; gap: 2px; } .ds-segment button { flex: 1; font: inherit; color: var(--fg); border: 1px solid transparent; border-radius: 6px; background: var(--fill); padding: 3px 9px; cursor: default; } .ds-segment button:hover:not(:disabled) { background: var(--hover); } .ds-segment button[aria-pressed=\"true\"] { background: var(--accent); color: var(--on-accent); } .ds-segment button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }"
+		},
+		{
+			"name": "Planned Tag",
+			"kind": "chip",
+			"refersTo": "planned-tag",
+			"description": "예정 휴가를 목록 안에서 조용히 구분하는 태그.",
+			"html": "<span class=\"ds-tag-planned\">예정</span>",
+			"css": ".ds-tag-planned { display: inline-block; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 4px; padding: 0 5px; font: 600 11.5px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; }"
+		},
+		{
+			"name": "Summary Row",
+			"kind": "custom",
+			"refersTo": "summary-row",
+			"description": "발생·사용·예정·잔여를 검산 가능한 세 열로 보여준다.",
+			"html": "<div class=\"ds-summary-row\"><span class=\"ds-summary-label\">잔여</span><b class=\"ds-summary-number\">12.75</b><span class=\"ds-summary-note\">지금 쓸 수 있는 양</span></div>",
+			"css": ".ds-summary-row { display: flex; align-items: center; gap: 8px; min-height: 22px; padding: 1px 12px; font: 13px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; color: var(--fg); } .ds-summary-label { flex: none; width: 30px; color: var(--fg-2); } .ds-summary-number { flex: none; width: 46px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; } .ds-summary-note { color: var(--fg-2); font-size: 11.5px; }"
+		},
+		{
+			"name": "Calendar Day",
+			"kind": "custom",
+			"refersTo": "calendar-day",
+			"description": "오늘·선택·예정·사용·소멸 상태를 한 날짜에 겹쳐 표현한다.",
+			"html": "<button class=\"ds-calendar-day ds-calendar-day--selected ds-calendar-day--planned\" type=\"button\" aria-pressed=\"true\">15</button>",
+			"css": ".ds-calendar-day { position: relative; width: 48px; height: 30px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--fg); font: 13px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; cursor: default; } .ds-calendar-day:hover:not(:disabled) { background: var(--hover); } .ds-calendar-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-calendar-day--selected { background: var(--accent); color: var(--on-accent); } .ds-calendar-day--planned::after { content: \"\"; position: absolute; left: 50%; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; transform: translateX(-50%); background: var(--accent); } .ds-calendar-day--selected::after { background: var(--on-accent); } .ds-calendar-day--expired::before { content: \"\"; position: absolute; left: 50%; bottom: 0; width: 16px; height: 2px; border-radius: 1px; transform: translateX(-50%); background: var(--danger); }"
+		}
+	],
+	"narrative": {
+		"northStar": "작지만 필수 도구",
+		"overview": "연차몇개의 화면은 상주 앱의 작은 팝오버 안에서 반드시 필요한 정보를 빠르게 읽게 한다. 시스템 텍스트와 테마를 따르고 한 가지 강조색과 얇은 구분선만으로 정보의 순서를 만든다. 버튼·목록·입력은 장식적인 카드가 아니라 검산 가능한 도구로 동작한다.",
+		"keyCharacteristics": [
+			"작지만 필수적인 정보 도구",
+			"시스템 네이티브 텍스트와 라이트·다크 테마",
+			"System Blue & Graphite의 단일 강조색 구조",
+			"그림자 없는 평면과 hairline 구분선",
+			"표 형식의 정확한 숫자 정렬"
+		],
+		"rules": [
+			{
+				"name": "The One Accent Rule",
+				"body": "파랑은 선택과 실행의 의미를 맡고, 새로운 장식색은 추가하지 않는다.",
+				"section": "colors"
+			},
+			{
+				"name": "The Flat Surface Rule",
+				"body": "그림자와 카드 스택 대신 면의 톤과 hairline으로 깊이와 영역을 표현한다.",
+				"section": "elevation"
+			},
+			{
+				"name": "The Stable Number Rule",
+				"body": "숫자는 tabular numerals와 고정 열 폭으로 정렬한다.",
+				"section": "typography"
+			}
+		],
+		"dos": [
+			"Do preserve the system theme token pairs.",
+			"Do align important numbers with tabular numerals.",
+			"Do separate sections with hairlines and shallow fills.",
+			"Do keep focus outlines visible."
+		],
+		"donts": [
+			"Don't add gradients, glow, oversized decoration, or excessive cards.",
+			"Don't add new accent colors.",
+			"Don't turn the compact popover into a dashboard canvas."
+		]
+	}
+}
