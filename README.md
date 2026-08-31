@@ -51,20 +51,13 @@ Windows는 **돈을 내도 이 경고를 없앨 수 없습니다** — 2024년�
 상태에서 새 버전을 실행하면 단일 인스턴스 락에 걸려 새 인스턴스가 스스로 종료하고, 옛
 인스턴스가 팝오버를 엽니다 — 업데이트됐다고 믿으면서 옛 버전을 계속 쓰게 됩니다.
 
-## 개발
+## 라이선스
 
-```bash
-pnpm install
-pnpm dev        # 데스크톱 앱 개발 모드
-pnpm verify     # lint + typecheck + test
-```
+현재 [LICENSE](LICENSE)는 MIT License입니다. 무료 사용뿐 아니라 소스·실행 파일의 수정, 복제,
+재배포, 상업적 이용도 허용하며, 재배포할 때 저작권 고지와 라이선스 고지를 포함해야 합니다.
+자세한 내용은 [라이선스 안내](docs/licensing.md)를 참고하세요.
 
-용어와 도메인 모델은 [CONTEXT.md](CONTEXT.md)를 따릅니다.
+## 문서
 
-## 릴리스
-
-버전의 유일한 출처는 `apps/desktop/package.json`의 `version`입니다.
-
-1. `apps/desktop/package.json`의 `version`을 올린다.
-2. 커밋하고 main에 푸시한다.
-3. `git tag v<version> && git push --tags` — 태그 푸시가 릴리스 워크플로를 트리거한다.
+- [개발 안내](docs/development.md)
+- [릴리스 안내](docs/release.md)
