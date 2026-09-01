@@ -1582,7 +1582,10 @@ async function waitForStoredData(
 ): Promise<LeaveData> {
 	/** 격리 저장 파일 경로. */
 	const filePath = path.join(userDataDirectory, "data.json");
-	for (let attempt = 0; attempt < 20; attempt += 1) {
+	/** 원자적 저장 교체가 끝날 때까지 확인할 최대 횟수. */
+	const maxAttempts = 20;
+	// 저장 교체 순간의 읽기 실패나 이전 내용은 짧은 간격으로 다시 확인한다.
+	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
 		try {
 			/** 현재 저장 파일. 원자적 교체 중이면 다음 시도에서 다시 읽는다. */
 			const data = JSON.parse(await readFile(filePath, "utf8")) as LeaveData;

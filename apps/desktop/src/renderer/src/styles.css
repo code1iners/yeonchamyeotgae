@@ -224,8 +224,9 @@ button:focus-visible {
 /* 입사일 변경 확인의 제목은 카드 장식 없이 짧은 섹션 머리로 둔다. */
 .settings-confirm-title {
 	margin: 0 0 3px;
-	font-size: 11.5px;
+	font-size: 11px;
 	font-weight: 600;
+	color: var(--fg-2);
 }
 
 .sec-title {
