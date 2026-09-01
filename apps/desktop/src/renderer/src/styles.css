@@ -73,6 +73,19 @@ body {
 	color: var(--fg-2);
 }
 
+/* 시각적으로는 숨기되 필드셋의 이름은 보조 기술에 남긴다. */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
 /* ── 원자 ─────────────────────────────────────────────────── */
 
 button {
@@ -529,6 +542,9 @@ button.link:hover:not(:disabled) {
 }
 
 .cal {
+	min-inline-size: 0;
+	margin: 0;
+	border: 0;
 	padding: 4px 10px 0;
 }
 .cal-nav {
@@ -618,6 +634,46 @@ button.link:hover:not(:disabled) {
 	background: var(--danger);
 }
 
+/* 달력 상태 범례 — 점과 밑줄의 의미를 색을 구별하지 않아도 확인하게 한다. */
+.cal-legend {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	min-inline-size: 0;
+	margin: 0;
+	border: 0;
+	padding: 0 12px 2px;
+	color: var(--fg-2);
+	font-size: 11px;
+}
+.cal-legend > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.cal-legend-mark {
+	display: inline-block;
+	flex: none;
+}
+.cal-legend-planned,
+.cal-legend-used {
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+}
+.cal-legend-planned {
+	background: var(--accent);
+}
+.cal-legend-used {
+	background: var(--fg-2);
+}
+.cal-legend-expired {
+	width: 16px;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--danger);
+}
+
 /* 단위 선택 — 종일/반차/반반차가 한 몸으로 붙은 segmented control이다. */
 .seg {
 	display: flex;
@@ -647,6 +703,10 @@ button.link:hover:not(:disabled) {
 .hist-views {
 	flex: none;
 	width: 148px;
+	min-inline-size: 0;
+	margin: 0;
+	border: 0;
+	padding: 0;
 }
 
 /* 이력 리스트만 스크롤한다(5.3절) — 팝오버 높이가 내용을 따르므로 여기서만 자른다. */
@@ -794,20 +854,65 @@ button.hist-year:hover:not(:disabled) {
 	border-top: 1px solid var(--line);
 	padding-bottom: 2px;
 }
-.hist-day .sec-title {
+
+.hist-day-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	padding-right: 12px;
+}
+.hist-day-head .sec-title {
 	margin-top: 6px;
+}
+.hist-day-status {
+	font-size: 10.5px;
+}
+.hist-day-record {
+	margin: 0;
+}
+.hist-day-record > div {
+	display: grid;
+	grid-template-columns: 68px minmax(0, 1fr);
+	column-gap: 8px;
+	padding: 2px 12px;
+	min-height: 22px;
+}
+.hist-day-record dt {
+	color: var(--fg-2);
+}
+.hist-day-record dd {
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .hist-day-actions {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	margin-left: auto;
+	padding: 4px 12px 2px;
+}
+.hist-day-unit-fieldset {
+	display: flex;
+	align-items: center;
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.hist-day-unit-fieldset legend {
+	width: 68px;
+	flex: none;
+	padding: 0;
+	color: var(--fg-2);
+	font-size: 11.5px;
 }
 .hist-day-units {
-	flex: none;
-	width: 108px;
+	min-width: 0;
 }
 .hist-day-units button {
-	padding: 1px 0;
+	padding: 1px 2px;
 	font-size: 11.5px;
 }

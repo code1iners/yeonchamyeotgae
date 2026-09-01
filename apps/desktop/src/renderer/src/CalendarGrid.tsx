@@ -48,7 +48,8 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 	const leadingBlanks = first.dayOfWeek % 7;
 
 	return (
-		<div className="cal">
+		<fieldset className="cal">
+			<legend className="sr-only">달력</legend>
 			<div className="cal-nav">
 				<button
 					type="button"
@@ -84,7 +85,7 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 					/** 이 칸의 날짜. */
 					const date = first.add({ days: index }).toString();
 					/** 이 칸의 장식. */
-					const mark = decorate?.(date);
+					const decoration = decorate?.(date);
 					return (
 						<button
 							type="button"
@@ -92,11 +93,14 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 							className={[
 								"cal-day num",
 								date === today ? "cal-today" : "",
-								mark?.selected ? "cal-selected" : "",
-								mark?.dot ? `cal-dot-${mark.dot}` : "",
-								mark?.expired ? "cal-expired" : "",
+								decoration?.selected ? "cal-selected" : "",
+								decoration?.dot ? `cal-dot-${decoration.dot}` : "",
+								decoration?.expired ? "cal-expired" : "",
 							].join(" ")}
-							disabled={mark?.disabled}
+							aria-label={calendarDayLabel(date, today, decoration)}
+							aria-current={date === today ? "date" : undefined}
+							aria-pressed={decoration?.selected ?? false}
+							disabled={decoration?.disabled}
 							onClick={() => onPick(date)}
 						>
 							{index + 1}
@@ -104,6 +108,36 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 					);
 				})}
 			</div>
-		</div>
+		</fieldset>
 	);
+}
+
+/** 달력 날짜의 상태를 색과 독립적으로 읽어 주는 접근 가능한 이름. */
+function calendarDayLabel(
+	date: string,
+	today: string,
+	mark: DayDecoration | undefined,
+): string {
+	/** 날짜 셀에서 함께 안내할 상태 문구. */
+	const statuses: string[] = [];
+	if (date === today) {
+		statuses.push("오늘");
+	}
+	if (mark?.dot === "planned") {
+		statuses.push("예정");
+	}
+	if (mark?.dot === "used") {
+		statuses.push("사용");
+	}
+	if (mark?.expired) {
+		statuses.push("소멸일");
+	}
+	if (mark?.selected) {
+		statuses.push("선택됨");
+	}
+	if (mark?.disabled) {
+		statuses.push("선택할 수 없음");
+	}
+
+	return statuses.length > 0 ? `${date}, ${statuses.join(", ")}` : date;
 }

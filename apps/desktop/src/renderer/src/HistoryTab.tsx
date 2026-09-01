@@ -22,13 +22,6 @@ type Props = {
 	today: string;
 };
 
-/** 달력 아래 그날 기록의 단위 선택지(스펙 5.3절) — 좁은 자리라 숫자로 줄인다. */
-const CALENDAR_UNITS = [
-	{ label: "1", days: 1 },
-	{ label: "½", days: 0.5 },
-	{ label: "¼", days: 0.25 },
-] as const;
-
 /**
  * 이력 탭 — 무엇을 언제 썼는지 훑는 화면(스펙 5.3절). 리스트와 달력 두 뷰가 전환된다.
  *
@@ -51,7 +44,8 @@ export function HistoryTab({ entries, balance, adjustments, today }: Props) {
 	return (
 		<div className="pane">
 			<div className="hist-head">
-				<div className="seg hist-views">
+				<fieldset className="seg hist-views">
+					<legend className="sr-only">이력 보기</legend>
 					{(
 						[
 							{ key: "list", label: "리스트" },
@@ -67,7 +61,7 @@ export function HistoryTab({ entries, balance, adjustments, today }: Props) {
 							{label}
 						</button>
 					))}
-				</div>
+				</fieldset>
 			</div>
 			{view === "list" ? (
 				<HistoryList entries={entries} groups={groups} losses={losses} />
@@ -391,12 +385,14 @@ function HistoryCalendar({
 	/** 눌러서 펼쳐둔 날짜. 처음에는 아무 날도 아니다. */
 	const [selected, setSelected] = useState<string | null>(null);
 	/** 셸에 변경을 커밋하는 통로. */
-	const { commit, saving, error } = useCommit();
+	const { commit, saving, error, clearError } = useCommit();
 
 	/** 날짜 → 그날의 휴가 기록. 하루 1건이라 값이 하나다. */
 	const entryByDate = new Map(entries.map((entry) => [entry.date, entry]));
 	/** 예정인 날짜들 — 3.9절 경계를 여기서 다시 구현하지 않고 코어 판정을 옮겨 받는다. */
 	const plannedDates = new Set(groups.planned.map((entry) => entry.date));
+	/** 소멸 내역이 있는 날짜들 — 셀마다 같은 배열을 다시 훑지 않는다. */
+	const expiredDates = new Set(losses.map((loss) => loss.expiryDate));
 
 	/** 펼친 날짜의 기록. */
 	const selectedEntry = selected ? entryByDate.get(selected) : undefined;
@@ -404,9 +400,14 @@ function HistoryCalendar({
 	const selectedLosses = selected
 		? losses.filter((loss) => loss.expiryDate === selected)
 		: [];
+	/** 선택한 기록이 조회일 이후인지 — 예정/사용은 날짜에서만 나온다. */
+	const selectedPlanned = selectedEntry
+		? plannedDates.has(selectedEntry.date)
+		: false;
 
 	/** 단위 변경 핸들러 — 누르는 즉시 커밋한다. 폼이 아니라 그날 기록의 손잡이다. */
 	const handleChangeDays = async (entry: LeaveEntry, days: number) => {
+		clearError();
 		await commit({
 			entries: entries.map((item) =>
 				item.id === entry.id ? { ...item, days } : item,
@@ -416,60 +417,118 @@ function HistoryCalendar({
 
 	/** 삭제 핸들러. */
 	const handleDelete = async (entry: LeaveEntry) => {
+		clearError();
 		await commit({ entries: entries.filter((item) => item.id !== entry.id) });
+	};
+
+	/** 날짜 선택 핸들러 — 이전 날짜의 저장 실패 문구를 새 날짜로 가져가지 않는다. */
+	const handlePickDate = (date: string) => {
+		clearError();
+		setSelected(date);
 	};
 
 	return (
 		<>
-			<CalendarGrid
-				today={today}
-				initialMonth={today}
-				decorate={(date) => {
-					/** 그날의 휴가 기록. */
-					const entry = entryByDate.get(date);
-					return {
-						selected: date === selected,
-						dot: entry
-							? plannedDates.has(date)
-								? "planned"
-								: "used"
-							: undefined,
-						expired: losses.some((loss) => loss.expiryDate === date),
-					};
-				}}
-				onPick={(date) => setSelected(date)}
-			/>
+			<div className="hist-calendar">
+				<fieldset className="cal-legend">
+					<legend className="sr-only">달력 상태 안내</legend>
+					<span>
+						<i
+							className="cal-legend-mark cal-legend-planned"
+							aria-hidden="true"
+						/>
+						예정
+					</span>
+					<span>
+						<i className="cal-legend-mark cal-legend-used" aria-hidden="true" />
+						사용
+					</span>
+					<span>
+						<i
+							className="cal-legend-mark cal-legend-expired"
+							aria-hidden="true"
+						/>
+						소멸일
+					</span>
+				</fieldset>
+				<CalendarGrid
+					today={today}
+					initialMonth={today}
+					decorate={(date) => {
+						/** 그날의 휴가 기록. */
+						const entry = entryByDate.get(date);
+						return {
+							selected: date === selected,
+							dot: entry
+								? plannedDates.has(date)
+									? "planned"
+									: "used"
+								: undefined,
+							expired: expiredDates.has(date),
+						};
+					}}
+					onPick={handlePickDate}
+				/>
+			</div>
 			{selected && (
-				<div className="hist-day">
-					<div className="sec-title num">{selected}</div>
+				<section
+					className="hist-day"
+					aria-label="선택한 날짜 상세"
+					aria-live="polite"
+				>
+					<div className="hist-day-head">
+						<h3 className="sec-title num">{selected}</h3>
+						{selectedEntry && (
+							<strong
+								className={`hist-day-status ${selectedPlanned ? "tag-planned" : "hist-status-used"}`}
+							>
+								{selectedPlanned ? "예정" : "사용"}
+							</strong>
+						)}
+					</div>
 					{selectedLosses.map((loss) => (
 						<div
 							className="row warn"
-							key={`${loss.source}-${loss.note}-${loss.days}`}
+							key={`${loss.expiryDate}-${loss.source}-${loss.note}-${loss.days}`}
 						>
 							{lossLabel(loss)}
 						</div>
 					))}
 					{selectedEntry ? (
-						<div className="row">
-							<span>{unitLabel(selectedEntry.days)}</span>
-							{selectedEntry.note && (
-								<span className="dim hist-note">{selectedEntry.note}</span>
-							)}
-							<span className="hist-day-actions">
-								<span className="seg hist-day-units">
-									{CALENDAR_UNITS.map((unit) => (
-										<button
-											type="button"
-											key={unit.days}
-											aria-pressed={selectedEntry.days === unit.days}
-											disabled={saving}
-											onClick={() => handleChangeDays(selectedEntry, unit.days)}
-										>
-											{unit.label}
-										</button>
-									))}
-								</span>
+						<>
+							<dl className="hist-day-record">
+								<div>
+									<dt>날짜</dt>
+									<dd className="num">{selectedEntry.date}</dd>
+								</div>
+								<div>
+									<dt>단위</dt>
+									<dd>{unitLabel(selectedEntry.days)}</dd>
+								</div>
+								<div>
+									<dt>메모</dt>
+									<dd className="dim">{selectedEntry.note || "메모 없음"}</dd>
+								</div>
+							</dl>
+							<div className="hist-day-actions">
+								<fieldset className="hist-day-unit-fieldset">
+									<legend>단위 변경</legend>
+									<div className="seg hist-day-units">
+										{UNITS.map((unit) => (
+											<button
+												type="button"
+												key={unit.days}
+												aria-pressed={selectedEntry.days === unit.days}
+												disabled={saving}
+												onClick={() =>
+													handleChangeDays(selectedEntry, unit.days)
+												}
+											>
+												{unit.label}
+											</button>
+										))}
+									</div>
+								</fieldset>
 								<button
 									type="button"
 									className="mini"
@@ -478,15 +537,19 @@ function HistoryCalendar({
 								>
 									삭제
 								</button>
-							</span>
-						</div>
+							</div>
+						</>
 					) : (
 						selectedLosses.length === 0 && (
 							<div className="row dim">이 날에는 기록이 없습니다.</div>
 						)
 					)}
-					{error && <p className="error">{error}</p>}
-				</div>
+					{error && (
+						<p className="error" role="alert" aria-live="assertive">
+							{error}
+						</p>
+					)}
+				</section>
 			)}
 		</>
 	);

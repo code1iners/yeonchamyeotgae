@@ -125,6 +125,9 @@ const EXCESS_DATA = excessData();
 /** 예정·사용·연차 연도 접기와 인라인 변경을 한 흐름에서 검증할 저장 데이터. */
 const HISTORY_DATA = historyData();
 
+/** 달력의 월 이동·상태 문구·소멸 설명·선택 기록 변경을 한 흐름에서 검증할 저장 데이터. */
+const CALENDAR_DATA = calendarData();
+
 /** 기록이 길어져도 목록만 스크롤되는지 검증할 저장 데이터. */
 const LONG_HISTORY_DATA = longHistoryData();
 
@@ -270,6 +273,44 @@ function historyData(): LeaveData {
 			},
 		],
 		adjustments: [],
+	};
+}
+
+/** 예정·사용·소멸일이 서로 다른 달에 걸리는 달력 검증용 저장 데이터. */
+function calendarData(): LeaveData {
+	return {
+		schemaVersion: 1,
+		settings: { hireDate: TEST_TODAY, grantBasis: "hireDate" },
+		entries: [
+			{
+				id: "calendar-used-entry",
+				date: "2025-11-28",
+				days: 1,
+				note: "지난 기록 메모",
+			},
+			{
+				id: "calendar-planned-entry",
+				date: "2025-12-15",
+				days: 0.5,
+				note: "예정 기록 메모",
+			},
+		],
+		adjustments: [
+			{
+				id: "calendar-living-adjustment",
+				grantDate: TEST_TODAY,
+				expiryDate: "2026-12-31",
+				days: 10,
+				note: "달력 현재 발생",
+			},
+			{
+				id: "calendar-expired-adjustment",
+				grantDate: "2025-01-01",
+				expiryDate: "2025-11-30",
+				days: 5,
+				note: "이월",
+			},
+		],
 	};
 }
 
@@ -715,6 +756,124 @@ describe.sequential("Electron 제품 흐름", () => {
 		});
 		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
 		await expectVisible(flow.page.getByRole("tab", { name: "이력" }));
+	});
+
+	test("이력 달력에서 상태·소멸·선택 기록을 확인하고 키보드로 변경·삭제한다", async () => {
+		flow = await launchProductFlow(CALENDAR_DATA);
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+
+		/** 리스트와 달력 사이를 바꾸는 같은 화면의 보기 조작. */
+		const listView = flow.page.getByRole("button", { name: "리스트" });
+		const calendarView = flow.page.getByRole("button", { name: "달력" });
+		expect(await listView.getAttribute("aria-pressed")).toBe("true");
+		await flow.page.keyboard.press("Tab");
+		await expectKeyboardFocus(listView);
+		await flow.page.keyboard.press("Tab");
+		await expectKeyboardFocus(calendarView);
+		await flow.page.keyboard.press("Enter");
+		expect(await calendarView.getAttribute("aria-pressed")).toBe("true");
+		expect(await listView.getAttribute("aria-pressed")).toBe("false");
+
+		/** 현재 달을 감싸는 접근 가능한 달력. */
+		const calendar = flow.page.getByRole("group", {
+			name: "달력",
+			exact: true,
+		});
+		await expectVisible(calendar);
+		await expectVisible(calendar.getByText("2025년 12월", { exact: true }));
+
+		/** 이전 달로 이동하는 키보드 조작. */
+		const previousMonth = calendar.getByRole("button", { name: "이전 달" });
+		await previousMonth.focus();
+		await previousMonth.press("Enter");
+		/** 사용 상태를 문구로 포함하는 날짜 셀. */
+		const usedDay = calendar.getByRole("button", {
+			name: /2025-11-28.*사용/,
+		});
+		/** 소멸일 상태를 문구로 포함하는 날짜 셀. */
+		const expiryDay = calendar.getByRole("button", {
+			name: /2025-11-30.*소멸일/,
+		});
+		await expectVisible(usedDay);
+		await expectVisible(expiryDay);
+
+		/** 사용 기록을 키보드로 선택한다. */
+		await usedDay.focus();
+		await usedDay.press("Enter");
+		/** 선택 날짜의 기록·소멸 상세 영역. */
+		const selectedDetails = flow.page.getByRole("region", {
+			name: "선택한 날짜 상세",
+		});
+		await expectVisible(selectedDetails);
+		await expectVisible(
+			selectedDetails.getByRole("definition").filter({ hasText: "2025-11-28" }),
+		);
+		await expectVisible(selectedDetails.getByText("사용", { exact: true }));
+		await expectVisible(selectedDetails.getByText("메모", { exact: true }));
+		await expectVisible(
+			selectedDetails.getByText("지난 기록 메모", { exact: true }),
+		);
+
+		/** 다음 달로 돌아가는 키보드 조작. */
+		const nextMonth = calendar.getByRole("button", { name: "다음 달" });
+		await nextMonth.focus();
+		await nextMonth.press("Enter");
+		/** 예정 상태를 문구로 포함하는 날짜 셀. */
+		const plannedDay = calendar.getByRole("button", {
+			name: /2025-12-15.*예정/,
+		});
+		await plannedDay.focus();
+		await plannedDay.press("Enter");
+		await expectVisible(
+			selectedDetails.getByRole("definition").filter({ hasText: "2025-12-15" }),
+		);
+		await expectVisible(selectedDetails.getByText("예정", { exact: true }));
+		await expectVisible(
+			selectedDetails.getByText("예정 기록 메모", { exact: true }),
+		);
+		await expectVisible(
+			selectedDetails.getByRole("definition").filter({ hasText: "반차" }),
+		);
+
+		/** 단위 변경을 키보드로 실행하고 상태 푸시로 잔여가 바뀌는지 확인한다. */
+		const fullDay = selectedDetails.getByRole("button", { name: "종일" });
+		await fullDay.focus();
+		await fullDay.press("Enter");
+		await expectVisible(flow.page.getByText("9일", { exact: true }));
+		await expectVisible(
+			selectedDetails.getByRole("definition").filter({ hasText: "종일" }),
+		);
+		await expectVisible(
+			calendar.getByRole("button", {
+				name: /2025-12-15.*예정.*선택됨/,
+			}),
+		);
+
+		/** 선택 기록 삭제를 키보드로 실행한다. */
+		const deleteEntry = selectedDetails.getByRole("button", { name: "삭제" });
+		await deleteEntry.focus();
+		await deleteEntry.press("Enter");
+		await expectVisible(
+			selectedDetails.getByText("이 날에는 기록이 없습니다.", { exact: true }),
+		);
+		await expectVisible(flow.page.getByText("10일", { exact: true }));
+		expect(
+			await calendar.getByRole("button", { name: /2025-12-15.*예정/ }).count(),
+		).toBe(0);
+
+		/** 소멸일을 선택해 무엇이 얼마나 사라졌는지 확인한다. */
+		await previousMonth.focus();
+		await previousMonth.press("Enter");
+		await expiryDay.focus();
+		await expiryDay.press("Enter");
+		await expectVisible(
+			selectedDetails.getByText("2025년 이월 4일 소멸", { exact: true }),
+		);
+
+		/** 같은 이력 화면에서 리스트 보기로 되돌아가는 키보드 조작. */
+		await listView.focus();
+		await listView.press("Enter");
+		expect(await listView.getAttribute("aria-pressed")).toBe("true");
 	});
 
 	test("오늘 종일 빠른 등록이 두 조작으로 저장되고 잔여·이력을 갱신한다", async () => {
@@ -1244,4 +1403,19 @@ async function expectVisible(
 ): Promise<void> {
 	await locator.waitFor({ state: "visible", timeout: 1_000 });
 	expect(await locator.isVisible()).toBe(true);
+}
+
+/** 탭 키로 도달한 조작의 포커스와 실제 포커스 테두리를 함께 확인한다. */
+async function expectKeyboardFocus(
+	locator: ReturnType<Page["locator"]>,
+): Promise<void> {
+	expect(
+		await locator.evaluate((element) => element === document.activeElement),
+	).toBe(true);
+	expect(
+		await locator.evaluate((element) => {
+			const style = getComputedStyle(element);
+			return style.outlineStyle !== "none" && style.outlineWidth !== "0px";
+		}),
+	).toBe(true);
 }
