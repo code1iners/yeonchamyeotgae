@@ -60,6 +60,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await flow.page.waitForFunction(
 			() => document.documentElement.scrollHeight <= window.innerHeight,
 		);
+		/** 실제 팝오버 콘텐츠의 외부 치수. */
 		const layout = await flow.page.evaluate(() => ({
 			width: window.innerWidth,
 			height: window.innerHeight,
@@ -68,8 +69,11 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(layout.width).toBe(380);
 		expect(layout.contentHeight).toBeLessThanOrEqual(layout.height);
 
+		/** 요약 탭 버튼. */
 		const summaryTab = flow.page.getByRole("tab", { name: "요약" });
+		/** 이력 탭 버튼. */
 		const historyTab = flow.page.getByRole("tab", { name: "이력" });
+		/** 설정 탭 버튼. */
 		const settingsTab = flow.page.getByRole("tab", { name: "설정" });
 		expect(await summaryTab.getAttribute("id")).toBe("tab-summary");
 		expect(await summaryTab.getAttribute("aria-controls")).toBe(
@@ -90,6 +94,18 @@ describe.sequential("Electron 제품 흐름", () => {
 				(element) => element === document.activeElement,
 			),
 		).toBe(true);
+		/** 키보드로 선택된 탭의 실제 포커스 표시. */
+		const focusStyle = await historyTab.evaluate((element) => {
+			const style = getComputedStyle(element);
+			return {
+				outlineStyle: style.outlineStyle,
+				outlineWidth: style.outlineWidth,
+				outlineColor: style.outlineColor,
+			};
+		});
+		expect(focusStyle.outlineStyle).toBe("solid");
+		expect(focusStyle.outlineWidth).toBe("2px");
+		expect(focusStyle.outlineColor).not.toBe("rgba(0, 0, 0, 0)");
 		expect(
 			await flow.page.getByRole("tabpanel").getAttribute("aria-labelledby"),
 		).toBe("tab-history");

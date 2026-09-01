@@ -109,6 +109,7 @@ export function App() {
 
 		/** 키 입력으로 이동할 목록 위치. */
 		let nextIndex = currentIndex;
+		// 좌우 화살표는 탭을 순환하고 Home·End는 양 끝으로 이동한다.
 		switch (event.key) {
 			case "ArrowLeft":
 				nextIndex =
@@ -134,6 +135,7 @@ export function App() {
 			return;
 		}
 		selectTab(nextTab.key);
+		// 선택 상태를 바꾼 뒤 새 탭으로 포커스를 옮겨 roving tabindex를 완성한다.
 		document.getElementById(tabId(nextTab.key))?.focus();
 	};
 

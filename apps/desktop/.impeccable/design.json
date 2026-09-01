@@ -384,8 +384,8 @@
 			"kind": "nav",
 			"refersTo": "tab-selected",
 			"description": "요약·이력·설정의 현재 위치를 표시하는 세 탭.",
-			"html": "<nav class=\"ds-tabs\" role=\"tablist\"><button type=\"button\" role=\"tab\" aria-selected=\"true\">요약</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">이력</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">설정</button></nav>",
-			"css": ".ds-tabs { display: flex; gap: 2px; padding: 0 10px 8px; border-bottom: 1px solid var(--line); } .ds-tabs button { flex: 1; font: inherit; color: var(--fg); border: 1px solid transparent; border-radius: 6px; background: var(--fill); padding: 3px 9px; cursor: default; } .ds-tabs button:hover:not(:disabled) { background: var(--hover); } .ds-tabs button[aria-selected=\"true\"] { background: var(--accent); color: var(--on-accent); } .ds-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }"
+			"html": "<div class=\"ds-tabs\" role=\"tablist\"><button type=\"button\" role=\"tab\" aria-selected=\"true\">요약</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">이력</button><button type=\"button\" role=\"tab\" aria-selected=\"false\">설정</button></div>",
+			"css": ".ds-tabs { display: flex; gap: 2px; padding: 8px 10px; border-bottom: 1px solid var(--line); } .ds-tabs button { flex: 1; font: inherit; color: var(--fg); border: 1px solid transparent; border-radius: 6px; background: var(--fill); padding: 3px 9px; cursor: default; } .ds-tabs button:hover:not(:disabled) { background: var(--hover); } .ds-tabs button[aria-selected=\"true\"] { background: var(--accent); color: var(--on-accent); } .ds-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-tabs button[aria-selected=\"true\"]:focus-visible { outline-color: var(--on-accent); }"
 		},
 		{
 			"name": "Segmented Control",

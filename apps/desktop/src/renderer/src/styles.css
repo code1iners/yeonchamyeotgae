@@ -148,7 +148,7 @@ button:focus-visible {
 
 .head-balance strong {
 	font-size: 17px;
-	font-weight: 700;
+	font-weight: 600;
 	white-space: nowrap;
 }
 
@@ -166,6 +166,9 @@ button:focus-visible {
 .tabs button[aria-selected="true"] {
 	background: var(--accent);
 	color: var(--on-accent);
+}
+.tabs button[aria-selected="true"]:focus-visible {
+	outline-color: var(--on-accent);
 }
 
 /* 온보딩이 말하는 한 줄(5.4절). 글리프도 히어로도 넣지 않는다(6절). */
@@ -514,7 +517,7 @@ button.link:hover:not(:disabled) {
 	color: var(--on-accent);
 }
 
-/* 이력 달력의 장식(26번) — 숫자 아래의 점(예정 파랑 / 사용 회색)과 소멸 빨간 밑줄. */
+/* 이력 달력의 장식(26번) — 숫자 아래의 점(예정 녹색 / 사용 회색)과 소멸 빨간 밑줄. */
 .cal-day {
 	position: relative;
 }
@@ -608,18 +611,21 @@ button.hist-year:hover:not(:disabled) {
 	font-size: 10px;
 }
 
-/* 기록 행 — 수정·삭제는 올렸을 때만 보인다. 자리는 항상 잡아둬 행이 흔들리지 않는다. */
+/* 기록 행 — 수정·삭제는 hover·키보드 포커스에서 보이고 자리는 항상 잡아둔다. */
 .hist-row .hist-actions {
 	display: flex;
 	gap: 2px;
 	margin-left: auto;
-	visibility: hidden;
+	opacity: 0;
+	pointer-events: none;
 }
 .hist-row:hover {
 	background: var(--hover);
 }
-.hist-row:hover .hist-actions {
-	visibility: visible;
+.hist-row:hover .hist-actions,
+.hist-row:focus-within .hist-actions {
+	opacity: 1;
+	pointer-events: auto;
 }
 .hist-note {
 	flex: 1;
