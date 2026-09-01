@@ -466,7 +466,7 @@ button.link:hover:not(:disabled) {
 	text-align: right;
 }
 
-/* ── 휴가 등록 시트(25번) ─────────────────────────────────── */
+/* ── 휴가 등록면(04·05번) ─────────────────────────────────── */
 
 /* 시트 머리 — 제목과 닫기가 한 줄이다. 팝오버를 덮는 모드라 자기 문이 필요하다(5.2절). */
 .sheet-head {
@@ -477,16 +477,55 @@ button.link:hover:not(:disabled) {
 }
 .sheet-head .sec-title {
 	margin-top: 4px;
+	color: var(--fg);
+	font-size: 13px;
 }
 
-/* 달력 위의 안내 한 줄 — 지금 무엇을 고르는 중인지가 여기 있다. */
-.cal-hint {
-	margin: 0;
-	padding: 2px 12px 0;
-	font-size: 11.5px;
+/* 기본값과 확장 입력을 한 면에 둔다 — 등록면은 다른 페이지나 중첩 모달이 아니다. */
+.entry-form {
+	padding-top: 2px;
 }
-.cal-hint .mini {
-	margin-left: 6px;
+.entry-choice {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	min-inline-size: 0;
+	margin: 0;
+	padding: 4px 12px;
+	border: 0;
+}
+.entry-choice legend {
+	width: 68px;
+	flex: none;
+	padding: 0;
+	color: var(--fg-2);
+}
+.entry-unit-choice {
+	margin-top: 2px;
+	border-top: 1px solid var(--line);
+}
+.entry-today {
+	flex: none;
+	color: var(--accent);
+	font-size: 11.5px;
+	font-weight: 600;
+}
+.field .entry-checkbox {
+	flex: none;
+	width: auto;
+	margin: 0;
+}
+.entry-status {
+	margin: 0;
+	padding: 4px 12px 0;
+	font-size: 11.5px;
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+.entry-status-warning {
+	color: var(--danger);
 }
 
 .cal {

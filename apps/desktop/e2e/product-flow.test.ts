@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	chmod,
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { LeaveData } from "@yeoncha/core";
@@ -43,6 +50,35 @@ const NORMAL_DATA: LeaveData = {
 		},
 	],
 	adjustments: [],
+};
+
+/** 오늘 빠른 등록 전후의 잔여와 이력을 확인할 최소 결정론적 저장 데이터. */
+const QUICK_ENTRY_DATA: LeaveData = {
+	schemaVersion: 1,
+	settings: { hireDate: TEST_TODAY, grantBasis: "hireDate" },
+	entries: [],
+	adjustments: [
+		{
+			id: "quick-entry-adjustment",
+			grantDate: TEST_TODAY,
+			expiryDate: "2026-12-31",
+			days: 10,
+			note: "빠른 등록 시드",
+		},
+	],
+};
+
+/** 오늘 중복 안내와 다른 날짜 선택을 확인할 저장 데이터. */
+const DUPLICATE_ENTRY_DATA: LeaveData = {
+	...QUICK_ENTRY_DATA,
+	entries: [
+		{
+			id: "already-taken-today",
+			date: TEST_TODAY,
+			days: 1,
+			note: "이미 등록된 오늘",
+		},
+	],
 };
 
 /** 긴 목록의 위치와 고유 렌더링 key를 검증할 결정론적 저장 데이터. */
@@ -385,6 +421,143 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(expiryX.every((x) => x === expiryX[0])).toBe(true);
 	});
 
+	test("오늘 종일 빠른 등록이 두 조작으로 저장되고 잔여·이력을 갱신한다", async () => {
+		flow = await launchProductFlow(QUICK_ENTRY_DATA);
+
+		/** 등록 전 잔여. 오늘 조정 10일이 그대로 살아 있다. */
+		await expectVisible(flow.page.getByText("10일", { exact: true }));
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+
+		/** 기본값과 저장 버튼이 같은 등록면에 있는지 확인한다. */
+		const sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await expectVisible(sheet);
+		expect(await flow.page.getByLabel("날짜").inputValue()).toBe(TEST_TODAY);
+		await expectVisible(flow.page.getByText("오늘", { exact: true }));
+		expect(
+			await flow.page
+				.getByRole("button", { name: "종일", exact: true })
+				.getAttribute("aria-pressed"),
+		).toBe("true");
+		await captureEntryScreenshot(flow.page);
+
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		/** 저장 성공을 등록면에서 확인한 뒤 닫힘을 기다린다. */
+		await expectVisible(
+			flow.page.getByText("저장했습니다. 등록면을 닫습니다.", { exact: true }),
+		);
+		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("9일", { exact: true }));
+
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+		await expectVisible(flow.page.getByText(TEST_TODAY, { exact: true }));
+		await expectVisible(flow.page.getByText("종일", { exact: true }));
+	});
+
+	test("오늘 중복 등록은 막고 같은 등록면에서 다른 날짜를 고르게 한다", async () => {
+		flow = await launchProductFlow(DUPLICATE_ENTRY_DATA);
+
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		/** 오늘 중복 여부를 확인하고 바꿀 날짜를 입력하는 입력. */
+		const dateInput = flow.page.getByLabel("날짜");
+		/** 중복 날짜에서 재등록을 막는 버튼. */
+		const submit = flow.page.getByRole("button", { name: "등록", exact: true });
+		await expectVisible(
+			flow.page.getByText(
+				"오늘은 이미 휴가 기록이 있습니다. 다른 날짜를 선택하세요.",
+			),
+		);
+		expect(await submit.isDisabled()).toBe(true);
+		expect(await dateInput.getAttribute("aria-invalid")).toBe("true");
+
+		await dateInput.fill("2025-12-02");
+		expect(await submit.isEnabled()).toBe(true);
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		await expectVisible(flow.page.getByText("8일", { exact: true }));
+	});
+
+	test("기존 기간 등록은 같은 등록면에서 주말을 제외하고 여러 기록으로 저장한다", async () => {
+		flow = await launchProductFlow(QUICK_ENTRY_DATA);
+
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		await flow.page.getByLabel("날짜").fill("2025-12-05");
+		await flow.page.getByLabel("종료일").fill("2025-12-09");
+		expect(await flow.page.getByLabel("주말 제외").isChecked()).toBe(true);
+		await expectVisible(
+			flow.page.getByText("휴가 기록 3건을 종일로 등록합니다.", {
+				exact: true,
+			}),
+		);
+
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		await expectVisible(flow.page.getByText("7일", { exact: true }));
+	});
+
+	test("등록면은 키보드로 열고 닫거나 기본값을 저장할 수 있다", async () => {
+		flow = await launchProductFlow(QUICK_ENTRY_DATA);
+
+		/** 마우스 없이 등록면을 여는 트리거. */
+		const trigger = flow.page.getByRole("button", { name: "휴가 등록" });
+		await trigger.focus();
+		await trigger.press("Enter");
+		/** 열린 등록면의 키보드 닫힘을 확인하는 대화상자. */
+		const sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await expectVisible(sheet);
+		expect(
+			await flow.page
+				.getByLabel("날짜")
+				.evaluate((element) => element === document.activeElement),
+		).toBe(true);
+
+		await flow.page.keyboard.press("Escape");
+		await sheet.waitFor({ state: "detached" });
+
+		await trigger.focus();
+		await trigger.press("Enter");
+		/** 닫은 뒤 다시 연 등록면. */
+		const reopenedSheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await expectVisible(reopenedSheet);
+		/** 키보드 Enter로 기본 등록을 실행하는 버튼. */
+		const submit = flow.page.getByRole("button", { name: "등록", exact: true });
+		await submit.focus();
+		await submit.press("Enter");
+		await reopenedSheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("9일", { exact: true }));
+	});
+
+	test("등록 저장 실패 시 같은 등록면의 입력값과 맥락을 유지한다", async () => {
+		flow = await launchProductFlow(QUICK_ENTRY_DATA);
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		/** 저장 실패 뒤에도 같은 등록면이 남아 있는지 확인하는 대화상자. */
+		const sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		/** 저장 실패 뒤에도 보존되어야 하는 메모 입력. */
+		const note = flow.page.getByLabel("메모");
+		await note.fill("  저장 실패 뒤에도 남는 메모  ");
+
+		// 저장 파일 디렉터리를 잠가 원자적 쓰기 실패를 실제 Electron 경로에서 만든다.
+		await chmod(flow.userDataDirectory, 0o500);
+		try {
+			await flow.page
+				.getByRole("button", { name: "등록", exact: true })
+				.click();
+			await expectVisible(
+				flow.page.getByText(/저장하지 못했습니다/, { exact: false }),
+			);
+			expect(await sheet.isVisible()).toBe(true);
+			expect(await flow.page.getByLabel("날짜").inputValue()).toBe(TEST_TODAY);
+			expect(await note.inputValue()).toBe("  저장 실패 뒤에도 남는 메모  ");
+			expect(
+				await flow.page
+					.getByRole("button", { name: "등록", exact: true })
+					.isEnabled(),
+			).toBe(true);
+		} finally {
+			await chmod(flow.userDataDirectory, 0o700);
+		}
+	});
+
 	test("초과 원인에서 조정을 추가하면 현재 날짜 맥락을 보존한다", async () => {
 		flow = await launchProductFlow(EXCESS_DATA);
 		/** 앱과 같은 시간대의 조회일. */
@@ -585,6 +758,19 @@ async function captureSummaryScreenshot(page: Page): Promise<void> {
 	const screenshot = await page.screenshot();
 	/** 승인된 컴프 대조에 사용할 고정된 산출물 위치. */
 	const screenshotPath = path.join(outputDirectory, "summary-first-view.png");
+	await writeFile(screenshotPath, screenshot);
+}
+
+/** 승인된 컴프와 비교할 빠른 등록면을 임시 또는 지정된 증거 폴더에 남긴다. */
+async function captureEntryScreenshot(page: Page): Promise<void> {
+	/** 기본은 임시 산출물이고, 지정하면 리뷰에 남길 저장소 경로를 쓴다. */
+	const outputDirectory =
+		process.env.YEONCHA_E2E_ARTIFACT_DIR ?? SCREENSHOT_DIRECTORY;
+	await mkdir(outputDirectory, { recursive: true });
+	/** Playwright가 캡처한 등록면 데이터. */
+	const screenshot = await page.screenshot();
+	/** 기본값 검토에 사용할 고정된 산출물 위치. */
+	const screenshotPath = path.join(outputDirectory, "quick-entry.png");
 	await writeFile(screenshotPath, screenshot);
 }
 
