@@ -81,6 +81,19 @@ const DUPLICATE_ENTRY_DATA: LeaveData = {
 	],
 };
 
+/** 다른 날짜·단위·기간의 저장과 기존 날짜 건너뛰기를 확인할 데이터. */
+const EXPANDED_ENTRY_DATA: LeaveData = {
+	...QUICK_ENTRY_DATA,
+	entries: [
+		{
+			id: "already-taken-in-range",
+			date: "2025-12-05",
+			days: 1,
+			note: "기존 기록",
+		},
+	],
+};
+
 /** 긴 목록의 위치와 고유 렌더링 key를 검증할 결정론적 저장 데이터. */
 const LONG_SUMMARY_DATA: LeaveData = {
 	schemaVersion: 1,
@@ -494,6 +507,107 @@ describe.sequential("Electron 제품 흐름", () => {
 		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
 		await expectVisible(flow.page.getByText("7일", { exact: true }));
 	});
+
+	test("확장 등록은 다른 날짜·단위·메모와 역순 기간의 중복 제외를 저장한다", async () => {
+		flow = await launchProductFlow(EXPANDED_ENTRY_DATA);
+
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		/** 확장 입력을 확인할 첫 등록면. */
+		let sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		/** 다른 날짜를 선택할 입력. */
+		const dateInput = flow.page.getByLabel("날짜");
+		/** 선택 사항인 메모 입력. */
+		const noteInput = flow.page.getByLabel("메모");
+
+		// 다른 날짜와 반차를 고른 뒤 기간으로 갔다가 돌아와도 입력 맥락을 유지한다.
+		await dateInput.fill("2025-12-03");
+		await noteInput.fill("  반차 메모  ");
+		await flow.page.getByRole("button", { name: "반차", exact: true }).click();
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		expect(await dateInput.inputValue()).toBe("2025-12-03");
+		expect(await noteInput.inputValue()).toBe("  반차 메모  ");
+		await flow.page.getByRole("button", { name: "하루", exact: true }).click();
+		expect(await dateInput.inputValue()).toBe("2025-12-03");
+		expect(await noteInput.inputValue()).toBe("  반차 메모  ");
+
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("8.5일", { exact: true }));
+
+		// 같은 등록면에서 다른 단위와 메모를 저장한다.
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await flow.page.getByLabel("날짜").fill("2025-12-04");
+		await flow.page
+			.getByRole("button", { name: "반반차", exact: true })
+			.click();
+		await flow.page.getByLabel("메모").fill("  반반차 메모  ");
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("8.25일", { exact: true }));
+
+		// 시작일과 종료일을 역순으로 넣어도 주말과 기존 기록을 뺀 2건을 미리 보여준다.
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		await flow.page.getByLabel("날짜").fill("2025-12-09");
+		await flow.page.getByLabel("종료일").fill("2025-12-05");
+		expect(await flow.page.getByLabel("주말 제외").isChecked()).toBe(true);
+		await expectVisible(
+			flow.page.getByText("휴가 기록 2건을 종일로 등록합니다.", {
+				exact: true,
+			}),
+		);
+
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("6.25일", { exact: true }));
+
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+		await expectVisible(flow.page.getByText("2025-12-03", { exact: true }));
+		await expectVisible(flow.page.getByText("반차", { exact: true }));
+		/** 앞뒤 공백이 제거된 첫 번째 메모. */
+		const halfNote = flow.page.getByText("반차 메모", { exact: true });
+		await expectVisible(halfNote);
+		expect(await halfNote.textContent()).toBe("반차 메모");
+		await expectVisible(flow.page.getByText("2025-12-04", { exact: true }));
+		await expectVisible(flow.page.getByText("반반차", { exact: true }));
+		/** 앞뒤 공백이 제거된 두 번째 메모. */
+		const quarterNote = flow.page.getByText("반반차 메모", { exact: true });
+		await expectVisible(quarterNote);
+		expect(await quarterNote.textContent()).toBe("반반차 메모");
+		await expectVisible(flow.page.getByText("2025-12-08", { exact: true }));
+		await expectVisible(flow.page.getByText("2025-12-09", { exact: true }));
+		expect(
+			await flow.page.getByText("2025-12-05", { exact: true }).count(),
+		).toBe(1);
+
+		// 이미 기록된 날짜만 남긴 기간은 등록할 수 없고, 취소도 같은 등록면에서 끝낸다.
+		await flow.page.getByRole("tab", { name: "요약" }).click();
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		await flow.page.getByLabel("날짜").fill("2025-12-08");
+		await flow.page.getByLabel("종료일").fill("2025-12-09");
+		await expectVisible(
+			flow.page.getByText("선택한 기간에는 등록할 수 있는 날이 없습니다.", {
+				exact: true,
+			}),
+		);
+		expect(
+			await flow.page
+				.getByRole("button", { name: "등록", exact: true })
+				.isDisabled(),
+		).toBe(true);
+		await flow.page.getByRole("button", { name: "취소", exact: true }).click();
+		await sheet.waitFor({ state: "detached" });
+	}, 30_000);
 
 	test("등록면은 키보드로 열고 닫거나 기본값을 저장할 수 있다", async () => {
 		flow = await launchProductFlow(QUICK_ENTRY_DATA);
