@@ -1,0 +1,13 @@
+Use case: ui-mockup
+Asset type: alternate north-star direction comp for a native desktop tray popover
+Primary request: A production-grade visual concept for the Korean annual-leave tracker app "연차몇개", designed as a compact portrait desktop menu-bar popover inspired by Wim Crouwel's grid-based type specimens and print proof sheets. This is an alternate direction comparison image, not a phone mockup and not a website.
+Scene/backdrop: one front-facing narrow desktop popover, approximately 380px wide and 620px tall, no device frame.
+Subject: a precise summary screen for annual leave. Show the exact Korean product name "연차몇개", the large value "잔여 연차 12.75일", and the small line "2026.08.31 기준". Below, place "발생 15.00일", "사용 1.00일", "예정 1.25일", and "잔여 12.75일" on a strict visible construction grid, followed by "살아 있는 발생분" and a single clear action "휴가 등록". Use synthetic demonstration data only; no marketing claims.
+Style/medium: high-fidelity editorial product UI concept, visible typographic construction grid as the literal layout armature, Swiss/Dutch modernist print proof discipline, no device frame.
+Composition/framing: a tall narrow grid sheet with 12-column logic; large balance value aligned to the grid, compact rows on shared baselines, calendar/date controls shown as real grid cells, and the primary action anchored to the lower grid. The grid should clarify the data, not become a background pattern.
+Lighting/mood: exact, calm, contemporary, quietly experimental, easy to scan.
+Color palette: pale proof paper #f5f6f2, deep blue-black #17202b, one saturated grid blue #2f6fe4; no extra colors.
+Materials/textures: faint registration marks and hairline construction rules, clean ink, flat printed surface, no glass, no shadows, no gradients, no decorative illustration.
+Text (verbatim): "연차몇개", "잔여 연차 12.75일", "2026.08.31 기준", "발생 15.00일", "사용 1.00일", "예정 1.25일", "잔여 12.75일", "살아 있는 발생분", "휴가 등록".
+Constraints: preserve Korean text exactly where shown; make the balance readable within one second; keep controls believable at compact desktop size; no people, laptop, phone, browser chrome, invented claims, or watermark.
+Avoid: generic SaaS cards, excessive decoration, giant poster type that hides data, neon, 3D realism, unreadable microcopy, marketing hero layout.

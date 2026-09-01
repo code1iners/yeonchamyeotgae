@@ -1,0 +1,13 @@
+Use case: ui-mockup
+Asset type: alternate north-star direction comp for a native desktop tray popover
+Primary request: A production-grade visual concept for the Korean annual-leave tracker app "연차몇개", designed as a compact portrait desktop menu-bar popover inspired by a small aircraft's calm night instrument six-pack. This is an alternate direction comparison image, not a phone mockup and not a website.
+Scene/backdrop: one front-facing narrow desktop popover, approximately 380px wide and 620px tall, no device frame.
+Subject: a worker checking annual leave. Put the exact Korean product name "연차몇개" and a large central value "잔여 연차 12.75일" at the top. Arrange six restrained instruments beneath: "발생 15.00일", "사용 1.00일", "예정 1.25일", "초과 0일", "소멸 임박", and "잔여 12.75일". Put a single clear action "휴가 등록" below the instruments. Use synthetic demonstration data only; no marketing claims.
+Style/medium: high-fidelity product UI concept with real interface controls, instrument panel grammar, precise luminous markings, no sci-fi cockpit, no device mockup.
+Composition/framing: fixed constellation of six compact round gauges in two rows of three, with the balance gauge visually dominant but not overwhelming; reading order sweeps from balance to supporting facts; one obvious primary action below.
+Lighting/mood: quiet night-work instrument panel, trustworthy, focused, low-glare, highly legible.
+Color palette: matte near-black #101416, soft instrument white #e9eee9, radium green #91c83e for active values, amber #e0a63a only for caution; keep red absent unless a true danger state is shown.
+Materials/textures: matte panel, crisp tick marks, subtle phosphor glow, damped needle hints, no glass reflections, no gradients, no oversized decoration.
+Text (verbatim): "연차몇개", "잔여 연차 12.75일", "발생 15.00일", "사용 1.00일", "예정 1.25일", "초과 0일", "소멸 임박", "휴가 등록".
+Constraints: preserve Korean text exactly where shown; keep the balance readable within one second; make the screen believable at compact desktop size; no people, laptop, phone, browser chrome, invented claims, or watermark.
+Avoid: generic analytics dashboard, excessive neon, spaceship cockpit, 3D realism, tiny illegible gauges, decorative charts, marketing hero layout.

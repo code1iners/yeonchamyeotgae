@@ -1,0 +1,25 @@
+Use case: ui-mockup.
+
+Asset type: a standing-exit category-standard visual comp for a native desktop tray popover.
+
+Primary request: Create a production-grade but familiar compact portrait desktop tray popover for the Korean annual-leave tracker "연차몇개", executed in the visual language of a category-standard contemporary productivity app. This is the standing exit, not a recommendation.
+
+Scene/backdrop: one single front-facing narrow popover, approximately 380px wide by 620px tall, shown without a device frame or browser chrome. Clean white surface with subtle neutral separators.
+
+Subject: a clear top summary that lets a user understand remaining annual leave immediately; a compact tab row; a few standard summary cards or list rows; a prominent primary action labeled "휴가 등록"; a small settings affordance. Use synthetic UI data only and make no real-world claims.
+
+Style: familiar contemporary productivity software UI, crisp Korean system sans-serif, navy or charcoal text, restrained blue primary action, light gray borders, subtle radius, compact spacing, high legibility, calm and dependable. No decorative illustration. Make the interface feel immediately learnable and conventional.
+
+Composition: standard top balance summary, then compact summary/history structure, with the primary action discoverable within one second. Keep every element plausible for a native desktop tray popover.
+
+Exact visible Korean text to include:
+"연차몇개"
+"남은 연차"
+"12.75일"
+"사용한 연차 3일"
+"예정된 휴가 1일"
+"휴가 기록"
+"휴가 등록"
+"설정"
+
+Avoid: thermal paper, ledger or receipt metaphor, instrument gauges, visible construction grid, neon colors, gradients, glassmorphism, oversized hero imagery, floating marketing copy, watermark, fake app-store chrome, random unreadable lettering.

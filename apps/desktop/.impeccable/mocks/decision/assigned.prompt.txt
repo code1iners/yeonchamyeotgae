@@ -1,0 +1,13 @@
+Use case: ui-mockup
+Asset type: north-star direction comp for a native desktop tray popover
+Primary request: A production-grade visual concept for the Korean annual-leave tracker app "연차몇개", designed as a compact portrait desktop menu-bar popover in a thermal receipt world. This is a direction comparison image, not a phone mockup and not a website.
+Scene/backdrop: a single narrow, front-facing desktop popover with the full surface visible, approximately 380px wide and 620px tall.
+Subject: the app's first summary screen. The first thing visible is a receipt header with the exact Korean product name "연차몇개", the label "잔여 연차", the large value "12.75일", and the small line "2026.08.31 기준". Below it, one continuous receipt strip shows the line items "발생 15.00일", "사용 1.00일", "예정 1.25일", "잔여 12.75일", then a compact "살아 있는 발생분" section and a clear primary action "휴가 등록". Use synthetic demonstration data only; do not add marketing claims.
+Style/medium: editorial product UI concept rendered like a real interface, thermal-paper receipt logic translated into UI structure, crisp readable hierarchy, no device frame.
+Composition/framing: one fixed reading window; the balance header stays at the top, line-item proof follows in a single vertical flow, primary action near the bottom; dates and numbers align like a printed transaction slip; a subtle perforated edge can anchor the bottom but must not become decoration.
+Lighting/mood: warm office light, calm, precise, practical, slightly tactile but highly legible.
+Color palette: warm receipt paper #f4efe5, carbon black #171717, one vermilion red #c63d2f for the active balance and primary action; no other accent colors.
+Materials/textures: very subtle thermal paper grain and ink density variation, flat printed surfaces, small receipt typography, hairline rules, no glass, no shadows, no glossy effects.
+Text (verbatim): "연차몇개", "잔여 연차", "12.75일", "2026.08.31 기준", "발생 15.00일", "사용 1.00일", "예정 1.25일", "잔여 12.75일", "살아 있는 발생분", "휴가 등록".
+Constraints: preserve Korean text exactly where shown; make the balance immediately readable within one second; keep the interface believable at compact desktop size; show no people, no laptop, no phone, no browser chrome, no logo beyond the product name.
+Avoid: generic SaaS dashboard cards, glassmorphism, gradients, neon colors, oversized hero marketing layout, decorative illustrations, unreadable microcopy, fake charts, watermarks.

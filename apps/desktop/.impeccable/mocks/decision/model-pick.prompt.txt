@@ -1,0 +1,13 @@
+Use case: ui-mockup
+Asset type: north-star direction comp for a native desktop tray popover
+Primary request: A production-grade visual concept for the Korean annual-leave tracker app "연차몇개", designed as a compact portrait desktop menu-bar popover in the world of a trustworthy Korean bankbook and office ledger. This is a direction comparison image, not a phone mockup and not a website.
+Scene/backdrop: a single narrow, front-facing desktop popover with the full surface visible, approximately 380px wide and 620px tall.
+Subject: the first summary screen for a worker checking annual leave. Use a large but calm balance line with the exact text "잔여 연차 12.75일" and "2026.08.31 기준". Below, a disciplined ledger shows "발생 15.00일", "사용 1.00일", "예정 1.25일", and "잔여 12.75일" in aligned columns, followed by a compact source breakdown and one clear action "휴가 등록". Use synthetic demonstration data only; no marketing claims.
+Style/medium: editorial product UI concept, printed office ledger translated into an exceptionally clear compact desktop interface, no device frame.
+Composition/framing: one tall ledger sheet; a strong top balance line, a visible calculation rule, aligned numeric columns, a quiet source section, and the primary action at the bottom. Every row should feel like a verifiable transaction, not a card.
+Lighting/mood: calm, trustworthy, precise, familiar office stationery with a slightly contemporary finish.
+Color palette: cool paper #f7f8f6, graphite #202522, one restrained ledger green #1d6b52; no extra accent colors.
+Materials/textures: thin ruled paper, fine registration marks, subtle ink bleed, flat surfaces, no glass, no shadows, no glossy effects.
+Text (verbatim): "연차몇개", "잔여 연차", "12.75일", "2026.08.31 기준", "발생 15.00일", "사용 1.00일", "예정 1.25일", "잔여 12.75일", "살아 있는 발생분", "휴가 등록".
+Constraints: preserve Korean text exactly where shown; make the balance readable within one second; keep all controls believable at compact desktop size; no people, laptop, phone, browser chrome, invented logo, or commercial claim.
+Avoid: generic SaaS dashboard cards, dense finance charts, glassmorphism, gradients, neon green, decorative illustrations, oversized marketing hero, watermarks.

@@ -1,0 +1,147 @@
+{
+	"title": "연차몇개 UI 재설계 방향",
+	"question": "잔여를 한눈에 읽고 가장 짧은 동선으로 휴가를 기록하는 시각 세계를 선택하세요.",
+	"options": [
+		{
+			"id": "assigned",
+			"label": "감열 영수증",
+			"kicker": "THE ROLL",
+			"lineage": "편의점·카페의 감열 영수증과 일일 마감 전표",
+			"thesis": "잔여를 오늘의 마감 금액처럼 읽고, 휴가를 한 줄 거래처럼 기록한다.",
+			"palette": ["#f4efe5", "#171717", "#c63d2f"],
+			"materials": ["감열지", "탄소 잉크", "절취선"],
+			"viewport": "팝오버 상단에 '잔여 연차 12.75일'을 영수증 헤더처럼 고정하고, 발생·사용·예정·잔여를 한 장의 세로 전표로 이어 붙인다. 하단에는 한 번의 선택으로 여는 '휴가 등록'을 둔다.",
+			"risk": "영수증 비유가 강하면 연차의 날짜와 소멸 근거가 회계 기록처럼 느껴질 수 있다.",
+			"raised": [
+				{
+					"from": "depot-blind-courses",
+					"raise": "고정된 한 장의 읽기 창을 유지해 잔여와 핵심 행동이 화면 이동 없이 늘 같은 자리에 남는다."
+				},
+				{
+					"from": "cloud-quarry",
+					"raise": "상세 근거는 새 화면으로 튀지 않고 같은 전표의 접힌 줄을 펼쳐 확인한다."
+				},
+				{
+					"from": "iridescent-cloud-edge",
+					"raise": "예정·사용·소멸 임박은 색만이 아니라 영수증 문구와 보조 기호로 함께 구분한다."
+				},
+				{
+					"from": "eboy-pixorama-metropolis",
+					"raise": "모든 숫자와 날짜를 엄격한 전표 열에 맞춰 정렬해 한 번의 시선으로 검산한다."
+				}
+			],
+			"comp": ".impeccable/mocks/decision/assigned.png"
+		},
+		{
+			"id": "model-pick",
+			"label": "잔액 원장",
+			"kicker": "IMPECCABLE’S PICK",
+			"lineage": "은행 통장·가계부·사내 정산 원장",
+			"thesis": "잔여의 숫자와 그 숫자를 만든 발생·사용 기록을 한 권의 신뢰 가능한 원장처럼 대조한다.",
+			"palette": ["#f7f8f6", "#202522", "#1d6b52"],
+			"materials": ["얇은 원장지", "검산 선", "초록 인쇄 잉크"],
+			"viewport": "첫 화면은 큰 잔여 숫자와 네 줄의 계산 근거를 세로 원장으로 보여준다. 휴가 등록은 원장 하단의 새 줄을 여는 가장 가까운 행동이고, 이력은 같은 열 구조로 이어진다.",
+			"risk": "가장 익숙하고 명확한 방향인 만큼 금융·가계부 앱처럼 보일 위험이 있다.",
+			"comp": ".impeccable/mocks/decision/model-pick.png"
+		},
+		{
+			"id": "challenger-instruments",
+			"label": "야간 계기판",
+			"verdict": "competitive",
+			"lineage": "소형 항공기의 야간 계기판",
+			"thesis": "여섯 개의 차분한 계기가 서로 다른 연차의 진실을 빠르게 교차 검산하게 한다.",
+			"palette": ["#101416", "#e9eee9", "#91c83e", "#e0a63a"],
+			"materials": ["무광 계기판", "야광 눈금", "댐핑된 바늘"],
+			"viewport": "잔여를 중앙 계기로 크게 두고 발생·사용·예정·초과·소멸 임박을 주변의 작은 계기로 배치한다. 휴가 등록은 계기판 아래 고정된 단일 행동으로 둔다.",
+			"case": "제품 명확성은 높지만, 개인 직장인이 연차를 확인하는 장면과의 동일시는 원장 방향보다 약하다.",
+			"risk": "감시·운항 도구처럼 긴장도가 높아져 간단한 휴가 기록을 어렵게 보이게 할 수 있다.",
+			"comp": ".impeccable/mocks/decision/challenger-instruments.png",
+			"hero": "https://impeccable.style/worlds/cards/signals-instruments-night-flight-six-pack-hero.webp",
+			"board": "https://impeccable.style/worlds/cards/signals-instruments-night-flight-six-pack.webp"
+		},
+		{
+			"id": "challenger-grid",
+			"label": "구성 그리드",
+			"verdict": "competitive",
+			"lineage": "Wim Crouwel의 그리드 활자 표본과 인쇄 교정지",
+			"thesis": "연차의 숫자·날짜·상태가 하나의 보이는 구성 그리드 위에서 정확히 맞물린다.",
+			"palette": ["#f5f6f2", "#17202b", "#2f6fe4"],
+			"materials": ["교정지", "구성선", "한 가지 인쇄면"],
+			"viewport": "보이는 세로선과 기준선이 잔여 숫자, 발생분 열, 이력 날짜를 모두 같은 단위로 묶는다. 날짜 달력은 그리드의 실제 조작면으로 동작한다.",
+			"case": "검산 가능성과 날짜 조작의 명료성은 강하지만, 시각적 동일시는 전문 편집물 쪽으로 기운다.",
+			"risk": "그리드가 주인공이 되면 빠른 잔여 확인보다 디자인 시스템을 읽는 일이 먼저 될 수 있다.",
+			"comp": ".impeccable/mocks/decision/challenger-grid.png",
+			"hero": "https://impeccable.style/worlds/cards/crouwel-grid-specimen-hero.webp",
+			"board": "https://impeccable.style/worlds/cards/crouwel-grid-specimen.webp"
+		},
+		{
+			"id": "challenger-depot",
+			"label": "고정 창 전표",
+			"verdict": "declined",
+			"lineage": "새벽 물류 창고의 목적지 블라인드와 작업 전표",
+			"thesis": "한 칸씩 멈추는 작업 전표가 지금 처리해야 할 연차 상태를 한 창에 보여준다.",
+			"palette": ["#174a3b", "#f0c933", "#f2ead8"],
+			"materials": ["염색 오리천", "황색 레전드", "천공 테이프"],
+			"viewport": "한 줄짜리 상태 전표가 고정 창 아래에서 단계별로 바뀌고, 오류는 멈춘 줄의 절반으로 드러난다.",
+			"risk": "물류 작업의 장면이 직장인의 연차 관리 장면과 멀다.",
+			"case": "관객 동일시와 제품 명확성 모두 감열 영수증보다 낮다.",
+			"kept": "고정된 한 장의 읽기 창이라는 규율을 감열 영수증 방향에 기부했다.",
+			"hero": "https://impeccable.style/worlds/cards/operate-c-depot-blind-courses-hero.webp"
+		},
+		{
+			"id": "challenger-quarry",
+			"label": "구름 채석장",
+			"verdict": "declined",
+			"lineage": "날씨를 잘라 블록으로 쌓는 초현실적 채석장",
+			"thesis": "발생분을 잘라 내고 휴가를 임시 구조물처럼 조립한다.",
+			"palette": ["#f2f4f1", "#8cb8e8", "#59616b"],
+			"materials": ["구름 블록", "절단면", "안개"],
+			"viewport": "연차 발생분을 블록 단위로 쪼개고, 선택한 기록이 그 블록에서 빠져나가는 화면이다.",
+			"risk": "추상적 조작이 잔여와 날짜의 사실성을 가린다.",
+			"case": "관객 동일시와 제품 명확성 모두 낮다.",
+			"kept": "상세 근거를 펼치고 접는 계층적 상태 변화를 감열 영수증에 남겼다.",
+			"hero": "https://impeccable.style/worlds/cards/dream-surreal-impossible-worlds-cloud-quarry-hero.webp"
+		},
+		{
+			"id": "challenger-iridescent",
+			"label": "구름 가장자리",
+			"verdict": "declined",
+			"lineage": "물방울 크기에 따라 색띠가 달라지는 구름 가장자리",
+			"thesis": "연차 상태를 미세한 색의 띠로 감지한다.",
+			"palette": ["#f8f8f6", "#69727c", "#d29ab4", "#8e83c5"],
+			"materials": ["구름 흰색", "색띠", "슬레이트 잉크"],
+			"viewport": "잔여·예정·소멸 임박이 구름 가장자리의 색띠처럼 이어지고, 날짜를 누르면 띠의 근거가 열린다.",
+			"risk": "색의 미묘한 차이가 연차 기록의 즉시성을 약화한다.",
+			"case": "관객 동일시와 제품 명확성 모두 낮다.",
+			"kept": "색에 의존하지 않고 상태를 문구와 기호로 중복 표기하는 원칙을 남겼다.",
+			"hero": "https://impeccable.style/worlds/cards/clouds-storms-auroras-iridescent-cloud-edge-hero.webp"
+		},
+		{
+			"id": "challenger-pixel",
+			"label": "픽셀 도시",
+			"verdict": "declined",
+			"lineage": "eBoy 픽셀 도시와 등각 격자",
+			"thesis": "휴가 기록을 작은 도시 블록처럼 배치하고 확대하며 발견한다.",
+			"palette": ["#ff3b30", "#00c2ff", "#ffd60a", "#111111"],
+			"materials": ["하드 픽셀", "등각 블록", "의도적 디더링"],
+			"viewport": "달력과 기록을 하나의 등각 픽셀 필드로 보여주고, 깊은 확대에서 메모를 발견한다.",
+			"risk": "장식과 탐색이 빠른 잔여 확인보다 앞선다.",
+			"case": "관객 동일시와 제품 명확성 모두 낮다.",
+			"kept": "정수 단위의 엄격한 격자와 밀도 규율을 감열 영수증에 남겼다.",
+			"hero": "https://impeccable.style/worlds/cards/eboy-pixorama-metropolis-hero.webp"
+		}
+	],
+	"reroll": {"registers": ["safer", "bolder"]},
+	"buildPath": {"value": "comp", "toggle": true},
+	"canon": true,
+	"canonCard": {
+		"label": "The category standard",
+		"thesis": "일반적인 생산성 앱처럼 상단 요약, 탭, 카드, 폼을 가장 익숙한 방식으로 완성한다.",
+		"palette": ["#ffffff", "#172033", "#2563eb"],
+		"materials": ["깨끗한 그리드", "중립 표면", "제품형 컨트롤"],
+		"viewport": "상단에 잔여 숫자, 아래에 요약 카드와 탭을 둔 익숙한 팝오버다.",
+		"risk": "익숙하지만 다른 연차 도구와 구별되는 기억점이 없다.",
+		"comp": ".impeccable/mocks/decision/canon.png"
+	},
+	"steer": true
+}
