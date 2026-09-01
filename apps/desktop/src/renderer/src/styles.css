@@ -383,29 +383,40 @@ button.link:hover:not(:disabled) {
  * 4줄 표 — 라벨 · 숫자 · 설명. 숫자 열의 폭을 고정해 발생부터 잔여까지 자릿수가
  * 한 줄에 서고, 그래야 검산이 눈으로 된다(5.1절).
  */
-.row.sum {
-	min-height: 22px;
-	padding-top: 1px;
-	padding-bottom: 1px;
+
+.summary-table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+.summary-row {
+	height: 22px;
 }
 .sum-label {
 	width: 30px;
-	flex: none;
+	padding: 1px 0 1px 12px;
 	color: var(--fg-2);
+	font-weight: 400;
+	text-align: left;
+	white-space: nowrap;
 }
-.row.sum b {
+.sum-number {
 	width: 46px;
-	flex: none;
+	padding: 1px 0;
 	text-align: right;
+	font-weight: 400;
+}
+.sum-number b {
 	font-weight: 600;
 }
 .sum-note {
+	padding: 1px 12px 1px 8px;
 	font-size: 11.5px;
+	text-align: left;
 }
 
 /* 잔여 위의 hairline — 위의 항들을 더하고 빼면 이 줄이 나온다는 표시다. */
-.row.sum-total {
-	margin-top: 3px;
+.summary-row-total > * {
 	padding-top: 4px;
 	border-top: 1px solid var(--line);
 }
@@ -419,6 +430,10 @@ button.link:hover:not(:disabled) {
 }
 
 /* 살아 있는 발생분 한 줄 — 출처 · 남은 양/총량 · 소멸일. */
+.summary-grants {
+	max-height: 240px;
+	overflow-y: auto;
+}
 .grant {
 	display: flex;
 	align-items: baseline;
@@ -429,8 +444,12 @@ button.link:hover:not(:disabled) {
 .grant:hover {
 	background: var(--hover);
 }
+/* 남은 양/총량 열 — 소수 자릿수가 바뀌어도 소멸일 열은 같은 자리에 선다. */
 .grant-amount {
 	margin-left: auto;
+	width: 68px;
+	flex: none;
+	text-align: right;
 	font-weight: 600;
 }
 /* 소멸 임박 배지. 소멸을 알아채는 두 경로 중 하나다(5.7절). */

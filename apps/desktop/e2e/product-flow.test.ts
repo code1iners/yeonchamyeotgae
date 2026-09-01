@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { LeaveData } from "@yeoncha/core";
 import electronExecutable from "electron";
 import {
 	type ElectronApplication,
 	_electron as electron,
 	type Page,
 } from "playwright";
+import { Temporal } from "temporal-polyfill";
 import { afterEach, describe, expect, test } from "vitest";
 
 /** 제품 흐름이 실행할, electron-vite가 만든 메인 프로세스 번들 경로. */
@@ -15,8 +17,21 @@ const MAIN_ENTRY = path.resolve(import.meta.dirname, "../out/main/index.js");
 /** 개발 의존성으로 설치된 현재 운영체제용 실제 Electron 실행 파일 경로. */
 const ELECTRON_EXECUTABLE = electronExecutable;
 
+/** 실제 Electron 제품 흐름에서 셸과 시드를 함께 고정할 조회일. */
+const TEST_TODAY = "2025-12-01";
+/** 테스트 시드와 같은 조회일의 불변 날짜 객체. */
+const TEST_TODAY_DATE = Temporal.PlainDate.from(TEST_TODAY);
+/** 시드와 같은 조회일을 실제 Electron의 메인 프로세스에 주입하는 환경. */
+const TEST_ENV = {
+	...process.env,
+	NODE_ENV: "test",
+	YEONCHA_TEST_TODAY: TEST_TODAY,
+};
+/** 긴 발생분 시드가 공유하는 고정 기준 날짜. Temporal 날짜는 불변이라 재사용한다. */
+const SUMMARY_GRANT_BASE_DATE = Temporal.PlainDate.from("2000-01-01");
+
 /** 정상 상태에서 요약·이력·설정 탭을 모두 여는 결정론적 저장 데이터. */
-const NORMAL_DATA = {
+const NORMAL_DATA: LeaveData = {
 	schemaVersion: 1,
 	settings: { hireDate: "2020-01-01", grantBasis: "hireDate" },
 	entries: [
@@ -30,6 +45,37 @@ const NORMAL_DATA = {
 	adjustments: [],
 };
 
+/** 긴 목록의 위치와 고유 렌더링 key를 검증할 결정론적 저장 데이터. */
+const LONG_SUMMARY_DATA: LeaveData = {
+	schemaVersion: 1,
+	settings: { hireDate: "2000-01-01", grantBasis: "hireDate" },
+	entries: [],
+	adjustments: Array.from({ length: 48 }, (_, index) => ({
+		id: `summary-adjustment-${index}`,
+		grantDate: summaryAdjustmentDate(index),
+		expiryDate: "2999-12-31",
+		days: 0.25,
+		note: "",
+	})),
+};
+
+/** 긴 목록의 각 조정에 고유한 발생일을 부여해 렌더링 key 충돌을 막는다. */
+function summaryAdjustmentDate(index: number): string {
+	return SUMMARY_GRANT_BASE_DATE.add({
+		months: Math.floor(index / 4),
+		days: index % 4,
+	}).toString();
+}
+
+/** 예정 각주·소멸 임박·서로 다른 수량 폭을 한 화면에서 검증할 저장 데이터. */
+const SUMMARY_DATA = summaryData();
+
+/** 초과와 조정 진입 맥락을 검증할 결정론적 저장 데이터. */
+const EXCESS_DATA = excessData();
+
+/** 제품 흐름이 남길 첫 화면 스크린샷의 임시 경로. */
+const SCREENSHOT_DIRECTORY = path.join(os.tmpdir(), "yeonchamyeotgae-e2e");
+
 /** 실행 하나의 격리된 앱·사용자 데이터·팝오버 페이지 묶음. */
 type ProductFlow = {
 	/** 실제 Electron 앱 프로세스. */
@@ -39,6 +85,100 @@ type ProductFlow = {
 	/** 앱이 읽고 쓰는 임시 사용자 데이터 디렉터리. */
 	userDataDirectory: string;
 };
+
+/** 요약 표·각주·임박 표시를 한 번에 확인할 결정론적 상대 데이터. */
+function summaryData(): LeaveData {
+	/** 앱과 같은 시간대의 조회일. */
+	const today = TEST_TODAY_DATE;
+	/** 조회일 전날 — 사용 행을 만드는 날짜. */
+	const yesterday = today.subtract({ days: 1 });
+	/** 조회일 다음 날 — 미래 발생분의 예정 행을 만드는 날짜. */
+	const tomorrow = today.add({ days: 1 });
+	/** 현재 살아 있는 조정의 발생일. */
+	const currentGrantDate = today.subtract({ days: 10 });
+	/** 소멸 임박 조정의 소멸일. */
+	const currentExpiryDate = today.add({ days: 30 });
+	/** 미래 발생분의 소멸일. 배정 순서가 현재 조정보다 앞서도록 짧게 둔다. */
+	const futureExpiryDate = today.add({ days: 15 });
+	/** 조회일 입사일 — 계산으로 생기는 발생분 없이 조정 세 건만 검산한다. */
+	const hireDate = today;
+
+	return {
+		schemaVersion: 1,
+		settings: { hireDate: hireDate.toString(), grantBasis: "hireDate" },
+		entries: [
+			{
+				id: "summary-used-entry",
+				date: yesterday.toString(),
+				days: 2.75,
+				note: "사용한 휴가",
+			},
+			{
+				id: "summary-planned-entry",
+				date: tomorrow.toString(),
+				days: 1.25,
+				note: "예정한 휴가",
+			},
+		],
+		adjustments: [
+			{
+				id: "summary-current-adjustment",
+				grantDate: currentGrantDate.toString(),
+				expiryDate: currentExpiryDate.toString(),
+				days: 15,
+				note: "이월",
+			},
+			{
+				id: "summary-second-adjustment",
+				grantDate: today.subtract({ days: 5 }).toString(),
+				expiryDate: today.add({ days: 45 }).toString(),
+				days: 1.5,
+				note: "사규 추가분",
+			},
+			{
+				id: "summary-future-adjustment",
+				grantDate: tomorrow.toString(),
+				expiryDate: futureExpiryDate.toString(),
+				days: 5,
+				note: "미래 발생분",
+			},
+		],
+	};
+}
+
+/** 조정 15일보다 3일 많이 쓴 상태를 만드는 저장 데이터. */
+function excessData(): LeaveData {
+	/** 앱과 같은 시간대의 조회일. */
+	const today = TEST_TODAY_DATE;
+	/** 가장 이른 휴가 기록 날짜. */
+	const firstEntryDate = today.subtract({ days: 18 });
+	/** 조정 소멸일 — 추가 폼이 그대로 물려받을 값. */
+	const expiryDate = today.add({ years: 1 }).subtract({ days: 1 });
+
+	return {
+		schemaVersion: 1,
+		settings: { hireDate: today.toString(), grantBasis: "hireDate" },
+		entries: Array.from({ length: 18 }, (_, index) => {
+			/** 하루씩 이어지는 휴가 기록 날짜. */
+			const date = firstEntryDate.add({ days: index });
+			return {
+				id: `excess-entry-${index}`,
+				date: date.toString(),
+				days: 1,
+				note: "",
+			};
+		}),
+		adjustments: [
+			{
+				id: "excess-adjustment",
+				grantDate: today.subtract({ days: 30 }).toString(),
+				expiryDate: expiryDate.toString(),
+				days: 15,
+				note: "기존 조정",
+			},
+		],
+	};
+}
 
 /** 현재 테스트가 열어 둔 제품 흐름. 실패해도 afterEach가 반드시 정리한다. */
 let flow: ProductFlow | null = null;
@@ -143,6 +283,149 @@ describe.sequential("Electron 제품 흐름", () => {
 		await waitForPopoverHidden(flow.app);
 	});
 
+	test("긴 발생분 목록에서도 잔여와 휴가 등록이 최초 뷰포트에 남는다", async () => {
+		flow = await launchProductFlow(LONG_SUMMARY_DATA);
+
+		/** 잔여 계산과 기록 시작 행동을 사용자에게 보이는 위치로 찾는다. */
+		const balanceBox = await flow.page
+			.getByText("잔여", { exact: true })
+			.first()
+			.boundingBox();
+		const entryBox = await flow.page
+			.getByRole("button", { name: "휴가 등록" })
+			.boundingBox();
+		/** 팝오버의 실제 뷰포트 높이. */
+		const viewportHeight = await flow.page.evaluate(() => window.innerHeight);
+		/** 요약 목록과 팝오버 외부의 스크롤 경계. */
+		const grantRegion = flow.page.getByRole("region", {
+			name: "살아 있는 발생분",
+		});
+		const scrollState = await grantRegion.evaluate((element) => ({
+			regionScrollable: element.scrollHeight > element.clientHeight,
+			pageScrollable:
+				document.documentElement.scrollHeight > window.innerHeight,
+		}));
+		if (!balanceBox || !entryBox) {
+			throw new Error("요약의 핵심 요소 위치를 읽지 못했습니다");
+		}
+
+		expect(balanceBox.y).toBeGreaterThanOrEqual(0);
+		expect(entryBox.y + entryBox.height).toBeLessThanOrEqual(viewportHeight);
+		expect(scrollState).toEqual({
+			regionScrollable: true,
+			pageScrollable: false,
+		});
+		await expectVisible(flow.page.getByRole("button", { name: "휴가 등록" }));
+	});
+
+	test("요약 원장이 고정된 수량 열과 상태 근거를 제공한다", async () => {
+		flow = await launchProductFlow(SUMMARY_DATA);
+
+		/** 사용자와 보조 기술이 함께 찾는 요약 원장. */
+		const ledger = flow.page.getByRole("table", { name: "잔여 계산" });
+		await expectVisible(ledger);
+		await expectVisible(flow.page.getByText("13.75일", { exact: true }));
+
+		/** 요약 행별로 확인할 독립적인 계산 결과. */
+		const expectedRows = [
+			["발생", "16.5"],
+			["사용", "2.75"],
+			["예정", "0"],
+			["잔여", "13.75"],
+		] as const;
+		for (const [label, value] of expectedRows) {
+			/** 라벨과 수량이 한 행에 있는지 확인한다. */
+			const row = ledger.getByRole("row").filter({ hasText: label });
+			await expectVisible(row);
+			expect(await row.getByRole("cell").first().textContent()).toBe(value);
+		}
+
+		await expectVisible(
+			flow.page.getByText(
+				"등록한 예정 1.25일은 전부 아직 생기지 않은 발생분에서 나갑니다 — 지금 잔여에 없습니다",
+			),
+		);
+		await expectVisible(flow.page.getByTitle("소멸 임박, D-30"));
+		await expectVisible(flow.page.getByTitle("소멸 임박, D-45"));
+		await captureSummaryScreenshot(flow.page);
+
+		/** 모든 요약 행의 수량 셀이 같은 x 좌표에 서는지 확인한다. */
+		const cellX = await Promise.all(
+			expectedRows.map(
+				async ([label]) =>
+					(
+						await ledger
+							.getByRole("row")
+							.filter({ hasText: label })
+							.getByRole("cell")
+							.first()
+							.boundingBox()
+					)?.x,
+			),
+		);
+		expect(cellX.every((x) => x === cellX[0])).toBe(true);
+
+		/** 서로 다른 길이의 발생분 수량 셀이 같은 열에 서는지 확인한다. */
+		const amountLabels = ["12.25/15", "1.5/1.5"] as const;
+		const amountX = await Promise.all(
+			amountLabels.map(
+				async (label) =>
+					(await flow.page.getByText(label, { exact: true }).boundingBox())?.x,
+			),
+		);
+		expect(amountX.every((x) => x === amountX[0])).toBe(true);
+
+		/** D-day와 날짜가 바뀌어도 소멸일 셀이 같은 열에 서는지 확인한다. */
+		const expiryX = await Promise.all(
+			["D-30", "D-45"].map(
+				async (label) =>
+					(await flow.page.getByTitle(`소멸 임박, ${label}`).boundingBox())?.x,
+			),
+		);
+		expect(expiryX.every((x) => x === expiryX[0])).toBe(true);
+	});
+
+	test("초과 원인에서 조정을 추가하면 현재 날짜 맥락을 보존한다", async () => {
+		flow = await launchProductFlow(EXCESS_DATA);
+		/** 앱과 같은 시간대의 조회일. */
+		const today = TEST_TODAY_DATE;
+		/** 기존 살아 있는 조정의 소멸일. */
+		const expiryDate = today.add({ years: 1 }).subtract({ days: 1 });
+
+		await expectVisible(
+			flow.page.getByText(
+				"초과 3일 — 어느 발생분에도 배정되지 못한 휴가입니다",
+			),
+		);
+		/** 초과 수량을 보여주는 요약 행. 조정 폼으로 이동하기 전에 읽는다. */
+		const excessRow = flow.page
+			.getByRole("table", { name: "잔여 계산" })
+			.getByRole("row")
+			.filter({ hasText: "초과" });
+		await expectVisible(excessRow);
+		expect(await excessRow.getByRole("cell").first().textContent()).toBe("3");
+
+		await flow.page.getByRole("button", { name: "조정을 추가" }).click();
+		await expectVisible(flow.page.getByRole("tab", { name: "설정" }));
+		expect(
+			await flow.page
+				.getByRole("tab", { name: "설정" })
+				.getAttribute("aria-selected"),
+		).toBe("true");
+		await expectVisible(flow.page.getByRole("button", { name: "추가" }));
+		expect(await flow.page.getByLabel("발생일").inputValue()).toBe(
+			today.toString(),
+		);
+		expect(await flow.page.getByLabel("소멸일").inputValue()).toBe(
+			expiryDate.toString(),
+		);
+
+		// 링크로 들어온 조정 폼은 일반 설정 진입과 구분되어야 한다.
+		await flow.page.getByRole("tab", { name: "요약" }).click();
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+		await expectVisible(flow.page.getByRole("button", { name: "조정 추가" }));
+	});
+
 	test("입사일이 없는 격리 데이터에서는 설정 온보딩만 연다", async () => {
 		flow = await launchProductFlow(null);
 
@@ -178,7 +461,7 @@ describe.sequential("Electron 제품 흐름", () => {
 
 /** 격리된 사용자 데이터로 실제 빌드 Electron 앱을 연다. */
 async function launchProductFlow(
-	seed: typeof NORMAL_DATA | string | null,
+	seed: LeaveData | string | null,
 ): Promise<ProductFlow> {
 	/** 운영체제의 실제 사용자 프로필과 분리할 임시 앱 데이터 경로. */
 	const userDataDirectory = await mkdtemp(
@@ -199,6 +482,7 @@ async function launchProductFlow(
 		app = await electron.launch({
 			executablePath: ELECTRON_EXECUTABLE,
 			args: [MAIN_ENTRY, `--user-data-dir=${userDataDirectory}`],
+			env: TEST_ENV,
 		});
 		/** 앱이 만든 유일한 팝오버 페이지. */
 		const page = await app.firstWindow();
@@ -218,10 +502,11 @@ async function launchProductFlow(
 async function requestPopoverOpen(userDataDirectory: string): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
 		/** 단일 인스턴스 락을 가진 앱에 열기 요청만 전달할 보조 프로세스. */
-		const secondary = spawn(ELECTRON_EXECUTABLE, [
-			MAIN_ENTRY,
-			`--user-data-dir=${userDataDirectory}`,
-		]);
+		const secondary = spawn(
+			ELECTRON_EXECUTABLE,
+			[MAIN_ENTRY, `--user-data-dir=${userDataDirectory}`],
+			{ env: TEST_ENV },
+		);
 		/** 보조 프로세스가 멈췄을 때 앱과 임시 데이터가 남지 않게 할 제한 시간. */
 		const timeout = setTimeout(() => {
 			secondary.kill();
@@ -288,6 +573,19 @@ async function waitForPopoverHidden(app: ElectronApplication): Promise<void> {
 		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
 	throw new Error("팝오버가 blur 뒤에도 숨겨지지 않았습니다");
+}
+
+/** 승인된 컴프와 비교할 정상 요약 첫 화면을 임시 산출물로 남긴다. */
+async function captureSummaryScreenshot(page: Page): Promise<void> {
+	/** 기본은 임시 증거이고, 지정하면 리뷰에 남길 저장소 경로를 쓴다. */
+	const outputDirectory =
+		process.env.YEONCHA_E2E_ARTIFACT_DIR ?? SCREENSHOT_DIRECTORY;
+	await mkdir(outputDirectory, { recursive: true });
+	/** Playwright가 캡처한 화면 데이터. */
+	const screenshot = await page.screenshot();
+	/** 승인된 컴프 대조에 사용할 고정된 산출물 위치. */
+	const screenshotPath = path.join(outputDirectory, "summary-first-view.png");
+	await writeFile(screenshotPath, screenshot);
 }
 
 /** 사용자에게 보이는 요소가 나타날 때까지 기다린 뒤 가시성을 확인한다. */

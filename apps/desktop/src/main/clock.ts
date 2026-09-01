@@ -7,9 +7,13 @@ import { Temporal } from "temporal-polyfill";
  */
 const ZONE = "Asia/Seoul";
 
+/** 제품 흐름 테스트에서만 날짜를 고정한다. 일반 실행은 항상 KST 현재 날짜를 쓴다. */
+const TEST_TODAY =
+	process.env.NODE_ENV === "test" ? process.env.YEONCHA_TEST_TODAY : undefined;
+
 /** 코어에 넘기는 **"오늘"**. 셸에서 이 함수 하나가 만든다(7.3절). */
 export function todayInSeoul(): string {
-	return Temporal.Now.plainDateISO(ZONE).toString();
+	return TEST_TODAY ?? Temporal.Now.plainDateISO(ZONE).toString();
 }
 
 /**

@@ -63,14 +63,14 @@ export function SummaryTab({
 	/** 조회일에 살아 있는 발생분. 소멸 임박 순으로 정렬되어 온다(3.4절). */
 	const grants = livingGrants({ grants: balance.grants, today });
 	/** 초과가 있는가 — 초과 행과 상단의 원인 한 줄이 이 값에 달려 있다. */
-	const overdrawn = balance.excess > 0;
+	const hasExcess = balance.excess > 0;
 	/** 표 아래 각주. 미래 발생분에서 나가는 예정이 없으면 `null`이다. */
 	const footnote = footnoteOf(balance);
 
 	return (
 		<div className="pane">
 			{/* 원인 표시와 조치가 한 동선이어야 한다(5.1절) — 그래서 링크가 원인 옆에 있다. */}
-			{overdrawn && (
+			{hasExcess && (
 				<div className="alert">
 					<p>
 						초과 {balance.excess}일 — 어느 발생분에도 배정되지 못한 휴가입니다
@@ -80,42 +80,58 @@ export function SummaryTab({
 					</button>
 				</div>
 			)}
-			{LINES.filter((line) => line.key !== "excess" || overdrawn).map(
-				({ key, label, note }) => (
-					<div
-						className={`row sum ${key === "balance" ? "sum-total" : ""}`}
-						key={key}
-					>
-						<span className="sum-label">{label}</span>
-						<b className="num">{balance[key]}</b>
-						<span className="sum-note dim">{note}</span>
-					</div>
-				),
-			)}
+			<table className="summary-table" aria-label="잔여 계산">
+				<tbody>
+					{LINES.filter((line) => line.key !== "excess" || hasExcess).map(
+						({ key, label, note }) => (
+							<tr
+								className={`summary-row ${key === "balance" ? "summary-row-total" : ""}`}
+								key={key}
+							>
+								<th className="sum-label" scope="row">
+									{label}
+								</th>
+								<td className="sum-number num">
+									<b>{balance[key]}</b>
+								</td>
+								<td className="sum-note dim">{note}</td>
+							</tr>
+						),
+					)}
+				</tbody>
+			</table>
 			{/*
 			 * 각주가 유일한 해답이다(5.1절). 4줄의 `예정`에 등록 총량을 쓰면 검산이 깨지고,
 			 * 배정분만 쓰고 각주가 없으면 사용자가 등록한 나머지가 요약에서 사라진다.
 			 */}
 			{footnote && <p className="footnote dim">{footnote}</p>}
-			<div className="sec-title">살아 있는 발생분</div>
-			{grants.length === 0 ? (
-				<div className="row dim">지금 살아 있는 발생분이 없습니다.</div>
-			) : (
-				grants.map((grant) => (
-					<div className="grant" key={keyOf(grant)}>
-						<span>{SOURCE_LABEL[grant.source]}</span>
-						<b className="num grant-amount">
-							{grant.remaining}/{grant.days}
-						</b>
-						{/* 60일 이내면 날짜 대신 D-day다 — 날짜는 남은 시간을 계산하게 시킨다. */}
-						{grant.expiringSoon ? (
-							<span className="badge num warn">D-{grant.daysUntilExpiry}</span>
-						) : (
-							<span className="grant-expiry dim num">{grant.expiryDate}</span>
-						)}
-					</div>
-				))
-			)}
+			{/* 발생분이 많아져도 목록만 줄이고, 기록 시작 행동은 최초 뷰포트에 남긴다. */}
+			<section className="summary-grants" aria-label="살아 있는 발생분">
+				<div className="sec-title">살아 있는 발생분</div>
+				{grants.length === 0 ? (
+					<div className="row dim">지금 살아 있는 발생분이 없습니다.</div>
+				) : (
+					grants.map((grant) => (
+						<div className="grant" key={keyOf(grant)}>
+							<span>{SOURCE_LABEL[grant.source]}</span>
+							<b className="num grant-amount">
+								{grant.remaining}/{grant.days}
+							</b>
+							{/* 60일 이내면 날짜 대신 D-day다 — 날짜는 남은 시간을 계산하게 시킨다. */}
+							{grant.expiringSoon ? (
+								<span
+									className="badge num warn"
+									title={`소멸 임박, D-${grant.daysUntilExpiry}`}
+								>
+									D-{grant.daysUntilExpiry}
+								</span>
+							) : (
+								<span className="grant-expiry dim num">{grant.expiryDate}</span>
+							)}
+						</div>
+					))
+				)}
+			</section>
 			<div className="cta">
 				<button type="button" className="primary" onClick={onAddEntry}>
 					휴가 등록
