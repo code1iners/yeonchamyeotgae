@@ -476,8 +476,9 @@ describe.sequential("Electron 제품 흐름", () => {
 		flow = await launchProductFlow(BASIS_CHANGE_DATA);
 		await flow.page.getByRole("tab", { name: "설정" }).click();
 
-		/** 원장형 설정의 입사일·기준방식 입력. */
+		/** 원장형 설정의 입사일 입력. */
 		const hireDate = flow.page.getByLabel("입사일");
+		/** 원장형 설정의 기준방식 선택. */
 		const grantBasis = flow.page.getByLabel("기준방식");
 		/** 저장 전후 상태를 말하는 버튼. */
 		const save = flow.page.getByRole("button", { name: "저장", exact: true });
@@ -511,7 +512,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await grantBasis.selectOption("fiscalYear");
 		await expectVisible(
 			flow.page.getByText(
-				"회사에서 1월 1일에 연차를 일괄 부여한다면 이 방식을 고르세요.",
+				"회사에서 연차 발생을 1월 1일에 한꺼번에 계산한다면 이 방식을 고르세요.",
 				{ exact: false },
 			),
 		);
@@ -541,11 +542,20 @@ describe.sequential("Electron 제품 흐름", () => {
 		await hireDate.fill("2025-01-01");
 		await save.click();
 
-		/** 영향을 받는 기록을 보여 주는 확인 영역. */
+		/** 영향을 받는 기록을 보여 주는 확인 제목. */
 		const confirmTitle = flow.page.getByRole("heading", {
 			name: "입사일 변경 확인",
 		});
+		/** 키보드와 보조 기술이 읽기 시작할 확인 영역. */
+		const confirmRegion = flow.page.getByRole("region", {
+			name: "입사일 변경 확인",
+		});
 		await expectVisible(confirmTitle);
+		expect(
+			await confirmRegion.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
 		await expectVisible(
 			flow.page.getByText(
 				"새 입사일 이전의 휴가 기록 1건과 조정 1건이 있습니다.",
@@ -562,6 +572,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		// 보존을 고르면 파일의 기존 기록은 남고 백업은 만들지 않는다.
 		await flow.page.getByRole("button", { name: "남기고 저장" }).click();
 		await confirmTitle.waitFor({ state: "detached" });
+		/** 보존 선택 후 저장된 데이터. */
 		const kept = await waitForStoredData(
 			flow.userDataDirectory,
 			(data) => data.settings.hireDate === "2025-01-01",
@@ -576,12 +587,14 @@ describe.sequential("Electron 제품 흐름", () => {
 		await flow.page.getByRole("button", { name: "지우고 저장" }).click();
 		await confirmTitle.waitFor({ state: "detached" });
 
+		/** 삭제 선택 후 저장된 데이터. */
 		const deleted = await waitForStoredData(
 			flow.userDataDirectory,
 			(data) => data.settings.hireDate === "2025-06-01",
 		);
 		expect(deleted.entries).toHaveLength(0);
 		expect(deleted.adjustments).toHaveLength(0);
+		/** 삭제 직전에 남은 백업 원본. */
 		const backup = JSON.parse(
 			await readFile(
 				path.join(flow.userDataDirectory, "data.json.bak"),

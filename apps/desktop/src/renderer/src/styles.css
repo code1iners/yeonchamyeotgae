@@ -200,19 +200,6 @@ button:focus-visible {
 	padding: 4px 0 8px;
 }
 
-/* 설정이 길어져도 팝오버 머리와 탭을 밀어내지 않고 설정 본문만 스크롤한다. */
-.settings-pane {
-	max-height: 356px;
-	overflow-y: auto;
-}
-
-/* 입사일·기준방식을 하나의 원장형 기본 설정 묶음으로 읽게 한다. */
-.settings-title {
-	margin-top: 4px;
-	color: var(--fg);
-	font-size: 13px;
-}
-
 /* 필드 아래의 설명은 라벨 열을 건너뛰고 값 열에서 시작해 읽기 순서를 보존한다. */
 .settings-help {
 	margin: 0;

@@ -43,12 +43,17 @@ const GRANT_BASIS_OPTIONS = [
 		label: "회계연도 기준 (1/1)",
 		description:
 			"매년 1월 1일에 연차가 생기고 첫해는 입사 후 근무 개월 수로 비례 계산됩니다.",
-		example: "회사에서 1월 1일에 연차를 일괄 부여한다면 이 방식을 고르세요.",
+		example:
+			"회사에서 연차 발생을 1월 1일에 한꺼번에 계산한다면 이 방식을 고르세요.",
 	},
 ] as const satisfies readonly {
+	/** 코어의 기준방식 값. */
 	value: Settings["grantBasis"];
+	/** 화면에 표시할 기준방식 이름. */
 	label: string;
+	/** 기준방식이 계산되는 방법. */
 	description: string;
+	/** 선택을 도울 실제 사례. */
 	example: string;
 }[];
 
@@ -125,6 +130,8 @@ export function SettingsTab({
 	const describedBySuffix = error ? ` ${SAVE_ERROR_ID}` : "";
 	/** 마지막으로 폼에 반영한 저장값. 셸이 민 상태가 실제로 달라졌는지 가른다. */
 	const syncedRef = useRef(settings);
+	/** 입사일 변경 확인이 나타났을 때 보조 기술의 읽기 시작점. */
+	const confirmationRef = useRef<HTMLElement>(null);
 
 	useEffect(
 		function syncSavedSettingsEffect() {
@@ -138,6 +145,16 @@ export function SettingsTab({
 			setGrantBasis(settings.grantBasis);
 		},
 		[settings],
+	);
+
+	useEffect(
+		function focusChangeConfirmationEffect() {
+			// 저장 버튼이 사라지는 순간에도 키보드 사용자가 확인 영역을 놓치지 않게 한다.
+			if (pendingSplit) {
+				confirmationRef.current?.focus();
+			}
+		},
+		[pendingSplit],
 	);
 
 	/**
@@ -197,13 +214,13 @@ export function SettingsTab({
 	};
 
 	return (
-		<div className="pane settings-pane">
+		<div className="pane">
 			<section
 				className="settings-section"
 				aria-labelledby="settings-basic-title"
 				aria-busy={saving}
 			>
-				<h2 id="settings-basic-title" className="sec-title settings-title">
+				<h2 id="settings-basic-title" className="sec-title">
 					기본 설정
 				</h2>
 				<form
@@ -280,7 +297,11 @@ export function SettingsTab({
 					)}
 					{pendingSplit ? (
 						<section
+							ref={confirmationRef}
 							className="confirm settings-confirm"
+							tabIndex={-1}
+							aria-live="polite"
+							aria-atomic="true"
 							aria-labelledby={CHANGE_CONFIRM_TITLE_ID}
 							aria-describedby={CHANGE_CONFIRM_DESCRIPTION_ID}
 						>
