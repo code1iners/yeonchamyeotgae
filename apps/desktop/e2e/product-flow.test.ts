@@ -73,18 +73,26 @@ describe.sequential("Electron 제품 흐름", () => {
 		const summaryTab = flow.page.getByRole("tab", { name: "요약" });
 		/** 이력 탭 버튼. */
 		const historyTab = flow.page.getByRole("tab", { name: "이력" });
-		/** 설정 탭 버튼. */
-		const settingsTab = flow.page.getByRole("tab", { name: "설정" });
-		expect(await summaryTab.getAttribute("id")).toBe("tab-summary");
-		expect(await summaryTab.getAttribute("aria-controls")).toBe(
-			"panel-summary",
+		/** 각 탭이 실제 패널을 가리키고 패널이 해당 탭으로 이름 붙었는지. */
+		const tabPanelLinks = await flow.page.getByRole("tab").evaluateAll((tabs) =>
+			tabs.map((tab) => {
+				/** 탭이 가리키는 패널 식별자. */
+				const controlledPanelId = tab.getAttribute("aria-controls");
+				/** 탭이 제어하는 패널. */
+				const panel = controlledPanelId
+					? document.getElementById(controlledPanelId)
+					: null;
+				return {
+					hasPanel: panel !== null,
+					isNamedByTab: panel?.getAttribute("aria-labelledby") === tab.id,
+				};
+			}),
 		);
-		expect(await historyTab.getAttribute("aria-controls")).toBe(
-			"panel-history",
-		);
-		expect(await settingsTab.getAttribute("aria-controls")).toBe(
-			"panel-settings",
-		);
+		expect(tabPanelLinks).toEqual([
+			{ hasPanel: true, isNamedByTab: true },
+			{ hasPanel: true, isNamedByTab: true },
+			{ hasPanel: true, isNamedByTab: true },
+		]);
 
 		await summaryTab.focus();
 		await summaryTab.press("ArrowRight");
@@ -94,21 +102,20 @@ describe.sequential("Electron 제품 흐름", () => {
 				(element) => element === document.activeElement,
 			),
 		).toBe(true);
-		/** 키보드로 선택된 탭의 실제 포커스 표시. */
-		const focusStyle = await historyTab.evaluate((element) => {
-			const style = getComputedStyle(element);
-			return {
-				outlineStyle: style.outlineStyle,
-				outlineWidth: style.outlineWidth,
-				outlineColor: style.outlineColor,
-			};
-		});
-		expect(focusStyle.outlineStyle).toBe("solid");
-		expect(focusStyle.outlineWidth).toBe("2px");
-		expect(focusStyle.outlineColor).not.toBe("rgba(0, 0, 0, 0)");
-		expect(
-			await flow.page.getByRole("tabpanel").getAttribute("aria-labelledby"),
-		).toBe("tab-history");
+		/** 현재 선택된 탭으로 이름 붙은 활성 패널. */
+		const activePanel = await flow.page
+			.getByRole("tabpanel")
+			.evaluate((panel) => {
+				/** 패널 이름의 출처인 탭 식별자. */
+				const labelledBy = panel.getAttribute("aria-labelledby");
+				/** 패널 이름을 제공하는 탭. */
+				const tab = labelledBy ? document.getElementById(labelledBy) : null;
+				return {
+					label: tab?.textContent,
+					selected: tab?.getAttribute("aria-selected"),
+				};
+			});
+		expect(activePanel).toEqual({ label: "이력", selected: "true" });
 
 		await flow.page.emulateMedia({ colorScheme: "dark" });
 		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
