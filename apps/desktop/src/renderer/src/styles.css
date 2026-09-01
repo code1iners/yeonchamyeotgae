@@ -200,6 +200,47 @@ button:focus-visible {
 	padding: 4px 0 8px;
 }
 
+/* 설정이 길어져도 팝오버 머리와 탭을 밀어내지 않고 설정 본문만 스크롤한다. */
+.settings-pane {
+	max-height: 356px;
+	overflow-y: auto;
+}
+
+/* 입사일·기준방식을 하나의 원장형 기본 설정 묶음으로 읽게 한다. */
+.settings-title {
+	margin-top: 4px;
+	color: var(--fg);
+	font-size: 13px;
+}
+
+/* 필드 아래의 설명은 라벨 열을 건너뛰고 값 열에서 시작해 읽기 순서를 보존한다. */
+.settings-help {
+	margin: 0;
+	padding: 0 12px 4px 88px;
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--fg-2);
+}
+
+/* 저장 가능 여부·진행 상태를 버튼과 분리된 문장으로도 전달한다. */
+.settings-status {
+	margin: 0;
+	padding: 2px 12px 0;
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--fg-2);
+}
+.settings-status-saving {
+	color: var(--accent);
+}
+
+/* 입사일 변경 확인의 제목은 카드 장식 없이 짧은 섹션 머리로 둔다. */
+.settings-confirm-title {
+	margin: 0 0 3px;
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
 .sec-title {
 	font-size: 11px;
 	font-weight: 600;
@@ -224,7 +265,8 @@ button:focus-visible {
 	gap: 8px;
 	padding: 4px 12px;
 }
-.field > span {
+.field > span,
+.field > label {
 	width: 68px;
 	flex: none;
 	color: var(--fg-2);

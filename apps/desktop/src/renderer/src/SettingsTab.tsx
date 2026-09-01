@@ -6,9 +6,10 @@ import type {
 	Settings,
 } from "@yeoncha/core";
 import { splitRecordsByHireDate } from "@yeoncha/core";
-import { useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { AdjustmentsSection } from "./AdjustmentsSection";
 import { DataSection } from "./DataSection";
+import { isValidHireDate } from "./settings-validation";
 import { useCommit } from "./use-commit";
 
 type Props = {
@@ -29,13 +30,44 @@ type Props = {
 /** 기준방식 선택지(CONTEXT.md) — 코어의 `grantBasis` 값과 화면 문구를 잇는다. */
 const GRANT_BASIS_OPTIONS = [
 	/** 발생을 입사일에 맞춰 준다. */
-	{ value: "hireDate", label: "입사일 기준" },
+	{
+		value: "hireDate",
+		label: "입사일 기준",
+		description:
+			"입사일을 기준으로 해마다 연차가 생기고 소멸일도 발생일에 맞춰집니다.",
+		example: "첫 연차는 입사 1년 뒤에 생깁니다.",
+	},
 	/** 발생을 회계연도(1/1)에 맞춰 준다. 첫해는 비례분이 붙는다. */
-	{ value: "fiscalYear", label: "회계연도 기준 (1/1)" },
+	{
+		value: "fiscalYear",
+		label: "회계연도 기준 (1/1)",
+		description:
+			"매년 1월 1일에 연차가 생기고 첫해는 입사 후 근무 개월 수로 비례 계산됩니다.",
+		example: "회사에서 1월 1일에 연차를 일괄 부여한다면 이 방식을 고르세요.",
+	},
 ] as const satisfies readonly {
 	value: Settings["grantBasis"];
 	label: string;
+	description: string;
+	example: string;
 }[];
+
+/** 설정 폼의 입사일 입력 식별자. 오류와 설명을 같은 입력에 연결한다. */
+const HIRE_DATE_INPUT_ID = "settings-hire-date";
+/** 설정 폼의 기준방식 선택 식별자. 선택지 설명을 연결한다. */
+const GRANT_BASIS_INPUT_ID = "settings-grant-basis";
+/** 입사일 입력 설명 식별자. */
+const HIRE_DATE_HELP_ID = "settings-hire-date-help";
+/** 기준방식 선택 설명 식별자. */
+const GRANT_BASIS_HELP_ID = "settings-grant-basis-help";
+/** 저장 행동의 현재 가능 여부 설명 식별자. */
+const SAVE_STATUS_ID = "settings-save-status";
+/** 저장 실패 문구 식별자. */
+const SAVE_ERROR_ID = "settings-save-error";
+/** 입사일 변경 확인 영역 제목 식별자. */
+const CHANGE_CONFIRM_TITLE_ID = "settings-change-confirm-title";
+/** 입사일 변경 확인 영역 설명 식별자. */
+const CHANGE_CONFIRM_DESCRIPTION_ID = "settings-change-confirm-description";
 
 /**
  * 설정 탭 — 입사일 · 기준방식 · 조정 · 데이터(5.4절). 온보딩의 입구이자 앱에
@@ -69,6 +101,28 @@ export function SettingsTab({
 		settings !== null &&
 		settings.hireDate === hireDate &&
 		settings.grantBasis === grantBasis;
+	/** 입사일이 저장 형식의 실재하는 날짜인가 — 이 값이 저장 버튼 활성 조건이다. */
+	const hireDateValid = isValidHireDate(hireDate);
+	/** 화면에서 선택한 기준방식의 설명. 저장값과 다른 선택도 즉시 설명한다. */
+	const selectedBasis =
+		GRANT_BASIS_OPTIONS.find((option) => option.value === grantBasis) ??
+		GRANT_BASIS_OPTIONS[0];
+	/** 입력이 저장 가능한 상태인가 — 중복 저장과 빈·잘못된 날짜를 함께 막는다. */
+	const canSave = hireDateValid && !unchanged && !saving;
+	/** 저장 버튼이 비활성일 때 그 이유를 색과 무관하게 말한다. */
+	const saveHint = saving
+		? "저장 중입니다…"
+		: !hireDate
+			? "입사일을 입력하면 저장할 수 있습니다."
+			: !hireDateValid
+				? "입사일은 실제 날짜(YYYY-MM-DD)여야 저장할 수 있습니다."
+				: unchanged
+					? "변경한 값이 없습니다."
+					: pendingSplit
+						? "영향받는 기록을 처리한 뒤 설정을 저장합니다."
+						: "변경한 설정을 저장할 수 있습니다.";
+	/** 입력 오류를 해당 입력과 저장 상태에 함께 연결하는 설명 식별자. */
+	const describedBySuffix = error ? ` ${SAVE_ERROR_ID}` : "";
 	/** 마지막으로 폼에 반영한 저장값. 셸이 민 상태가 실제로 달라졌는지 가른다. */
 	const syncedRef = useRef(settings);
 
@@ -92,7 +146,13 @@ export function SettingsTab({
 	 * 입사일을 바꾸는 길에만 한 단계가 더 있다 — 새 입사일 이전의 기록을 지울지
 	 * 묻는 것이다(5.4절). 앱이 대신 고르지 않는다.
 	 */
-	const handleSave = async () => {
+	const handleSave = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		// 잘못된 값은 버튼이 비활성이라도 Enter 제출이나 자동화로 들어올 수 있다.
+		if (!canSave) {
+			return;
+		}
+
 		// 입사일이 바뀌었나요? 이직이며, 이전 기록이 있으면 지울지부터 묻는다.
 		if (settings && settings.hireDate !== hireDate) {
 			/** 새 입사일로 가른 기록. */
@@ -112,6 +172,9 @@ export function SettingsTab({
 	 * 거부하지 않으므로 그 파일을 앱이 그대로 읽는다(2절).
 	 */
 	const handleSaveDropping = async (split: HireDateSplit) => {
+		if (saving) {
+			return;
+		}
 		if (
 			await dropBeforeHireDate({
 				settings: { hireDate, grantBasis },
@@ -125,87 +188,154 @@ export function SettingsTab({
 
 	/** 이전 기록을 남기고 저장한다. */
 	const handleSaveKeeping = async () => {
+		if (saving) {
+			return;
+		}
 		if (await commit({ settings: { hireDate, grantBasis } })) {
 			setPendingSplit(null);
 		}
 	};
 
 	return (
-		<div className="pane">
-			<label className="field">
-				<span>입사일</span>
-				<input
-					type="date"
-					value={hireDate}
-					onChange={(event) => {
-						setHireDate(event.target.value);
-						// 묻던 중에 값을 다시 바꿨나요? 갈라둔 것이 다른 입사일의 결과가 된다.
-						setPendingSplit(null);
-					}}
-				/>
-			</label>
-			<label className="field">
-				<span>기준방식</span>
-				<select
-					value={grantBasis}
-					onChange={(event) => {
-						/** 고른 선택지. 목록에 없는 값은 무시한다. */
-						const picked = GRANT_BASIS_OPTIONS.find(
-							(option) => option.value === event.target.value,
-						);
-						if (picked) {
-							setGrantBasis(picked.value);
-						}
-					}}
+		<div className="pane settings-pane">
+			<section
+				className="settings-section"
+				aria-labelledby="settings-basic-title"
+				aria-busy={saving}
+			>
+				<h2 id="settings-basic-title" className="sec-title settings-title">
+					기본 설정
+				</h2>
+				<form
+					className="settings-form"
+					onSubmit={handleSave}
+					noValidate
+					aria-label="설정 저장"
+					aria-busy={saving}
 				>
-					{GRANT_BASIS_OPTIONS.map((option) => (
-						<option key={option.value} value={option.value}>
-							{option.label}
-						</option>
-					))}
-				</select>
-			</label>
-			{error && <p className="error">{error}</p>}
-			{pendingSplit ? (
-				<div className="confirm">
-					<p>새 입사일 이전의 {describeDropped(pendingSplit)}이 있습니다.</p>
-					<p className="dim">
-						지우면 삭제 직전 상태가 <code>data.json.bak</code>에 백업됩니다.
-						남겨두면 기록은 그대로 있고 계산에는 새 입사일이 적용됩니다.
-					</p>
-					<div className="cta">
-						<button
-							type="button"
-							className="primary"
+					<div className="field">
+						<label htmlFor={HIRE_DATE_INPUT_ID}>입사일</label>
+						<input
+							id={HIRE_DATE_INPUT_ID}
+							type="date"
+							value={hireDate}
 							disabled={saving}
-							onClick={() => handleSaveDropping(pendingSplit)}
-						>
-							지우고 저장
-						</button>
-						<button type="button" disabled={saving} onClick={handleSaveKeeping}>
-							남기고 저장
-						</button>
-						<button
-							type="button"
-							disabled={saving}
-							onClick={() => setPendingSplit(null)}
-						>
-							취소
-						</button>
+							required
+							aria-invalid={!hireDateValid}
+							aria-describedby={`${HIRE_DATE_HELP_ID} ${SAVE_STATUS_ID}${describedBySuffix}`}
+							onChange={(event) => {
+								setHireDate(event.target.value);
+								// 묻던 중에 값을 다시 바꿨나요? 갈라둔 것이 다른 입사일의 결과가 된다.
+								setPendingSplit(null);
+							}}
+						/>
 					</div>
-				</div>
-			) : (
-				<div className="cta">
-					<button
-						type="button"
-						className="primary"
-						disabled={!hireDate || saving || unchanged}
-						onClick={handleSave}
+					<p id={HIRE_DATE_HELP_ID} className="settings-help">
+						연차가 시작되는 근로일을 입력하세요.
+					</p>
+					<div className="field">
+						<label htmlFor={GRANT_BASIS_INPUT_ID}>기준방식</label>
+						<select
+							id={GRANT_BASIS_INPUT_ID}
+							value={grantBasis}
+							disabled={saving}
+							aria-describedby={`${GRANT_BASIS_HELP_ID} ${SAVE_STATUS_ID}${describedBySuffix}`}
+							onChange={(event) => {
+								/** 고른 선택지. 목록에 없는 값은 무시한다. */
+								const picked = GRANT_BASIS_OPTIONS.find(
+									(option) => option.value === event.target.value,
+								);
+								if (picked) {
+									setGrantBasis(picked.value);
+								}
+							}}
+						>
+							{GRANT_BASIS_OPTIONS.map((option) => (
+								<option key={option.value} value={option.value}>
+									{option.label}
+								</option>
+							))}
+						</select>
+					</div>
+					<p id={GRANT_BASIS_HELP_ID} className="settings-help">
+						{selectedBasis.description} {selectedBasis.example}
+					</p>
+					<p
+						id={SAVE_STATUS_ID}
+						className={`settings-status ${saving ? "settings-status-saving" : ""}`}
+						role="status"
+						aria-live="polite"
 					>
-						저장
-					</button>
-				</div>
-			)}
+						{saveHint}
+					</p>
+					{error && (
+						<p
+							id={SAVE_ERROR_ID}
+							className="error"
+							role="alert"
+							aria-live="assertive"
+						>
+							{error}
+						</p>
+					)}
+					{pendingSplit ? (
+						<section
+							className="confirm settings-confirm"
+							aria-labelledby={CHANGE_CONFIRM_TITLE_ID}
+							aria-describedby={CHANGE_CONFIRM_DESCRIPTION_ID}
+						>
+							<h3
+								id={CHANGE_CONFIRM_TITLE_ID}
+								className="settings-confirm-title"
+							>
+								입사일 변경 확인
+							</h3>
+							<p id={CHANGE_CONFIRM_DESCRIPTION_ID}>
+								새 입사일 이전의 {describeDropped(pendingSplit)}이 있습니다.
+							</p>
+							<p className="dim">
+								지우면 삭제 직전 상태가 <code>data.json.bak</code>에 백업됩니다.
+								남겨두면 이 기록은 그대로 두고 계산에만 새 입사일을 적용합니다.
+							</p>
+							<div className="cta">
+								<button
+									type="button"
+									className="primary"
+									disabled={saving}
+									onClick={() => handleSaveDropping(pendingSplit)}
+								>
+									{saving ? "저장 중…" : "지우고 저장"}
+								</button>
+								<button
+									type="button"
+									disabled={saving}
+									onClick={handleSaveKeeping}
+								>
+									남기고 저장
+								</button>
+								<button
+									type="button"
+									disabled={saving}
+									onClick={() => setPendingSplit(null)}
+								>
+									취소
+								</button>
+							</div>
+						</section>
+					) : (
+						<div className="cta">
+							<button
+								type="submit"
+								className="primary"
+								disabled={!canSave}
+								aria-describedby={SAVE_STATUS_ID}
+							>
+								{saving ? "저장 중…" : "저장"}
+							</button>
+						</div>
+					)}
+				</form>
+			</section>
 			{settings && (
 				/*
 				 * 설정 탭은 탭을 옮길 때마다 통째로 다시 서므로 열림이 마운트 시점의 초기

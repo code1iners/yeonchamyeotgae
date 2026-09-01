@@ -52,6 +52,37 @@ const NORMAL_DATA: LeaveData = {
 	adjustments: [],
 };
 
+/** 기준방식 전환에 따른 잔여 재계산을 확인할 설정 데이터. */
+const BASIS_CHANGE_DATA: LeaveData = {
+	schemaVersion: 1,
+	settings: { hireDate: "2024-07-01", grantBasis: "hireDate" },
+	entries: [],
+	adjustments: [],
+};
+
+/** 새 입사일 이전 휴가 기록·조정을 보존하거나 삭제하는 흐름의 설정 데이터. */
+const SETTINGS_IMPACT_DATA: LeaveData = {
+	schemaVersion: 1,
+	settings: { hireDate: "2024-01-01", grantBasis: "hireDate" },
+	entries: [
+		{
+			id: "settings-old-entry",
+			date: "2024-12-20",
+			days: 1,
+			note: "이전 입사일의 휴가",
+		},
+	],
+	adjustments: [
+		{
+			id: "settings-old-adjustment",
+			grantDate: "2024-06-01",
+			expiryDate: "2025-12-31",
+			days: 2,
+			note: "이전 입사일의 조정",
+		},
+	],
+};
+
 /** 오늘 빠른 등록 전후의 잔여와 이력을 확인할 최소 결정론적 저장 데이터. */
 const QUICK_ENTRY_DATA: LeaveData = {
 	schemaVersion: 1,
@@ -440,6 +471,166 @@ describe.sequential("Electron 제품 흐름", () => {
 		await triggerPopoverBlur(flow.app);
 		await waitForPopoverHidden(flow.app);
 	});
+
+	test("설정에서 기준방식 설명·유효성·저장 후 잔여 재계산을 확인한다", async () => {
+		flow = await launchProductFlow(BASIS_CHANGE_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 원장형 설정의 입사일·기준방식 입력. */
+		const hireDate = flow.page.getByLabel("입사일");
+		const grantBasis = flow.page.getByLabel("기준방식");
+		/** 저장 전후 상태를 말하는 버튼. */
+		const save = flow.page.getByRole("button", { name: "저장", exact: true });
+
+		await expectVisible(flow.page.getByRole("heading", { name: "기본 설정" }));
+		expect(await hireDate.inputValue()).toBe("2024-07-01");
+		expect(await grantBasis.inputValue()).toBe("hireDate");
+		expect(await save.isDisabled()).toBe(true);
+		expect(await hireDate.getAttribute("aria-invalid")).toBe("false");
+		await expectVisible(
+			flow.page.getByText("변경한 값이 없습니다.", { exact: true }),
+		);
+		await expectVisible(
+			flow.page.getByText(/첫 연차는 입사 1년 뒤에 생깁니다\./),
+		);
+
+		// 빈 입사일은 저장을 막고 입력과 안내를 보조 기술에 연결한다.
+		await hireDate.fill("");
+		expect(await save.isDisabled()).toBe(true);
+		expect(await hireDate.getAttribute("aria-invalid")).toBe("true");
+		await expectVisible(
+			flow.page.getByText("입사일을 입력하면 저장할 수 있습니다.", {
+				exact: true,
+			}),
+		);
+		expect(await hireDate.getAttribute("aria-describedby")).toContain(
+			"settings-save-status",
+		);
+
+		await hireDate.fill("2024-07-01");
+		await grantBasis.selectOption("fiscalYear");
+		await expectVisible(
+			flow.page.getByText(
+				"회사에서 1월 1일에 연차를 일괄 부여한다면 이 방식을 고르세요.",
+				{ exact: false },
+			),
+		);
+		expect(await save.isEnabled()).toBe(true);
+		expect(await grantBasis.getAttribute("aria-describedby")).toContain(
+			"settings-grant-basis-help",
+		);
+
+		await save.click();
+		await expectVisible(flow.page.getByText("7.5일", { exact: true }));
+		expect(await grantBasis.inputValue()).toBe("fiscalYear");
+		expect(
+			await flow.page
+				.getByText("변경한 값이 없습니다.", { exact: true })
+				.isVisible(),
+		).toBe(true);
+	}, 60_000);
+
+	test("입사일 변경에서 기록 보존과 삭제를 고르고 삭제 전 백업을 확인한다", async () => {
+		flow = await launchProductFlow(SETTINGS_IMPACT_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 변경할 입사일 입력. */
+		const hireDate = flow.page.getByLabel("입사일");
+		/** 변경 전에는 비활성이고, 날짜가 달라지면 활성화되는 저장 버튼. */
+		const save = flow.page.getByRole("button", { name: "저장", exact: true });
+		await hireDate.fill("2025-01-01");
+		await save.click();
+
+		/** 영향을 받는 기록을 보여 주는 확인 영역. */
+		const confirmTitle = flow.page.getByRole("heading", {
+			name: "입사일 변경 확인",
+		});
+		await expectVisible(confirmTitle);
+		await expectVisible(
+			flow.page.getByText(
+				"새 입사일 이전의 휴가 기록 1건과 조정 1건이 있습니다.",
+				{ exact: true },
+			),
+		);
+		await expectVisible(
+			flow.page.getByText(
+				"지우면 삭제 직전 상태가 data.json.bak에 백업됩니다. 남겨두면 이 기록은 그대로 두고 계산에만 새 입사일을 적용합니다.",
+				{ exact: true },
+			),
+		);
+
+		// 보존을 고르면 파일의 기존 기록은 남고 백업은 만들지 않는다.
+		await flow.page.getByRole("button", { name: "남기고 저장" }).click();
+		await confirmTitle.waitFor({ state: "detached" });
+		const kept = await waitForStoredData(
+			flow.userDataDirectory,
+			(data) => data.settings.hireDate === "2025-01-01",
+		);
+		expect(kept.entries).toHaveLength(1);
+		expect(kept.adjustments).toHaveLength(1);
+
+		// 다시 입사일을 옮긴 뒤 삭제를 고르면 새 설정과 남길 기록만 저장된다.
+		await hireDate.fill("2025-06-01");
+		await save.click();
+		await expectVisible(confirmTitle);
+		await flow.page.getByRole("button", { name: "지우고 저장" }).click();
+		await confirmTitle.waitFor({ state: "detached" });
+
+		const deleted = await waitForStoredData(
+			flow.userDataDirectory,
+			(data) => data.settings.hireDate === "2025-06-01",
+		);
+		expect(deleted.entries).toHaveLength(0);
+		expect(deleted.adjustments).toHaveLength(0);
+		const backup = JSON.parse(
+			await readFile(
+				path.join(flow.userDataDirectory, "data.json.bak"),
+				"utf8",
+			),
+		) as LeaveData;
+		expect(backup.settings.hireDate).toBe("2025-01-01");
+		expect(backup.entries).toHaveLength(1);
+		expect(backup.adjustments).toHaveLength(1);
+
+		// 삭제 후 상태 푸시로 이력도 즉시 다시 계산된다.
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+		expect(
+			await flow.page.getByText("2024-12-20", { exact: true }).count(),
+		).toBe(0);
+	}, 60_000);
+
+	test("설정 저장 실패 시 입력값·설명·재시도 경로를 유지한다", async () => {
+		flow = await launchProductFlow(BASIS_CHANGE_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 저장에 실패할 기준방식 초안. */
+		const grantBasis = flow.page.getByLabel("기준방식");
+		await grantBasis.selectOption("fiscalYear");
+
+		// 저장 파일 디렉터리를 잠가 원자적 쓰기 실패를 실제 Electron 경로에서 만든다.
+		await chmod(flow.userDataDirectory, 0o500);
+		try {
+			await flow.page
+				.getByRole("button", { name: "저장", exact: true })
+				.click();
+			await expectVisible(
+				flow.page.getByRole("alert").filter({ hasText: "저장하지 못했습니다" }),
+			);
+			expect(await grantBasis.inputValue()).toBe("fiscalYear");
+			expect(
+				await flow.page
+					.getByRole("button", { name: "저장", exact: true })
+					.isEnabled(),
+			).toBe(true);
+			expect(
+				await flow.page
+					.getByRole("form", { name: "설정 저장" })
+					.getAttribute("aria-busy"),
+			).toBe("false");
+		} finally {
+			await chmod(flow.userDataDirectory, 0o700);
+		}
+	}, 60_000);
 
 	test("긴 발생분 목록에서도 잔여와 휴가 등록이 최초 뷰포트에 남는다", async () => {
 		flow = await launchProductFlow(LONG_SUMMARY_DATA);
@@ -1369,6 +1560,28 @@ async function waitForPopoverHidden(app: ElectronApplication): Promise<void> {
 		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
 	throw new Error("팝오버가 blur 뒤에도 숨겨지지 않았습니다");
+}
+
+/** 저장 커밋이 임시 파일에 반영되고 난 뒤 조건을 만족하는 데이터를 읽는다. */
+async function waitForStoredData(
+	userDataDirectory: string,
+	predicate: (data: LeaveData) => boolean,
+): Promise<LeaveData> {
+	/** 격리 저장 파일 경로. */
+	const filePath = path.join(userDataDirectory, "data.json");
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		try {
+			/** 현재 저장 파일. 원자적 교체 중이면 다음 시도에서 다시 읽는다. */
+			const data = JSON.parse(await readFile(filePath, "utf8")) as LeaveData;
+			if (predicate(data)) {
+				return data;
+			}
+		} catch {
+			// 쓰기 교체 순간의 짧은 읽기 실패는 다음 시도에서 확인한다.
+		}
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	throw new Error("저장 파일이 예상한 설정으로 갱신되지 않았습니다");
 }
 
 /** 승인된 컴프와 비교할 정상 요약 첫 화면을 임시 산출물로 남긴다. */
