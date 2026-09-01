@@ -248,14 +248,16 @@ export function App() {
 							hidden={tab !== "settings"}
 							tabIndex={-1}
 						>
-							<SettingsTab
-								settings={state.settings}
-								entries={state.entries}
-								adjustments={state.adjustments}
-								grants={state.balance?.grants ?? []}
-								today={state.today}
-								openAdjustment={selected.openAdjustment}
-							/>
+							{tab === "settings" && (
+								<SettingsTab
+									settings={state.settings}
+									entries={state.entries}
+									adjustments={state.adjustments}
+									grants={state.balance?.grants ?? []}
+									today={state.today}
+									openAdjustment={selected.openAdjustment}
+								/>
+							)}
 						</div>
 					</>
 				)
@@ -265,8 +267,8 @@ export function App() {
 }
 
 /**
- * 헤더의 잔여 문구. 계산할 수 없는 상태는 대시로 둔다 — 온보딩에서는 헤더 자체가
- * 없으므로 이 자리에 오는 것은 파일을 읽지 못한 경우뿐이다.
+ * 헤더에 표시할 잔여 문구. 온보딩에서는 잔여 영역 자체를 렌더링하지 않으며,
+ * 이 함수가 호출되는 계산 가능 상태에서는 정확한 소수 값을 그대로 보여준다.
  *
  * **반올림도 절사도 하지 않는다**(5.1절). Windows에서는 이 화면이 정확한 잔여를
  * 볼 수 있는 유일한 곳이다.
