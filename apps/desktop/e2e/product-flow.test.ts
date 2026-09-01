@@ -52,6 +52,54 @@ afterEach(async () => {
 });
 
 describe.sequential("Electron 제품 흐름", () => {
+	test("공통 팝오버 셸이 제품명과 연결된 탭·패널 및 키보드 이동을 제공한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+
+		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
+		await expectVisible(flow.page.getByRole("tablist", { name: "연차 화면" }));
+		await flow.page.waitForFunction(
+			() => document.documentElement.scrollHeight <= window.innerHeight,
+		);
+		const layout = await flow.page.evaluate(() => ({
+			width: window.innerWidth,
+			height: window.innerHeight,
+			contentHeight: document.documentElement.scrollHeight,
+		}));
+		expect(layout.width).toBe(380);
+		expect(layout.contentHeight).toBeLessThanOrEqual(layout.height);
+
+		const summaryTab = flow.page.getByRole("tab", { name: "요약" });
+		const historyTab = flow.page.getByRole("tab", { name: "이력" });
+		const settingsTab = flow.page.getByRole("tab", { name: "설정" });
+		expect(await summaryTab.getAttribute("id")).toBe("tab-summary");
+		expect(await summaryTab.getAttribute("aria-controls")).toBe(
+			"panel-summary",
+		);
+		expect(await historyTab.getAttribute("aria-controls")).toBe(
+			"panel-history",
+		);
+		expect(await settingsTab.getAttribute("aria-controls")).toBe(
+			"panel-settings",
+		);
+
+		await summaryTab.focus();
+		await summaryTab.press("ArrowRight");
+		expect(await historyTab.getAttribute("aria-selected")).toBe("true");
+		expect(
+			await historyTab.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+		expect(
+			await flow.page.getByRole("tabpanel").getAttribute("aria-labelledby"),
+		).toBe("tab-history");
+
+		await flow.page.emulateMedia({ colorScheme: "dark" });
+		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
+		expect(await flow.page.getByRole("tab").count()).toBe(3);
+		expect(await historyTab.getAttribute("aria-selected")).toBe("true");
+	});
+
 	test("빌드 앱의 팝오버를 열고 닫은 뒤 정상 데이터의 세 탭을 사용자 문구와 역할로 확인한다", async () => {
 		flow = await launchProductFlow(NORMAL_DATA);
 

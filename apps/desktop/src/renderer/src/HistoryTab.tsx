@@ -44,7 +44,7 @@ export function HistoryTab({ entries, balance, adjustments, today }: Props) {
 	const losses = expiryLosses({ grants: balance.grants, adjustments });
 	/**
 	 * 예정 / 연차 연도별 사용 그룹. 두 뷰가 같은 판정을 본다 — 리스트의 예정 섹션과
-	 * 달력의 파란 점이 갈리면 안 되므로 3.9절 경계는 코어의 이 결과 하나에서 나온다.
+	 * 달력의 예정·사용 점이 갈리면 안 되므로 3.9절 경계는 코어의 이 결과 하나에서 나온다.
 	 */
 	const groups = groupHistory({ grants: balance.grants, entries, today });
 
@@ -328,7 +328,7 @@ function HistoryCalendar({
 	losses,
 	today,
 }: Pick<Props, "entries" | "today"> & {
-	/** 예정 / 사용 판정의 출처 — 파란 점과 회색 점이 리스트의 섹션과 같은 경계를 쓴다. */
+	/** 예정 / 사용 판정의 출처 — 녹색 점과 회색 점이 리스트의 섹션과 같은 경계를 쓴다. */
 	groups: HistorySections;
 	/** 빨간 밑줄을 붙일 소멸 줄들. */
 	losses: ExpiryLoss[];

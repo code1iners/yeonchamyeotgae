@@ -1,37 +1,41 @@
 /*
- * 팝오버의 시각 언어(스펙 5절) — 시스템 네이티브, 장식 없음, 강조색은 시스템 블루 하나.
- * 밀도는 실제 메뉴바 앱(Itsycal, Stats)을 따른다: 본문 13px, 행 높이 25px 안팎, hairline 구분선.
- * 07번 프로토타입의 확정안(F)이 쓰던 토큰을 그대로 옮겼다.
+ * 팝오버의 시각 언어(스펙 5절) — 얇은 원장 선, 짙은 잉크, 절제된 녹색 하나.
+ * 밀도는 작은 메뉴바 도구에 맞춘다: 본문 13px, 행 높이 25px 안팎, hairline 구분선.
+ * 승인된 잔액 원장 컴프의 정보 순서와 녹색 역할만 옮기고 종이 질감은 재현하지 않는다.
  */
 
 :root {
-	--fg: #1d1d1f;
-	--fg-2: #6e6e73;
-	--accent: #007aff;
+	color-scheme: light;
+	--fg: #202522;
+	--fg-2: #66736b;
+	--accent: #1d6b52;
+	--accent-soft: rgba(29, 107, 82, 0.12);
 	--on-accent: #fff;
-	--danger: #d70015;
-	--line: rgba(0, 0, 0, 0.09);
-	--line-strong: rgba(0, 0, 0, 0.16);
-	--hover: rgba(0, 0, 0, 0.05);
-	--fill: rgba(0, 0, 0, 0.04);
-	--field: rgba(255, 255, 255, 0.7);
-	--bg: #f5f5f7;
+	--danger: #b42318;
+	--line: rgba(32, 37, 34, 0.14);
+	--line-strong: rgba(32, 37, 34, 0.24);
+	--hover: rgba(29, 107, 82, 0.08);
+	--fill: rgba(32, 37, 34, 0.045);
+	--field: rgba(255, 255, 255, 0.72);
+	--bg: #f7f8f6;
 }
 
-/* 라이트/다크는 시스템 테마를 그대로 따른다. 트레이 글리프의 테마 추종(6.2절)과는 다른 축이다. */
+/* 라이트·다크는 같은 역할을 유지하고 명도만 바꾼다. 트레이 글리프와는 다른 축이다. */
 @media (prefers-color-scheme: dark) {
 	:root {
-		--fg: #f5f5f7;
-		--fg-2: #a1a1a6;
-		--accent: #0a84ff;
+		color-scheme: dark;
+		--fg: #edf2ee;
+		--fg-2: #a7b4ac;
+		--accent: #287c60;
+		--accent-soft: rgba(40, 124, 96, 0.22);
 		--on-accent: #fff;
-		--danger: #ff453a;
-		--line: rgba(255, 255, 255, 0.12);
-		--line-strong: rgba(255, 255, 255, 0.2);
-		--hover: rgba(255, 255, 255, 0.07);
-		--fill: rgba(255, 255, 255, 0.06);
-		--field: rgba(255, 255, 255, 0.08);
-		--bg: #1e1e1e;
+		--danger: #ff8a80;
+		--line: rgba(237, 242, 238, 0.16);
+		--line-strong: rgba(237, 242, 238, 0.26);
+		--hover: rgba(40, 124, 96, 0.2);
+		--fill: rgba(237, 242, 238, 0.07);
+		--field: rgba(237, 242, 238, 0.08);
+		--bg: #1c2420;
 	}
 }
 
@@ -52,6 +56,12 @@ body {
 	-webkit-font-smoothing: antialiased;
 	user-select: none;
 	cursor: default;
+	overflow-x: hidden;
+}
+
+.popover-shell {
+	width: 100%;
+	min-width: 0;
 }
 
 /* 숫자는 자리를 맞춰 세운다 — 잔여가 갱신될 때 글자가 흔들리지 않는다. */
@@ -101,6 +111,8 @@ select {
 }
 input:focus,
 select:focus,
+input:focus-visible,
+select:focus-visible,
 button:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: -1px;
@@ -111,18 +123,39 @@ button:focus-visible {
 .head {
 	display: flex;
 	align-items: baseline;
-	gap: 6px;
-	padding: 8px 12px 6px;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 10px 12px 8px;
+	border-bottom: 2px solid var(--accent);
 }
-.head b {
+
+.product-name {
+	margin: 0;
 	font-size: 17px;
 	font-weight: 600;
+}
+
+.head-balance {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+.head-balance-label {
+	color: var(--fg-2);
+}
+
+.head-balance strong {
+	font-size: 17px;
+	font-weight: 700;
+	white-space: nowrap;
 }
 
 .tabs {
 	display: flex;
 	gap: 2px;
-	padding: 0 10px 8px;
+	padding: 8px 10px;
 	border-bottom: 1px solid var(--line);
 }
 .tabs button {
@@ -502,7 +535,7 @@ button.link:hover:not(:disabled) {
 .cal-day.cal-dot-used::after {
 	background: var(--fg-2);
 }
-/* 고른 칸에서는 파란 배경에 묻히지 않게 점이 흰색이 된다. */
+/* 고른 칸에서는 녹색 배경에 묻히지 않게 점이 흰색이 된다. */
 .cal-day.cal-selected::after {
 	background: var(--on-accent);
 }
@@ -597,7 +630,7 @@ button.hist-year:hover:not(:disabled) {
 	font-size: 11.5px;
 }
 
-/* 파란 예정 태그(5.3절). 색은 강조색 하나에서만 나온다. */
+/* 녹색 예정 태그(5.3절). 색은 강조색 하나에서만 나온다. */
 .tag-planned {
 	flex: none;
 	padding: 0 5px;
@@ -605,7 +638,7 @@ button.hist-year:hover:not(:disabled) {
 	font-size: 10.5px;
 	font-weight: 600;
 	color: var(--accent);
-	background: color-mix(in srgb, var(--accent) 14%, transparent);
+	background: var(--accent-soft);
 }
 
 /* 그 자리 수정 폼 — 행 하나가 폼이 된다. 카드를 겹치지 않고 배경 한 톤으로만 가른다. */

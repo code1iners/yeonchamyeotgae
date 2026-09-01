@@ -7,128 +7,317 @@
 			"ink": {
 				"role": "neutral",
 				"displayName": "Graphite",
-				"canonical": "#1d1d1f",
-				"tonalRamp": ["#050506", "#0b0b0c", "#121214", "#1d1d1f", "#343437", "#5a5a5e", "#9b9ba0", "#f5f5f7"]
+				"canonical": "#202522",
+				"tonalRamp": [
+					"#050806",
+					"#0c100d",
+					"#151a17",
+					"#202522",
+					"#383e3a",
+					"#5f6862",
+					"#a1aba4",
+					"#edf2ee"
+				]
 			},
 			"ink-dark": {
 				"role": "neutral",
 				"displayName": "Graphite on Dark",
-				"canonical": "#f5f5f7",
-				"tonalRamp": ["#1d1d1f", "#343437", "#5a5a5e", "#88888d", "#b0b0b5", "#d0d0d4", "#e7e7ea", "#f5f5f7"]
+				"canonical": "#edf2ee",
+				"tonalRamp": [
+					"#202522",
+					"#383e3a",
+					"#5f6862",
+					"#858f89",
+					"#abb5ae",
+					"#c5cec8",
+					"#dfe8e2",
+					"#edf2ee"
+				]
 			},
 			"muted": {
 				"role": "neutral",
 				"displayName": "Muted Graphite",
-				"canonical": "#6e6e73",
-				"tonalRamp": ["#1f1f21", "#3f3f42", "#5b5b5f", "#6e6e73", "#8d8d92", "#b1b1b5", "#d5d5d8", "#f5f5f7"]
+				"canonical": "#66736b",
+				"tonalRamp": [
+					"#1f2521",
+					"#3a443e",
+					"#515d56",
+					"#66736b",
+					"#829087",
+					"#a3afa8",
+					"#c5cec8",
+					"#edf2ee"
+				]
 			},
 			"muted-dark": {
 				"role": "neutral",
 				"displayName": "Muted Graphite on Dark",
-				"canonical": "#a1a1a6",
-				"tonalRamp": ["#242426", "#444448", "#69696d", "#818186", "#a1a1a6", "#c2c2c6", "#dfdfe2", "#f5f5f7"]
+				"canonical": "#a7b4ac",
+				"tonalRamp": [
+					"#252d28",
+					"#414c45",
+					"#617067",
+					"#7f9085",
+					"#a7b4ac",
+					"#c3cec6",
+					"#dce7df",
+					"#edf2ee"
+				]
 			},
 			"accent": {
 				"role": "primary",
-				"displayName": "System Blue",
-				"canonical": "#007aff",
-				"tonalRamp": ["#001a33", "#00345f", "#00578f", "#007aff", "#3995ff", "#75b4ff", "#abd1ff", "#e6f3ff"]
+				"displayName": "Ledger Green",
+				"canonical": "#1d6b52",
+				"tonalRamp": [
+					"#08251b",
+					"#0d3e2d",
+					"#14543f",
+					"#1d6b52",
+					"#398266",
+					"#6aa88f",
+					"#a6cab9",
+					"#e8f3ed"
+				]
 			},
 			"accent-dark": {
 				"role": "primary",
-				"displayName": "System Blue on Dark",
-				"canonical": "#0a84ff",
-				"tonalRamp": ["#001d38", "#003b70", "#0063ad", "#0a84ff", "#4b9fff", "#82bbff", "#b5d6ff", "#e9f4ff"]
+				"displayName": "Ledger Green on Dark",
+				"canonical": "#287c60",
+				"tonalRamp": [
+					"#061e16",
+					"#0b3a2b",
+					"#14523e",
+					"#287c60",
+					"#4d987b",
+					"#78b89d",
+					"#afd3c0",
+					"#e7f3ec"
+				]
 			},
 			"on-accent": {
 				"role": "neutral",
 				"displayName": "Accent Text",
 				"canonical": "#fff",
-				"tonalRamp": ["#000000", "#1a1a1a", "#333333", "#4d4d4d", "#666666", "#999999", "#cccccc", "#ffffff"]
+				"tonalRamp": [
+					"#000000",
+					"#1a1a1a",
+					"#333333",
+					"#4d4d4d",
+					"#666666",
+					"#999999",
+					"#cccccc",
+					"#ffffff"
+				]
 			},
 			"danger": {
 				"role": "tertiary",
 				"displayName": "Signal Red",
-				"canonical": "#d70015",
-				"tonalRamp": ["#3a0006", "#67000d", "#a00011", "#d70015", "#ed3a43", "#f77a7f", "#ffb4b7", "#ffe7e8"]
+				"canonical": "#b42318",
+				"tonalRamp": [
+					"#410a06",
+					"#6e110c",
+					"#8f1d13",
+					"#b42318",
+					"#d05247",
+					"#e17e73",
+					"#efaaa2",
+					"#fbe5e2"
+				]
 			},
 			"danger-dark": {
 				"role": "tertiary",
 				"displayName": "Signal Red on Dark",
-				"canonical": "#ff453a",
-				"tonalRamp": ["#3a0503", "#6f0d0b", "#b3201d", "#ff453a", "#ff7068", "#ff9e98", "#ffc9c5", "#ffebe9"]
+				"canonical": "#ff8a80",
+				"tonalRamp": [
+					"#3b0a07",
+					"#6b1510",
+					"#a7342d",
+					"#ff8a80",
+					"#ffaaa2",
+					"#ffc1bc",
+					"#ffd7d3",
+					"#ffebe9"
+				]
 			},
 			"canvas": {
 				"role": "neutral",
 				"displayName": "Light Canvas",
-				"canonical": "#f5f5f7",
-				"tonalRamp": ["#1d1d1f", "#343437", "#6e6e73", "#a1a1a6", "#c7c7cc", "#e2e2e5", "#f0f0f2", "#f5f5f7"]
+				"canonical": "#f7f8f6",
+				"tonalRamp": [
+					"#202522",
+					"#383e3a",
+					"#66736b",
+					"#a7b4ac",
+					"#c9d2cc",
+					"#e0e8e2",
+					"#eff4f0",
+					"#f7f8f6"
+				]
 			},
 			"canvas-dark": {
 				"role": "neutral",
 				"displayName": "Dark Canvas",
-				"canonical": "#1e1e1e",
-				"tonalRamp": ["#000000", "#0b0b0b", "#1e1e1e", "#2c2c2e", "#48484a", "#636366", "#8e8e93", "#f5f5f7"]
+				"canonical": "#1c2420",
+				"tonalRamp": [
+					"#080b09",
+					"#101612",
+					"#1c2420",
+					"#2c3730",
+					"#435047",
+					"#65736b",
+					"#9eaaa2",
+					"#edf2ee"
+				]
 			},
 			"line": {
 				"role": "neutral",
 				"displayName": "Light Hairline",
-				"canonical": "rgba(0, 0, 0, 0.09)",
-				"tonalRamp": ["rgba(0, 0, 0, 0.18)", "rgba(0, 0, 0, 0.16)", "rgba(0, 0, 0, 0.13)", "rgba(0, 0, 0, 0.09)", "rgba(0, 0, 0, 0.07)", "rgba(0, 0, 0, 0.05)", "rgba(0, 0, 0, 0.03)", "transparent"]
+				"canonical": "rgba(32, 37, 34, 0.14)",
+				"tonalRamp": [
+					"rgba(32, 37, 34, 0.28)",
+					"rgba(32, 37, 34, 0.24)",
+					"rgba(32, 37, 34, 0.2)",
+					"rgba(32, 37, 34, 0.14)",
+					"rgba(32, 37, 34, 0.1)",
+					"rgba(32, 37, 34, 0.07)",
+					"rgba(32, 37, 34, 0.04)",
+					"transparent"
+				]
 			},
 			"line-dark": {
 				"role": "neutral",
 				"displayName": "Dark Hairline",
-				"canonical": "rgba(255, 255, 255, 0.12)",
-				"tonalRamp": ["rgba(255, 255, 255, 0.22)", "rgba(255, 255, 255, 0.19)", "rgba(255, 255, 255, 0.16)", "rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.09)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.03)", "transparent"]
+				"canonical": "rgba(237, 242, 238, 0.16)",
+				"tonalRamp": [
+					"rgba(237, 242, 238, 0.32)",
+					"rgba(237, 242, 238, 0.27)",
+					"rgba(237, 242, 238, 0.22)",
+					"rgba(237, 242, 238, 0.16)",
+					"rgba(237, 242, 238, 0.11)",
+					"rgba(237, 242, 238, 0.07)",
+					"rgba(237, 242, 238, 0.04)",
+					"transparent"
+				]
 			},
 			"line-strong": {
 				"role": "neutral",
 				"displayName": "Light Strong Hairline",
-				"canonical": "rgba(0, 0, 0, 0.16)",
-				"tonalRamp": ["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.26)", "rgba(0, 0, 0, 0.22)", "rgba(0, 0, 0, 0.16)", "rgba(0, 0, 0, 0.12)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.02)"]
+				"canonical": "rgba(32, 37, 34, 0.24)",
+				"tonalRamp": [
+					"rgba(32, 37, 34, 0.38)",
+					"rgba(32, 37, 34, 0.32)",
+					"rgba(32, 37, 34, 0.28)",
+					"rgba(32, 37, 34, 0.24)",
+					"rgba(32, 37, 34, 0.16)",
+					"rgba(32, 37, 34, 0.11)",
+					"rgba(32, 37, 34, 0.06)",
+					"rgba(32, 37, 34, 0.03)"
+				]
 			},
 			"line-strong-dark": {
 				"role": "neutral",
 				"displayName": "Dark Strong Hairline",
-				"canonical": "rgba(255, 255, 255, 0.2)",
-				"tonalRamp": ["rgba(255, 255, 255, 0.3)", "rgba(255, 255, 255, 0.26)", "rgba(255, 255, 255, 0.23)", "rgba(255, 255, 255, 0.2)", "rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.03)"]
+				"canonical": "rgba(237, 242, 238, 0.26)",
+				"tonalRamp": [
+					"rgba(237, 242, 238, 0.38)",
+					"rgba(237, 242, 238, 0.32)",
+					"rgba(237, 242, 238, 0.28)",
+					"rgba(237, 242, 238, 0.26)",
+					"rgba(237, 242, 238, 0.19)",
+					"rgba(237, 242, 238, 0.13)",
+					"rgba(237, 242, 238, 0.08)",
+					"rgba(237, 242, 238, 0.04)"
+				]
 			},
 			"hover": {
 				"role": "neutral",
 				"displayName": "Light Hover Fill",
-				"canonical": "rgba(0, 0, 0, 0.05)",
-				"tonalRamp": ["rgba(0, 0, 0, 0.12)", "rgba(0, 0, 0, 0.1)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.05)", "rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.03)", "rgba(0, 0, 0, 0.015)", "transparent"]
+				"canonical": "rgba(29, 107, 82, 0.08)",
+				"tonalRamp": [
+					"rgba(29, 107, 82, 0.16)",
+					"rgba(29, 107, 82, 0.13)",
+					"rgba(29, 107, 82, 0.11)",
+					"rgba(29, 107, 82, 0.08)",
+					"rgba(29, 107, 82, 0.06)",
+					"rgba(29, 107, 82, 0.04)",
+					"rgba(29, 107, 82, 0.02)",
+					"transparent"
+				]
 			},
 			"hover-dark": {
 				"role": "neutral",
 				"displayName": "Dark Hover Fill",
-				"canonical": "rgba(255, 255, 255, 0.07)",
-				"tonalRamp": ["rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.07)", "rgba(255, 255, 255, 0.05)", "rgba(255, 255, 255, 0.03)", "rgba(255, 255, 255, 0.015)", "transparent"]
+				"canonical": "rgba(40, 124, 96, 0.2)",
+				"tonalRamp": [
+					"rgba(40, 124, 96, 0.28)",
+					"rgba(40, 124, 96, 0.24)",
+					"rgba(40, 124, 96, 0.2)",
+					"rgba(40, 124, 96, 0.16)",
+					"rgba(40, 124, 96, 0.11)",
+					"rgba(40, 124, 96, 0.07)",
+					"rgba(40, 124, 96, 0.04)",
+					"transparent"
+				]
 			},
 			"fill": {
 				"role": "neutral",
 				"displayName": "Light Utility Fill",
-				"canonical": "rgba(0, 0, 0, 0.04)",
-				"tonalRamp": ["rgba(0, 0, 0, 0.1)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.06)", "rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.03)", "rgba(0, 0, 0, 0.02)", "rgba(0, 0, 0, 0.01)", "transparent"]
+				"canonical": "rgba(32, 37, 34, 0.045)",
+				"tonalRamp": [
+					"rgba(32, 37, 34, 0.13)",
+					"rgba(32, 37, 34, 0.1)",
+					"rgba(32, 37, 34, 0.08)",
+					"rgba(32, 37, 34, 0.045)",
+					"rgba(32, 37, 34, 0.03)",
+					"rgba(32, 37, 34, 0.02)",
+					"rgba(32, 37, 34, 0.01)",
+					"transparent"
+				]
 			},
 			"fill-dark": {
 				"role": "neutral",
 				"displayName": "Dark Utility Fill",
-				"canonical": "rgba(255, 255, 255, 0.06)",
-				"tonalRamp": ["rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.08)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.04)", "rgba(255, 255, 255, 0.03)", "rgba(255, 255, 255, 0.015)", "transparent"]
+				"canonical": "rgba(237, 242, 238, 0.07)",
+				"tonalRamp": [
+					"rgba(237, 242, 238, 0.13)",
+					"rgba(237, 242, 238, 0.1)",
+					"rgba(237, 242, 238, 0.08)",
+					"rgba(237, 242, 238, 0.07)",
+					"rgba(237, 242, 238, 0.05)",
+					"rgba(237, 242, 238, 0.03)",
+					"rgba(237, 242, 238, 0.015)",
+					"transparent"
+				]
 			},
 			"field": {
 				"role": "neutral",
 				"displayName": "Light Field",
-				"canonical": "rgba(255, 255, 255, 0.7)",
-				"tonalRamp": ["rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.25)", "rgba(255, 255, 255, 0.35)", "rgba(255, 255, 255, 0.5)", "rgba(255, 255, 255, 0.7)", "rgba(255, 255, 255, 0.8)", "rgba(255, 255, 255, 0.9)", "#ffffff"]
+				"canonical": "rgba(255, 255, 255, 0.72)",
+				"tonalRamp": [
+					"rgba(255, 255, 255, 0.16)",
+					"rgba(255, 255, 255, 0.28)",
+					"rgba(255, 255, 255, 0.4)",
+					"rgba(255, 255, 255, 0.56)",
+					"rgba(255, 255, 255, 0.72)",
+					"rgba(255, 255, 255, 0.82)",
+					"rgba(255, 255, 255, 0.92)",
+					"#ffffff"
+				]
 			},
 			"field-dark": {
 				"role": "neutral",
 				"displayName": "Dark Field",
-				"canonical": "rgba(255, 255, 255, 0.08)",
-				"tonalRamp": ["rgba(255, 255, 255, 0.02)", "rgba(255, 255, 255, 0.04)", "rgba(255, 255, 255, 0.06)", "rgba(255, 255, 255, 0.08)", "rgba(255, 255, 255, 0.1)", "rgba(255, 255, 255, 0.12)", "rgba(255, 255, 255, 0.15)", "rgba(255, 255, 255, 0.2)"]
+				"canonical": "rgba(237, 242, 238, 0.08)",
+				"tonalRamp": [
+					"rgba(237, 242, 238, 0.02)",
+					"rgba(237, 242, 238, 0.04)",
+					"rgba(237, 242, 238, 0.06)",
+					"rgba(237, 242, 238, 0.08)",
+					"rgba(237, 242, 238, 0.1)",
+					"rgba(237, 242, 238, 0.12)",
+					"rgba(237, 242, 238, 0.15)",
+					"rgba(237, 242, 238, 0.2)"
+				]
 			}
 		},
 		"typographyMeta": {
@@ -212,7 +401,7 @@
 			"refersTo": "planned-tag",
 			"description": "예정 휴가를 목록 안에서 조용히 구분하는 태그.",
 			"html": "<span class=\"ds-tag-planned\">예정</span>",
-			"css": ".ds-tag-planned { display: inline-block; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 4px; padding: 0 5px; font: 600 11.5px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; }"
+			"css": ".ds-tag-planned { display: inline-block; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 5px; font: 600 11.5px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; }"
 		},
 		{
 			"name": "Summary Row",
@@ -237,14 +426,14 @@
 		"keyCharacteristics": [
 			"작지만 필수적인 정보 도구",
 			"시스템 네이티브 텍스트와 라이트·다크 테마",
-			"System Blue & Graphite의 단일 강조색 구조",
+			"Ledger Green & Graphite의 단일 강조색 구조",
 			"그림자 없는 평면과 hairline 구분선",
 			"표 형식의 정확한 숫자 정렬"
 		],
 		"rules": [
 			{
 				"name": "The One Accent Rule",
-				"body": "파랑은 선택과 실행의 의미를 맡고, 새로운 장식색은 추가하지 않는다.",
+				"body": "원장 녹색은 선택과 실행의 의미를 맡고, 새로운 장식색은 추가하지 않는다.",
 				"section": "colors"
 			},
 			{

@@ -131,8 +131,8 @@
 			"hero": "https://impeccable.style/worlds/cards/eboy-pixorama-metropolis-hero.webp"
 		}
 	],
-	"reroll": {"registers": ["safer", "bolder"]},
-	"buildPath": {"value": "comp", "toggle": true},
+	"reroll": { "registers": ["safer", "bolder"] },
+	"buildPath": { "value": "comp", "toggle": true },
 	"canon": true,
 	"canonCard": {
 		"label": "The category standard",

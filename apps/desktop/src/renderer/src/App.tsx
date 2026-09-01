@@ -1,5 +1,5 @@
 import type { Balance } from "@yeoncha/core";
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { HistoryTab } from "./HistoryTab";
 import { LeaveEntrySheet } from "./LeaveEntrySheet";
 import { SettingsTab } from "./SettingsTab";
@@ -19,6 +19,16 @@ const TABS = [
 
 /** 탭 식별자. */
 type TabKey = (typeof TABS)[number]["key"];
+
+/** 탭과 연결된 버튼의 고유 식별자. */
+function tabId(key: TabKey): string {
+	return `tab-${key}`;
+}
+
+/** 탭과 연결된 패널의 고유 식별자. */
+function panelId(key: TabKey): string {
+	return `panel-${key}`;
+}
 
 /**
  * 고른 탭과, 그 탭으로 간 이유.
@@ -78,6 +88,54 @@ export function App() {
 	const onboarding = state !== null && state.settings === null;
 	/** 실제로 그릴 탭. */
 	const tab: TabKey = onboarding ? "settings" : selected.tab;
+	/** 탭을 선택하고 조정 추가 같은 이전 진입 맥락은 닫는다. */
+	const selectTab = (nextTab: TabKey) => {
+		setSelected({ tab: nextTab, openAdjustment: false });
+	};
+	/** 탭 목록에서 키보드로 다음 화면을 고르는 핸들러. */
+	const handleTabKeyDown = (
+		event: KeyboardEvent<HTMLButtonElement>,
+		currentTab: TabKey,
+	) => {
+		/** 지금 상태에서 키보드로 갈 수 있는 탭. */
+		const enabledTabs = onboarding
+			? TABS.filter(({ key }) => key === "settings")
+			: TABS;
+		/** 현재 선택된 탭의 목록 위치. */
+		const currentIndex = enabledTabs.findIndex(({ key }) => key === currentTab);
+		if (currentIndex < 0) {
+			return;
+		}
+
+		/** 키 입력으로 이동할 목록 위치. */
+		let nextIndex = currentIndex;
+		switch (event.key) {
+			case "ArrowLeft":
+				nextIndex =
+					(currentIndex - 1 + enabledTabs.length) % enabledTabs.length;
+				break;
+			case "ArrowRight":
+				nextIndex = (currentIndex + 1) % enabledTabs.length;
+				break;
+			case "Home":
+				nextIndex = 0;
+				break;
+			case "End":
+				nextIndex = enabledTabs.length - 1;
+				break;
+			default:
+				return;
+		}
+
+		event.preventDefault();
+		/** 키보드로 이동할 탭. */
+		const nextTab = enabledTabs[nextIndex];
+		if (!nextTab) {
+			return;
+		}
+		selectTab(nextTab.key);
+		document.getElementById(tabId(nextTab.key))?.focus();
+	};
 
 	useEffect(
 		function followOnboardingTabEffect() {
@@ -93,7 +151,7 @@ export function App() {
 	// 높이를 재는 뿌리 요소는 하나로 둔다 — 화면을 갈아끼울 때 이 요소까지 바뀌면
 	// 마운트 때 건 ResizeObserver가 떨어져 나간 노드를 계속 보게 된다.
 	return (
-		<div ref={rootRef}>
+		<div className="popover-shell" ref={rootRef}>
 			{/*
 			 * 저장 파일을 읽지 못했나요? **탭 구조 자체를 그리지 않는다**(5.5절).
 			 * 온보딩과 뭉뚱그리면 화면이 거짓말을 한다 — 입사일은 있는데 파일이 깨진
@@ -113,31 +171,34 @@ export function App() {
 			) : (
 				state && (
 					<>
-						{/* 온보딩에는 헤더를 두지 않는다 — 잔여 자리에 들어갈 대시는 방금 눌러
-					    들어온 트레이 글리프와 같은 것이고(6절), 이 화면이 말할 것은 한 줄뿐이다. */}
-						{!onboarding && (
-							<div className="head">
-								<span>잔여</span>
-								{/* 초과가 있으면 경고색이다(5.1절). 요약 탭의 초과 행·원인 한 줄과
-								    같은 조건이어야 한다 — 갈리면 헤더와 본문이 다른 말을 한다. */}
-								<b
-									className={`num ${state.balance && state.balance.excess > 0 ? "warn" : ""}`}
-								>
-									{formatBalance(state.balance)}
-								</b>
-							</div>
-						)}
-						<div className="tabs" role="tablist">
+						<header className="head">
+							<h1 className="product-name">연차몇개</h1>
+							{!onboarding && (
+								<div className="head-balance">
+									<span className="head-balance-label">잔여</span>
+									{/* 초과가 있으면 경고색이다(5.1절). 요약 탭의 초과 행·원인 한 줄과
+									    같은 조건이어야 한다 — 갈리면 헤더와 본문이 다른 말을 한다. */}
+									<strong
+										className={`num ${state.balance && state.balance.excess > 0 ? "warn" : ""}`}
+									>
+										{formatBalance(state.balance)}
+									</strong>
+								</div>
+							)}
+						</header>
+						<div className="tabs" role="tablist" aria-label="연차 화면">
 							{TABS.map(({ key, label }) => (
 								<button
 									key={key}
 									type="button"
 									role="tab"
+									id={tabId(key)}
+									aria-controls={panelId(key)}
 									aria-selected={tab === key}
+									tabIndex={tab === key ? 0 : -1}
 									disabled={onboarding && key !== "settings"}
-									onClick={() =>
-										setSelected({ tab: key, openAdjustment: false })
-									}
+									onClick={() => selectTab(key)}
+									onKeyDown={(event) => handleTabKeyDown(event, key)}
 								>
 									{label}
 								</button>
@@ -146,7 +207,13 @@ export function App() {
 						{onboarding && (
 							<p className="onboarding">입사일을 넣으면 연차를 계산합니다.</p>
 						)}
-						<div role="tabpanel">
+						<div
+							id={panelId("summary")}
+							role="tabpanel"
+							aria-labelledby={tabId("summary")}
+							hidden={tab !== "summary"}
+							tabIndex={-1}
+						>
 							{tab === "summary" && state.balance && (
 								<SummaryTab
 									balance={state.balance}
@@ -157,6 +224,14 @@ export function App() {
 									onAddEntry={() => setEntryOpen(true)}
 								/>
 							)}
+						</div>
+						<div
+							id={panelId("history")}
+							role="tabpanel"
+							aria-labelledby={tabId("history")}
+							hidden={tab !== "history"}
+							tabIndex={-1}
+						>
 							{tab === "history" && state.balance && (
 								<HistoryTab
 									entries={state.entries}
@@ -165,16 +240,22 @@ export function App() {
 									today={state.today}
 								/>
 							)}
-							{tab === "settings" && (
-								<SettingsTab
-									settings={state.settings}
-									entries={state.entries}
-									adjustments={state.adjustments}
-									grants={state.balance?.grants ?? []}
-									today={state.today}
-									openAdjustment={selected.openAdjustment}
-								/>
-							)}
+						</div>
+						<div
+							id={panelId("settings")}
+							role="tabpanel"
+							aria-labelledby={tabId("settings")}
+							hidden={tab !== "settings"}
+							tabIndex={-1}
+						>
+							<SettingsTab
+								settings={state.settings}
+								entries={state.entries}
+								adjustments={state.adjustments}
+								grants={state.balance?.grants ?? []}
+								today={state.today}
+								openAdjustment={selected.openAdjustment}
+							/>
 						</div>
 					</>
 				)
