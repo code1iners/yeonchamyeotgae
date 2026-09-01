@@ -246,7 +246,8 @@ components:
 - **Neutral:** `--field` 배경과 일반 텍스트로 보조 행동을 둔다.
 - **Mini:** 투명 배경, muted 텍스트, `1px 5px` 패딩으로 목록 행 안의 수정·삭제·닫기를 처리한다.
 - **Hover / Focus:** hover는 `--hover` 또는 primary의 밝기 변화만 사용하고, 키보드 포커스는
-  강조색 2px outline을 유지한다. 비활성은 opacity 0.4다.
+  2px outline을 유지한다. 강조면 위에서는 `--on-accent`, 그 밖에서는 `--accent`를 쓴다.
+  비활성은 opacity 0.4다.
 
 ### Inputs / Fields
 

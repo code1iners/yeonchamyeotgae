@@ -95,6 +95,9 @@ button.primary {
 button.primary:hover:not(:disabled) {
 	filter: brightness(1.08);
 }
+button.primary:focus-visible {
+	outline-color: var(--on-accent);
+}
 button:disabled {
 	opacity: 0.4;
 }
@@ -516,6 +519,9 @@ button.link:hover:not(:disabled) {
 	background: var(--accent);
 	color: var(--on-accent);
 }
+.cal-day.cal-selected:focus-visible {
+	outline-color: var(--on-accent);
+}
 
 /* 이력 달력의 장식(26번) — 숫자 아래의 점(예정 녹색 / 사용 회색)과 소멸 빨간 밑줄. */
 .cal-day {
@@ -568,6 +574,9 @@ button.link:hover:not(:disabled) {
 .seg button[aria-pressed="true"] {
 	background: var(--accent);
 	color: var(--on-accent);
+}
+.seg button[aria-pressed="true"]:focus-visible {
+	outline-color: var(--on-accent);
 }
 
 /* ── 이력(26번) ───────────────────────────────────────────── */

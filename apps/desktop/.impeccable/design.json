@@ -363,7 +363,7 @@
 			"refersTo": "button-primary",
 			"description": "저장·등록·복구처럼 다음 행동이 분명한 주요 조작.",
 			"html": "<button class=\"ds-btn-primary\" type=\"button\">저장</button>",
-			"css": ".ds-btn-primary { font: inherit; color: var(--on-accent); background: var(--accent); border: 1px solid transparent; border-radius: 6px; padding: 3px 9px; cursor: default; } .ds-btn-primary:hover:not(:disabled) { filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-btn-primary:disabled { opacity: 0.4; }"
+			"css": ".ds-btn-primary { font: inherit; color: var(--on-accent); background: var(--accent); border: 1px solid transparent; border-radius: 6px; padding: 3px 9px; cursor: default; } .ds-btn-primary:hover:not(:disabled) { filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid var(--on-accent); outline-offset: -1px; } .ds-btn-primary:disabled { opacity: 0.4; }"
 		},
 		{
 			"name": "Neutral Button",
@@ -403,7 +403,7 @@
 			"refersTo": "tab-selected",
 			"description": "휴가 단위와 리스트·달력 뷰처럼 배타적 선택을 표현한다.",
 			"html": "<div class=\"ds-segment\"><button type=\"button\" aria-pressed=\"true\">종일</button><button type=\"button\" aria-pressed=\"false\">반차</button><button type=\"button\" aria-pressed=\"false\">반반차</button></div>",
-			"css": ".ds-segment { display: flex; gap: 2px; } .ds-segment button { flex: 1; font: inherit; color: var(--fg); border: 1px solid transparent; border-radius: 6px; background: var(--fill); padding: 3px 9px; cursor: default; } .ds-segment button:hover:not(:disabled) { background: var(--hover); } .ds-segment button[aria-pressed=\"true\"] { background: var(--accent); color: var(--on-accent); } .ds-segment button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }"
+			"css": ".ds-segment { display: flex; gap: 2px; } .ds-segment button { flex: 1; font: inherit; color: var(--fg); border: 1px solid transparent; border-radius: 6px; background: var(--fill); padding: 3px 9px; cursor: default; } .ds-segment button:hover:not(:disabled) { background: var(--hover); } .ds-segment button[aria-pressed=\"true\"] { background: var(--accent); color: var(--on-accent); } .ds-segment button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-segment button[aria-pressed=\"true\"]:focus-visible { outline-color: var(--on-accent); }"
 		},
 		{
 			"name": "Planned Tag",
@@ -427,7 +427,7 @@
 			"refersTo": "calendar-day",
 			"description": "오늘·선택·예정·사용·소멸 상태를 한 날짜에 겹쳐 표현한다.",
 			"html": "<button class=\"ds-calendar-day ds-calendar-day--selected ds-calendar-day--planned\" type=\"button\" aria-pressed=\"true\">15</button>",
-			"css": ".ds-calendar-day { position: relative; width: 48px; height: 30px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--fg); font: 13px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; cursor: default; } .ds-calendar-day:hover:not(:disabled) { background: var(--hover); } .ds-calendar-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-calendar-day--selected { background: var(--accent); color: var(--on-accent); } .ds-calendar-day--planned::after { content: \"\"; position: absolute; left: 50%; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; transform: translateX(-50%); background: var(--accent); } .ds-calendar-day--selected::after { background: var(--on-accent); } .ds-calendar-day--expired::before { content: \"\"; position: absolute; left: 50%; bottom: 0; width: 16px; height: 2px; border-radius: 1px; transform: translateX(-50%); background: var(--danger); }"
+			"css": ".ds-calendar-day { position: relative; width: 48px; height: 30px; padding: 0; border: none; border-radius: 6px; background: transparent; color: var(--fg); font: 13px/1.4 -apple-system, \"SF Pro Text\", \"Segoe UI\", system-ui, sans-serif; font-variant-numeric: tabular-nums; cursor: default; } .ds-calendar-day:hover:not(:disabled) { background: var(--hover); } .ds-calendar-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; } .ds-calendar-day--selected { background: var(--accent); color: var(--on-accent); } .ds-calendar-day--selected:focus-visible { outline-color: var(--on-accent); } .ds-calendar-day--planned::after { content: \"\"; position: absolute; left: 50%; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; transform: translateX(-50%); background: var(--accent); } .ds-calendar-day--selected::after { background: var(--on-accent); } .ds-calendar-day--expired::before { content: \"\"; position: absolute; left: 50%; bottom: 0; width: 16px; height: 2px; border-radius: 1px; transform: translateX(-50%); background: var(--danger); }"
 		}
 	],
 	"narrative": {
