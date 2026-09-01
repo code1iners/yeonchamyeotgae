@@ -569,9 +569,26 @@ describe.sequential("Electron 제품 흐름", () => {
 			),
 		);
 
+		// 취소하면 다음 키 입력이 입사일 입력으로 이어진다.
+		await flow.page.getByRole("button", { name: "취소", exact: true }).click();
+		await confirmTitle.waitFor({ state: "detached" });
+		expect(
+			await hireDate.evaluate((element) => element === document.activeElement),
+		).toBe(true);
+		await save.click();
+		await expectVisible(confirmTitle);
+		expect(
+			await confirmRegion.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+
 		// 보존을 고르면 파일의 기존 기록은 남고 백업은 만들지 않는다.
 		await flow.page.getByRole("button", { name: "남기고 저장" }).click();
 		await confirmTitle.waitFor({ state: "detached" });
+		expect(
+			await hireDate.evaluate((element) => element === document.activeElement),
+		).toBe(true);
 		/** 보존 선택 후 저장된 데이터. */
 		const kept = await waitForStoredData(
 			flow.userDataDirectory,
@@ -586,6 +603,9 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(confirmTitle);
 		await flow.page.getByRole("button", { name: "지우고 저장" }).click();
 		await confirmTitle.waitFor({ state: "detached" });
+		expect(
+			await hireDate.evaluate((element) => element === document.activeElement),
+		).toBe(true);
 
 		/** 삭제 선택 후 저장된 데이터. */
 		const deleted = await waitForStoredData(

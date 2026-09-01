@@ -132,6 +132,10 @@ export function SettingsTab({
 	const syncedRef = useRef(settings);
 	/** 입사일 변경 확인이 나타났을 때 보조 기술의 읽기 시작점. */
 	const confirmationRef = useRef<HTMLElement>(null);
+	/** 확인을 닫은 뒤 키보드 흐름을 되돌릴 입사일 입력. */
+	const hireDateInputRef = useRef<HTMLInputElement>(null);
+	/** 확인 영역이 열려 있었는지 기억해 첫 렌더의 포커스 탈취를 막는다. */
+	const confirmationWasOpenRef = useRef(false);
 
 	useEffect(
 		function syncSavedSettingsEffect() {
@@ -148,13 +152,21 @@ export function SettingsTab({
 	);
 
 	useEffect(
-		function focusChangeConfirmationEffect() {
+		function manageConfirmationFocusEffect() {
 			// 저장 버튼이 사라지는 순간에도 키보드 사용자가 확인 영역을 놓치지 않게 한다.
 			if (pendingSplit) {
+				confirmationWasOpenRef.current = true;
 				confirmationRef.current?.focus();
+				return;
+			}
+
+			// 취소·보존·삭제가 끝나면 다시 입사일 입력에서 다음 조작을 시작하게 한다.
+			if (confirmationWasOpenRef.current && !saving) {
+				confirmationWasOpenRef.current = false;
+				hireDateInputRef.current?.focus();
 			}
 		},
-		[pendingSplit],
+		[pendingSplit, saving],
 	);
 
 	/**
@@ -233,6 +245,7 @@ export function SettingsTab({
 					<div className="field">
 						<label htmlFor={HIRE_DATE_INPUT_ID}>입사일</label>
 						<input
+							ref={hireDateInputRef}
 							id={HIRE_DATE_INPUT_ID}
 							type="date"
 							value={hireDate}
