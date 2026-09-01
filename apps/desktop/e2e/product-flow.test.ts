@@ -526,11 +526,20 @@ describe.sequential("Electron 제품 흐름", () => {
 		await flow.page
 			.getByRole("button", { name: "기간으로", exact: true })
 			.click();
+		/** 기간의 종료일을 선택할 입력. */
+		const endDateInput = flow.page.getByLabel("종료일");
+		await endDateInput.fill("2025-12-04");
 		expect(await dateInput.inputValue()).toBe("2025-12-03");
+		expect(await endDateInput.inputValue()).toBe("2025-12-04");
 		expect(await noteInput.inputValue()).toBe("  반차 메모  ");
 		await flow.page.getByRole("button", { name: "하루", exact: true }).click();
 		expect(await dateInput.inputValue()).toBe("2025-12-03");
 		expect(await noteInput.inputValue()).toBe("  반차 메모  ");
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		expect(await endDateInput.inputValue()).toBe("2025-12-04");
+		await flow.page.getByRole("button", { name: "하루", exact: true }).click();
 
 		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
 		await sheet.waitFor({ state: "detached" });
@@ -556,6 +565,7 @@ describe.sequential("Electron 제품 흐름", () => {
 			.click();
 		await flow.page.getByLabel("날짜").fill("2025-12-09");
 		await flow.page.getByLabel("종료일").fill("2025-12-05");
+		await flow.page.getByLabel("메모").fill("  기간 메모  ");
 		expect(await flow.page.getByLabel("주말 제외").isChecked()).toBe(true);
 		await expectVisible(
 			flow.page.getByText("휴가 기록 2건을 종일로 등록합니다.", {
@@ -566,6 +576,36 @@ describe.sequential("Electron 제품 흐름", () => {
 		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
 		await sheet.waitFor({ state: "detached" });
 		await expectVisible(flow.page.getByText("6.25일", { exact: true }));
+
+		// 주말 제외를 끄면 주말도 실제 휴가 기록으로 펼쳐진다.
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		await flow.page.getByLabel("날짜").fill("2025-12-13");
+		await flow.page.getByLabel("종료일").fill("2025-12-14");
+		expect(await flow.page.getByLabel("주말 제외").isChecked()).toBe(true);
+		await expectVisible(
+			flow.page.getByText("선택한 기간에는 등록할 수 있는 날이 없습니다.", {
+				exact: true,
+			}),
+		);
+		expect(
+			await flow.page
+				.getByRole("button", { name: "등록", exact: true })
+				.isDisabled(),
+		).toBe(true);
+		await flow.page.getByLabel("주말 제외").uncheck();
+		await expectVisible(
+			flow.page.getByText("휴가 기록 2건을 종일로 등록합니다.", {
+				exact: true,
+			}),
+		);
+		await flow.page.getByLabel("메모").fill("  주말 메모  ");
+		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
+		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("4.25일", { exact: true }));
 
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 		await expectVisible(flow.page.getByText("2025-12-03", { exact: true }));
@@ -580,8 +620,22 @@ describe.sequential("Electron 제품 흐름", () => {
 		const quarterNote = flow.page.getByText("반반차 메모", { exact: true });
 		await expectVisible(quarterNote);
 		expect(await quarterNote.textContent()).toBe("반반차 메모");
+		/** 펼쳐진 각 기간 기록에 전달된 앞뒤 공백 제거 메모. */
+		const periodNotes = flow.page.getByText("기간 메모", { exact: true });
+		expect(await periodNotes.allTextContents()).toEqual([
+			"기간 메모",
+			"기간 메모",
+		]);
+		/** 주말 기록 두 건에 전달된 앞뒤 공백 제거 메모. */
+		const weekendNotes = flow.page.getByText("주말 메모", { exact: true });
+		expect(await weekendNotes.allTextContents()).toEqual([
+			"주말 메모",
+			"주말 메모",
+		]);
 		await expectVisible(flow.page.getByText("2025-12-08", { exact: true }));
 		await expectVisible(flow.page.getByText("2025-12-09", { exact: true }));
+		await expectVisible(flow.page.getByText("2025-12-13", { exact: true }));
+		await expectVisible(flow.page.getByText("2025-12-14", { exact: true }));
 		expect(
 			await flow.page.getByText("2025-12-05", { exact: true }).count(),
 		).toBe(1);
@@ -607,7 +661,20 @@ describe.sequential("Electron 제품 흐름", () => {
 		).toBe(true);
 		await flow.page.getByRole("button", { name: "취소", exact: true }).click();
 		await sheet.waitFor({ state: "detached" });
-	}, 30_000);
+
+		// 유효한 입력을 취소해도 저장되지 않고 잔여가 그대로다.
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await flow.page.getByLabel("날짜").fill("2025-12-15");
+		await flow.page.getByLabel("메모").fill("취소할 기록");
+		await flow.page.getByRole("button", { name: "취소", exact: true }).click();
+		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("4.25일", { exact: true }));
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+		expect(
+			await flow.page.getByText("2025-12-15", { exact: true }).count(),
+		).toBe(0);
+	}, 60_000);
 
 	test("등록면은 키보드로 열고 닫거나 기본값을 저장할 수 있다", async () => {
 		flow = await launchProductFlow(QUICK_ENTRY_DATA);
