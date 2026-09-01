@@ -10,6 +10,7 @@
 		"lint": "biome check .",
 		"package": "pnpm build && electron-builder --publish never",
 		"test": "vitest run",
+		"test:product": "pnpm build && vitest run e2e",
 		"typecheck": "tsc -p tsconfig.json"
 	},
 	"devDependencies": {
@@ -21,6 +22,7 @@
 		"electron": "^44.0.0",
 		"electron-builder": "26.15.7",
 		"electron-vite": "^5.0.0",
+		"playwright": "^1.62.1",
 		"react": "^19.2.8",
 		"react-dom": "^19.2.8",
 		"temporal-polyfill": "^1.0.4",
