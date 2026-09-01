@@ -112,12 +112,14 @@ function HistoryList({
 	} | null>(null);
 	/** 초안 검증에 걸린 문구. */
 	const [issue, setIssue] = useState<string | null>(null);
+	/** 삭제 실패를 붙일 기록의 식별자. 오류를 리스트 위로 떼지 않고 해당 행에 둔다. */
+	const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
 	/**
 	 * 수정 저장의 커밋 통로. 삭제와 나눈 이유는 실패 문구의 자리다 — 한 통로면 다른
 	 * 행의 삭제 실패가 열려 있는 수정 폼 안에 뜬다.
 	 */
 	const edit = useCommit();
-	/** 삭제의 커밋 통로. 실패 문구는 리스트 위에 뜬다. */
+	/** 삭제의 커밋 통로. 실패 문구는 해당 행 아래에 뜬다. */
 	const remove = useCommit();
 	/** 어느 쪽이든 커밋이 오가는 중인가 — 그동안 모든 손잡이를 잠근다. */
 	const saving = edit.saving || remove.saving;
@@ -137,6 +139,8 @@ function HistoryList({
 		setDraft({ id: entry.id, date: entry.date, days: entry.days });
 		setIssue(null);
 		edit.clearError();
+		setDeleteErrorId(null);
+		remove.clearError();
 	};
 
 	/** 수정 닫기 핸들러. */
@@ -185,133 +189,184 @@ function HistoryList({
 		if (draft?.id === id) {
 			handleCloseEdit();
 		}
-		await remove.commit({
+		remove.clearError();
+		setDeleteErrorId(id);
+		/** 삭제 커밋 결과. 실패하면 현재 행을 유지한다. */
+		const committed = await remove.commit({
 			entries: entries.filter((entry) => entry.id !== id),
 		});
+		if (committed) {
+			setDeleteErrorId(null);
+		}
 	};
 
 	/** 행 하나 — 수정 중이면 그 자리가 폼이 된다. */
-	const renderRow = (entry: LeaveEntry, planned: boolean) =>
-		draft?.id === entry.id ? (
-			<div className="hist-edit" key={entry.id}>
-				<div className="hist-edit-fields">
-					<input
-						type="date"
-						value={draft.date}
-						onChange={(event) =>
-							setDraft({ ...draft, date: event.target.value })
-						}
-					/>
-					<div className="seg">
-						{UNITS.map((unit) => (
+	const renderRow = (entry: LeaveEntry, planned: boolean) => {
+		/** 이 행이 수정 폼으로 바뀌었는가. */
+		const isEditing = draft?.id === entry.id;
+		/** 행의 접근 가능한 이름 — 날짜만으로 예정과 사용을 혼동하지 않게 한다. */
+		const rowLabel = `${entry.date} ${planned ? "예정" : "사용"} 휴가 기록`;
+		/** 이 행에서 표시할 삭제 실패 문구. */
+		const rowDeleteError = deleteErrorId === entry.id ? remove.error : null;
+
+		return (
+			<article
+				className="hist-row-container"
+				key={entry.id}
+				aria-label={rowLabel}
+			>
+				{isEditing ? (
+					<div className="hist-edit" aria-busy={edit.saving}>
+						<div className="hist-edit-fields">
+							<input
+								type="date"
+								aria-label="날짜"
+								aria-invalid={issue !== null}
+								value={draft.date}
+								disabled={saving}
+								onChange={(event) => {
+									setDraft({ ...draft, date: event.target.value });
+									setIssue(null);
+								}}
+							/>
+							<fieldset className="seg" aria-label="단위">
+								{UNITS.map((unit) => (
+									<button
+										type="button"
+										key={unit.days}
+										aria-pressed={draft.days === unit.days}
+										disabled={saving}
+										onClick={() => {
+											setDraft({ ...draft, days: unit.days });
+											setIssue(null);
+										}}
+									>
+										{unit.label}
+									</button>
+								))}
+							</fieldset>
+						</div>
+						{issue && (
+							<p className="error" role="alert" aria-live="assertive">
+								{issue}
+							</p>
+						)}
+						{edit.error && (
+							<p className="error" role="alert" aria-live="assertive">
+								{edit.error}
+							</p>
+						)}
+						<div className="hist-edit-cta">
 							<button
 								type="button"
-								key={unit.days}
-								aria-pressed={draft.days === unit.days}
-								onClick={() => setDraft({ ...draft, days: unit.days })}
+								className="mini"
+								disabled={saving}
+								onClick={handleSaveEdit}
 							>
-								{unit.label}
+								저장
 							</button>
-						))}
+							<button
+								type="button"
+								className="mini"
+								disabled={saving}
+								onClick={handleCloseEdit}
+							>
+								취소
+							</button>
+						</div>
 					</div>
-				</div>
-				{issue && <p className="error">{issue}</p>}
-				{edit.error && <p className="error">{edit.error}</p>}
-				<div className="hist-edit-cta">
-					<button
-						type="button"
-						className="mini"
-						disabled={saving}
-						onClick={handleSaveEdit}
+				) : (
+					<div className="row hist-row">
+						<b className="num hist-date">{entry.date}</b>
+						<span className="hist-unit">{unitLabel(entry.days)}</span>
+						<span
+							className={
+								planned
+									? "hist-status tag-planned"
+									: "hist-status hist-status-used"
+							}
+						>
+							{planned ? "예정" : "사용"}
+						</span>
+						<span className="dim hist-note">{entry.note}</span>
+						<span className="hist-actions">
+							<button
+								type="button"
+								className="mini"
+								disabled={saving}
+								onClick={() => handleOpenEdit(entry)}
+							>
+								수정
+							</button>
+							<button
+								type="button"
+								className="mini"
+								disabled={saving}
+								onClick={() => handleDelete(entry.id)}
+							>
+								삭제
+							</button>
+						</span>
+					</div>
+				)}
+				{rowDeleteError && (
+					<p
+						className="error hist-row-error"
+						role="alert"
+						aria-live="assertive"
 					>
-						저장
-					</button>
-					<button
-						type="button"
-						className="mini"
-						disabled={saving}
-						onClick={handleCloseEdit}
-					>
-						취소
-					</button>
-				</div>
-			</div>
-		) : (
-			<div className="row hist-row" key={entry.id}>
-				<b className="num">{entry.date}</b>
-				<span>{unitLabel(entry.days)}</span>
-				{planned && <span className="tag-planned">예정</span>}
-				{entry.note && <span className="dim hist-note">{entry.note}</span>}
-				<span className="hist-actions">
-					<button
-						type="button"
-						className="mini"
-						disabled={saving}
-						onClick={() => handleOpenEdit(entry)}
-					>
-						수정
-					</button>
-					<button
-						type="button"
-						className="mini"
-						disabled={saving}
-						onClick={() => handleDelete(entry.id)}
-					>
-						삭제
-					</button>
-				</span>
-			</div>
+						{rowDeleteError}
+					</p>
+				)}
+			</article>
 		);
+	};
 
 	return (
-		<>
-			{/* 삭제 실패는 어느 행에서 났든 리스트 위에 뜬다 — 수정 폼과 통로가 다르다. */}
-			{remove.error && <p className="error">{remove.error}</p>}
-			<div className="hist-scroll">
-				{groups.planned.length === 0 && groups.years.length === 0 && (
-					<div className="row dim">휴가 기록이 없습니다.</div>
-				)}
-				{groups.planned.length > 0 && (
-					<>
-						<div className="sec-title">예정</div>
-						{groups.planned.map((entry) => renderRow(entry, true))}
-					</>
-				)}
-				{groups.years.map((section) => (
-					<div key={section.year}>
-						<button
-							type="button"
-							className="hist-year"
-							aria-expanded={openYears.has(section.year)}
-							onClick={() => handleToggleYear(section.year)}
+		<section className="hist-scroll" aria-label="휴가 이력 목록">
+			{groups.planned.length === 0 && groups.years.length === 0 && (
+				<div className="row dim">휴가 기록이 없습니다.</div>
+			)}
+			{groups.planned.length > 0 && (
+				<>
+					<div className="sec-title">예정</div>
+					{groups.planned.map((entry) => renderRow(entry, true))}
+				</>
+			)}
+			{groups.years.map((section) => (
+				<div key={section.year}>
+					<button
+						type="button"
+						className="hist-year"
+						aria-expanded={openYears.has(section.year)}
+						onClick={() => handleToggleYear(section.year)}
+					>
+						<span className="hist-chevron">
+							{openYears.has(section.year) ? "▾" : "▸"}
+						</span>
+						<b className="num">{section.year}년</b>
+						<span className="dim num">{section.entries.length}건</span>
+					</button>
+					{openYears.has(section.year) &&
+						section.entries.map((entry) => renderRow(entry, false))}
+				</div>
+			))}
+			{/* 소멸분은 맨 아래다 — 평소에 볼 것이 아니라 흐리게만 둔다(5.3절). */}
+			{losses.length > 0 && (
+				<>
+					<div className="sec-title">소멸</div>
+					{losses.map((loss) => (
+						<div
+							className="row dim"
+							key={`${loss.expiryDate}-${loss.source}-${loss.note}`}
 						>
-							<span className="hist-chevron">
-								{openYears.has(section.year) ? "▾" : "▸"}
-							</span>
-							<b className="num">{section.year}년</b>
-							<span className="dim num">{section.entries.length}건</span>
-						</button>
-						{openYears.has(section.year) &&
-							section.entries.map((entry) => renderRow(entry, false))}
-					</div>
-				))}
-				{/* 소멸분은 맨 아래다 — 평소에 볼 것이 아니라 흐리게만 둔다(5.3절). */}
-				{losses.length > 0 && (
-					<>
-						<div className="sec-title">소멸</div>
-						{losses.map((loss) => (
-							<div
-								className="row dim"
-								key={`${loss.expiryDate}-${loss.source}-${loss.note}`}
-							>
-								<span className="num">{lossLabel(loss)}</span>
-								<span className="num hist-loss-date">{loss.expiryDate}</span>
-							</div>
-						))}
-					</>
-				)}
-			</div>
-		</>
+							<span className="num">{lossLabel(loss)}</span>
+							<span className="num hist-loss-date">{loss.expiryDate}</span>
+						</div>
+					))}
+				</>
+			)}
+		</section>
 	);
 }
 

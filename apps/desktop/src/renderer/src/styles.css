@@ -678,19 +678,51 @@ button.hist-year:hover:not(:disabled) {
 	font-size: 10px;
 }
 
-/* 기록 행 — 수정·삭제는 hover·키보드 포커스에서 보이고 자리는 항상 잡아둔다. */
+/* 기록 행을 감싼다 — 행 오류가 해당 기록 바로 아래에 남도록 한다. */
+.hist-row-container {
+	min-width: 0;
+}
+
+/* 기록 행 — 날짜·단위·상태·메모·행동 열을 고정해 값과 행동이 나타나도 흔들리지 않는다. */
+.hist-row {
+	display: grid;
+	grid-template-columns: 78px 46px 42px minmax(0, 1fr) 70px;
+	column-gap: 6px;
+	min-width: 0;
+}
+.hist-status {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 42px;
+	font-size: 10.5px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+.hist-status-used {
+	color: var(--fg-2);
+}
+.hist-row .hist-date,
+.hist-row .hist-unit,
+.hist-row .hist-status,
+.hist-row .hist-actions {
+	min-width: 0;
+}
 .hist-row .hist-actions {
 	display: flex;
+	justify-content: flex-end;
 	gap: 2px;
-	margin-left: auto;
+	width: 100%;
+	grid-column: 5;
 	opacity: 0;
 	pointer-events: none;
 }
-.hist-row:hover {
+.hist-row-container:hover .hist-row,
+.hist-row-container:focus-within .hist-row {
 	background: var(--hover);
 }
-.hist-row:hover .hist-actions,
-.hist-row:focus-within .hist-actions {
+.hist-row-container:hover .hist-actions,
+.hist-row-container:focus-within .hist-actions {
 	opacity: 1;
 	pointer-events: auto;
 }
@@ -701,6 +733,9 @@ button.hist-year:hover:not(:disabled) {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: 11.5px;
+}
+.hist-row .hist-note {
+	grid-column: 4;
 }
 
 /* 녹색 예정 태그(5.3절). 색은 강조색 하나에서만 나온다. */
@@ -724,6 +759,12 @@ button.hist-year:hover:not(:disabled) {
 	align-items: center;
 	gap: 6px;
 }
+.hist-edit-fields fieldset {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
 .hist-edit-fields input {
 	flex: none;
 	width: 132px;
@@ -731,6 +772,9 @@ button.hist-year:hover:not(:disabled) {
 .hist-edit .error {
 	padding-left: 0;
 	padding-right: 0;
+}
+.hist-row-error {
+	padding: 0 12px 4px;
 }
 .hist-edit-cta {
 	display: flex;

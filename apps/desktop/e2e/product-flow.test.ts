@@ -122,6 +122,12 @@ const SUMMARY_DATA = summaryData();
 /** 초과와 조정 진입 맥락을 검증할 결정론적 저장 데이터. */
 const EXCESS_DATA = excessData();
 
+/** 예정·사용·연차 연도 접기와 인라인 변경을 한 흐름에서 검증할 저장 데이터. */
+const HISTORY_DATA = historyData();
+
+/** 기록이 길어져도 목록만 스크롤되는지 검증할 저장 데이터. */
+const LONG_HISTORY_DATA = longHistoryData();
+
 /** 제품 흐름이 남길 첫 화면 스크린샷의 임시 경로. */
 const SCREENSHOT_DIRECTORY = path.join(os.tmpdir(), "yeonchamyeotgae-e2e");
 
@@ -226,6 +232,68 @@ function excessData(): LeaveData {
 				note: "기존 조정",
 			},
 		],
+	};
+}
+
+/** 예정·사용·소멸 하단 배치를 한 화면에서 재현하는 이력 시드. */
+function historyData(): LeaveData {
+	/** 앱과 같은 시간대의 조회일. */
+	const today = TEST_TODAY_DATE;
+	/** 현재 연차 연도에 속한 사용 기록. */
+	const usedDate = today.subtract({ days: 3 });
+	/** 이전 연차 연도에 속한 사용 기록. 월차 잔량을 소멸시킨다. */
+	const previousYearDate = Temporal.PlainDate.from("2024-12-20");
+	/** 예정 기록을 처음 수정할 날짜. */
+	const plannedDate = today.add({ days: 14 });
+
+	return {
+		schemaVersion: 1,
+		settings: { hireDate: "2024-01-01", grantBasis: "hireDate" },
+		entries: [
+			{
+				id: "history-used-current",
+				date: usedDate.toString(),
+				days: 1,
+				note: "현재 연차 사용",
+			},
+			{
+				id: "history-used-previous",
+				date: previousYearDate.toString(),
+				days: 0.5,
+				note: "지난 연차 사용",
+			},
+			{
+				id: "history-planned",
+				date: plannedDate.toString(),
+				days: 0.25,
+				note: "예정 기록",
+			},
+		],
+		adjustments: [],
+	};
+}
+
+/** 예정 기록 여러 건으로 이력 목록의 내부 스크롤을 만드는 시드. */
+function longHistoryData(): LeaveData {
+	/** 앱과 같은 시간대의 조회일. */
+	const today = TEST_TODAY_DATE;
+	/** 스크롤 경계를 넘길 예정 기록. */
+	const entries = Array.from({ length: 36 }, (_, index) => {
+		/** 각 기록의 날짜. */
+		const date = today.add({ days: index + 1 });
+		return {
+			id: `long-history-${index}`,
+			date: date.toString(),
+			days: 0.25,
+			note: "",
+		};
+	});
+
+	return {
+		schemaVersion: 1,
+		settings: { hireDate: "2024-01-01", grantBasis: "hireDate" },
+		entries,
+		adjustments: [],
 	};
 }
 
@@ -432,6 +500,221 @@ describe.sequential("Electron 제품 흐름", () => {
 			),
 		);
 		expect(expiryX.every((x) => x === expiryX[0])).toBe(true);
+	});
+
+	test("이력 리스트가 예정·연차 연도·소멸을 나누고 인라인 변경 후 잔여를 갱신한다", async () => {
+		flow = await launchProductFlow(HISTORY_DATA);
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+
+		/** 예정 기록 행. 예정 섹션과 행 태그가 같은 기록을 가리킨다. */
+		const plannedRow = flow.page.getByRole("article", {
+			name: /2025-12-15 예정 휴가 기록/,
+		});
+		/** 현재 연차 연도 접기 버튼. */
+		const currentYear = flow.page.getByRole("button", { name: /2025년/ });
+		/** 이전 연차 연도 접기 버튼. */
+		const previousYear = flow.page.getByRole("button", { name: /2024년/ });
+		/** 소멸된 월차의 하단 기록. */
+		const expiredLine = flow.page.getByText("2024년 월차 10.5일 소멸", {
+			exact: true,
+		});
+
+		await expectVisible(flow.page.getByText("예정", { exact: true }).first());
+		await expectVisible(plannedRow);
+		await expectVisible(flow.page.getByText("사용", { exact: true }).first());
+		expect(await currentYear.getAttribute("aria-expanded")).toBe("true");
+		expect(await previousYear.getAttribute("aria-expanded")).toBe("false");
+		expect(
+			await flow.page.getByText("2024-12-20", { exact: true }).count(),
+		).toBe(0);
+		await expectVisible(expiredLine);
+
+		/** 수정 전 예정 날짜 열의 위치. */
+		const dateBefore = await plannedRow
+			.getByText("2025-12-15", { exact: true })
+			.boundingBox();
+		await plannedRow.hover();
+		await expectVisible(plannedRow.getByRole("button", { name: "수정" }));
+		/** 값의 길이와 행동 노출이 달라도 다섯 고정 열의 시작 위치가 같다. */
+		const plannedColumnBoxes = await Promise.all([
+			plannedRow.getByText("2025-12-15", { exact: true }).boundingBox(),
+			plannedRow.getByText("반반차", { exact: true }).boundingBox(),
+			plannedRow.getByText("예정", { exact: true }).boundingBox(),
+			plannedRow.getByText("예정 기록", { exact: true }).boundingBox(),
+			plannedRow.getByRole("button", { name: "수정" }).boundingBox(),
+		]);
+		/** 현재 사용 행은 날짜·단위·상태·메모가 예정 행과 서로 다르다. */
+		const currentRow = flow.page.getByRole("article", {
+			name: /2025-11-28 사용 휴가 기록/,
+		});
+		await currentRow.hover();
+		await expectVisible(currentRow.getByRole("button", { name: "수정" }));
+		const currentColumnBoxes = await Promise.all([
+			currentRow.getByText("2025-11-28", { exact: true }).boundingBox(),
+			currentRow.getByText("종일", { exact: true }).boundingBox(),
+			currentRow.getByText("사용", { exact: true }).boundingBox(),
+			currentRow.getByText("현재 연차 사용", { exact: true }).boundingBox(),
+			currentRow.getByRole("button", { name: "수정" }).boundingBox(),
+		]);
+		if (
+			!plannedColumnBoxes.every(Boolean) ||
+			!currentColumnBoxes.every(Boolean)
+		) {
+			throw new Error("이력 고정 열의 위치를 읽지 못했습니다");
+		}
+		expect(currentColumnBoxes.map((box) => box?.x)).toEqual(
+			plannedColumnBoxes.map((box) => box?.x),
+		);
+		/** 키보드 포커스로도 행 행동을 발견할 수 있는 수정 버튼. */
+		const editButton = plannedRow.getByRole("button", { name: "수정" });
+		await editButton.focus();
+		await expectVisible(plannedRow.getByRole("button", { name: "삭제" }));
+		await editButton.press("Enter");
+		await expectVisible(plannedRow.getByLabel("날짜"));
+		await flow.page.getByLabel("날짜").fill("2025-12-16");
+		await plannedRow.getByRole("button", { name: "반차", exact: true }).click();
+		await plannedRow.getByRole("button", { name: "저장" }).click();
+
+		await expectVisible(flow.page.getByText("13.5일", { exact: true }));
+		await expectVisible(
+			flow.page.getByRole("article", {
+				name: /2025-12-16 예정 휴가 기록/,
+			}),
+		);
+		expect(
+			await flow.page.getByText("2025-12-15", { exact: true }).count(),
+		).toBe(0);
+		/** 수정 후에도 날짜 열은 같은 고정 열에 선다. */
+		const dateAfter = await flow.page
+			.getByRole("article", { name: /2025-12-16 예정 휴가 기록/ })
+			.getByText("2025-12-16", { exact: true })
+			.boundingBox();
+		if (!dateBefore || !dateAfter) {
+			throw new Error("인라인 수정 전후 날짜 위치를 읽지 못했습니다");
+		}
+		expect(dateAfter.x).toBe(dateBefore.x);
+
+		/** 수정한 예정 기록을 삭제할 행. */
+		const updatedPlannedRow = flow.page.getByRole("article", {
+			name: /2025-12-16 예정 휴가 기록/,
+		});
+		await updatedPlannedRow.hover();
+		await updatedPlannedRow.getByRole("button", { name: "삭제" }).click();
+		await expectVisible(flow.page.getByText("14일", { exact: true }));
+		expect(
+			await flow.page.getByText("2025-12-16", { exact: true }).count(),
+		).toBe(0);
+
+		// 이전 연차 연도를 펼쳐도 소멸 기록은 그 아래에 남는다.
+		await previousYear.click();
+		await expectVisible(flow.page.getByText("2024-12-20", { exact: true }));
+		/** 펼친 이전 연차 연도의 사용 행 위치. */
+		const usedBox = await flow.page
+			.getByText("2024-12-20", { exact: true })
+			.boundingBox();
+		/** 사용 행 아래에 놓여야 하는 소멸 행 위치. */
+		const expiredBox = await expiredLine.boundingBox();
+		if (!usedBox || !expiredBox) {
+			throw new Error("사용·소멸 행 위치를 읽지 못했습니다");
+		}
+		expect(expiredBox.y).toBeGreaterThan(usedBox.y);
+
+		/** 현재 연차 연도 사용 기록을 인라인 수정할 행. */
+		const usedRow = flow.page.getByRole("article", {
+			name: /2025-11-28 사용 휴가 기록/,
+		});
+		await usedRow.hover();
+		await usedRow.getByRole("button", { name: "수정" }).click();
+		await usedRow.getByLabel("날짜").fill("2024-12-20");
+		await usedRow.getByRole("button", { name: "저장" }).click();
+		await expectVisible(
+			usedRow.getByText("그날에는 이미 휴가 기록이 있습니다", { exact: true }),
+		);
+		expect(await usedRow.getByLabel("날짜").inputValue()).toBe("2024-12-20");
+		await usedRow.getByLabel("날짜").fill("2025-11-27");
+		await usedRow.getByRole("button", { name: "저장" }).click();
+		await expectVisible(
+			flow.page.getByRole("article", { name: /2025-11-27 사용 휴가 기록/ }),
+		);
+
+		/** 날짜를 고친 사용 기록을 삭제할 행. */
+		const updatedUsedRow = flow.page.getByRole("article", {
+			name: /2025-11-27 사용 휴가 기록/,
+		});
+		await updatedUsedRow.hover();
+		await updatedUsedRow.getByRole("button", { name: "삭제" }).click();
+		await expectVisible(flow.page.getByText("15일", { exact: true }));
+		expect(
+			await flow.page.getByText("2025-11-27", { exact: true }).count(),
+		).toBe(0);
+	});
+
+	test("이력 변경 실패가 해당 행에 남고 입력 맥락을 보존한다", async () => {
+		flow = await launchProductFlow(HISTORY_DATA);
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+
+		/** 수정 실패를 만들 예정 기록 행. */
+		const plannedRow = flow.page.getByRole("article", {
+			name: /2025-12-15 예정 휴가 기록/,
+		});
+		await plannedRow.hover();
+		await plannedRow.getByRole("button", { name: "수정" }).click();
+		await flow.page.getByLabel("날짜").fill("2025-12-16");
+
+		// 저장 파일 디렉터리를 잠가 수정 실패를 실제 Electron 경로에서 만든다.
+		await chmod(flow.userDataDirectory, 0o500);
+		try {
+			await plannedRow.getByRole("button", { name: "저장" }).click();
+			await expectVisible(
+				plannedRow.getByText(/저장하지 못했습니다/, { exact: false }),
+			);
+			expect(await flow.page.getByLabel("날짜").inputValue()).toBe(
+				"2025-12-16",
+			);
+		} finally {
+			await chmod(flow.userDataDirectory, 0o700);
+		}
+
+		await plannedRow.getByRole("button", { name: "취소" }).click();
+
+		/** 삭제 실패를 만들 현재 연차 사용 기록 행. */
+		const usedRow = flow.page.getByRole("article", {
+			name: /2025-11-28 사용 휴가 기록/,
+		});
+		await usedRow.hover();
+		await chmod(flow.userDataDirectory, 0o500);
+		try {
+			await usedRow.getByRole("button", { name: "삭제" }).click();
+			await expectVisible(
+				usedRow.getByText(/저장하지 못했습니다/, { exact: false }),
+			);
+			await expectVisible(usedRow.getByText("2025-11-28", { exact: true }));
+		} finally {
+			await chmod(flow.userDataDirectory, 0o700);
+		}
+	});
+
+	test("긴 이력에서는 팝오버 머리와 탭을 고정하고 목록만 스크롤한다", async () => {
+		flow = await launchProductFlow(LONG_HISTORY_DATA);
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+
+		/** 이력만 스크롤 가능한 접근성 영역. */
+		const historyList = flow.page.getByRole("region", {
+			name: "휴가 이력 목록",
+		});
+		await expectVisible(historyList);
+		/** 목록과 팝오버 바깥의 스크롤 여부. */
+		const scrollState = await historyList.evaluate((element) => ({
+			regionScrollable: element.scrollHeight > element.clientHeight,
+			pageScrollable:
+				document.documentElement.scrollHeight > window.innerHeight,
+		}));
+		expect(scrollState).toEqual({
+			regionScrollable: true,
+			pageScrollable: false,
+		});
+		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
+		await expectVisible(flow.page.getByRole("tab", { name: "이력" }));
 	});
 
 	test("오늘 종일 빠른 등록이 두 조작으로 저장되고 잔여·이력을 갱신한다", async () => {
