@@ -25,6 +25,9 @@ git tag v<version>
 git push --tags
 ```
 
-태그를 푸시하면 macOS Apple Silicon용 `.dmg`와 Windows x64용 `.exe`를 패키징해 하나의
-GitHub Release로 올립니다. 릴리스 본문은 [.github/RELEASE_BODY.md](../.github/RELEASE_BODY.md)
-에서 읽습니다.
+지원하는 릴리스 산출물은 macOS Apple Silicon용 `.dmg`입니다. 현재 GitHub Actions에는 Windows
+x64용 `.exe` 패키징이 잔여 설정으로 남아 있어 실제 워크플로 정의와 지원 정책이 일치하지
+않습니다. Windows 잡의 성공 여부는 릴리스 준비 증거로 사용하지 않으며, 다음 워크플로 수정에서
+복구하지 않고 제거합니다. 이 결정은
+[ADR-0003](adr/0003-macos-only-desktop-build.md)에 기록했습니다. 릴리스 본문은
+[.github/RELEASE_BODY.md](../.github/RELEASE_BODY.md)에서 읽습니다.

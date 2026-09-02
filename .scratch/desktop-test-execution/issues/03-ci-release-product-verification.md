@@ -31,3 +31,9 @@ Electron 제품 흐름까지 통과한 뒤 다음 빌드·패키징 단계로 �
 통과했고, `pnpm verify:workflows`, YAML 구문 검사와 변경 파일 포맷 검사가 통과했다. 전면
 제품 흐름과 원격 GitHub Actions 잡은 실행하지 않았으므로 macOS·Windows CI 통과로 표현하지
 않는다.
+
+**2026-09-02, 지원 범위 변경.** [ADR-0003](../../../docs/adr/0003-macos-only-desktop-build.md)에
+따라 Windows 빌드·릴리스를 지원 범위에서 제외했다. 위 Windows 체크 항목과 구현 기록은 당시
+계약의 이력이며 현재 수용 조건이 아니다. 제품 흐름 러너의 Windows `pnpm.cmd` 실행 제약은
+알려진 상태로 수용하고, 기존 Windows CI·릴리스 매트릭스는 다음 워크플로 수정에서 복구하지
+않고 제거한다.
