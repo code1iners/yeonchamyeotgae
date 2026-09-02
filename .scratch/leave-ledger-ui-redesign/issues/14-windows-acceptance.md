@@ -15,4 +15,14 @@
 - [ ] Windows 전용으로 발견한 시각·포커스·트레이 문제를 제품 계약을 깨지 않는 범위에서 수정한다.
 - [ ] 마지막 수정 이후 정적 검사, 전체 자동 테스트와 Windows Electron 제품 흐름이 통과한다.
 - [ ] Windows 검증 결과와 macOS 재검증 결과를 별도 증거로 기록한다.
-- [ ] Windows 환경을 사용할 수 없다면 이 티켓을 완료 처리하지 않고 검증 경계를 명시한다.
+- [x] Windows 환경을 사용할 수 없다면 이 티켓을 완료 처리하지 않고 검증 경계를 명시한다.
+
+## Comments
+
+### 2026-09-02 — Windows 수용 검증 경계 기록
+
+- 현재 작업 환경은 macOS(`Darwin`, arm64)이며 Windows 실행 환경(`pwsh`, `powershell`, `wine`)을 사용할 수 없다. 현재 로컬 HEAD에 대해 실제 Windows Electron 앱의 작업 표시줄 트레이 클릭, 툴팁, Windows 글꼴, 네이티브 포커스·블러와 작업 영역 가장자리 동작을 관찰할 수 없다.
+- `.github/workflows/ci.yml`의 `macos-latest`·`windows-latest` 매트릭스와 `pnpm verify:product` 실행선은 유지되고 있다. 다만 원격 실행 결과는 현재 로컬 HEAD에 대한 Windows 증거가 아니며, 별도 Windows 실행 후 이 티켓에 결과를 추가해야 한다.
+- 현재 코드의 Windows 분기(`showInactive`, 작업 영역 기준 팝오버 위치 보정, 정사각형 트레이 숫자 이미지, 우클릭 메뉴 분리)를 정적으로 확인했다. macOS에서 재현되거나 안전하게 확정할 수 있는 Windows 전용 시각·포커스·트레이 결함은 발견되지 않아 추측에 의한 제품 코드 변경은 하지 않았다.
+- 로컬 검증은 `pnpm exec turbo run lint typecheck test --force --concurrency=1` 6/6 작업 성공(코어 123개·데스크톱 18개 단위 테스트), `pnpm test:product` 33/33, `pnpm test:product:foreground` 33/33, `git diff --check` 통과다. 모두 macOS 증거이며 Windows 수용 증거로 대체하지 않는다.
+- 실제 Windows 실행과 그 결과 기록이 남기 전까지 Windows 관련 체크리스트와 티켓 `resolved` 처리를 보류한다.
