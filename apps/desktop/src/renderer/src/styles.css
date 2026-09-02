@@ -898,9 +898,12 @@ button.hist-year:hover:not(:disabled) {
 /* 기록 행 — 날짜·단위·상태·메모·행동 열을 고정해 값과 행동이 나타나도 흔들리지 않는다. */
 .hist-row {
 	display: grid;
-	grid-template-columns: 78px 46px 42px minmax(0, 1fr) 70px;
+	grid-template-columns: 84px 46px 42px minmax(0, 1fr) 70px;
 	column-gap: 6px;
 	min-width: 0;
+}
+.hist-row .hist-date {
+	white-space: nowrap;
 }
 .hist-status {
 	display: inline-flex;

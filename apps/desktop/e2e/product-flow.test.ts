@@ -210,8 +210,16 @@ const CALENDAR_DATA = calendarData();
 /** 기록이 길어져도 목록만 스크롤되는지 검증할 저장 데이터. */
 const LONG_HISTORY_DATA = longHistoryData();
 
-/** 제품 흐름이 남길 첫 화면 스크린샷의 임시 경로. */
+/** 제품 흐름이 남길 시각 수용 캡처의 기본 임시 경로. */
 const SCREENSHOT_DIRECTORY = path.join(os.tmpdir(), "yeonchamyeotgae-e2e");
+/** 컴프 대조에 허용하는 결정론적 시각 상태 캡처 이름. */
+type VisualScreenshotName =
+	| "summary-first-view.png"
+	| "summary-first-view-dark.png"
+	| "quick-entry.png"
+	| "quick-entry-dark.png"
+	| "history-edit.png"
+	| "history-edit-dark.png";
 
 /** 실행 하나의 격리된 앱·사용자 데이터·팝오버 페이지 묶음. */
 type ProductFlow = {
@@ -435,7 +443,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
 		await expectVisible(flow.page.getByRole("tablist", { name: "연차 화면" }));
 		await flow.page.waitForFunction(
-			() => document.documentElement.scrollHeight <= window.innerHeight,
+			() => document.documentElement.scrollHeight === window.innerHeight,
 		);
 		/** 실제 팝오버 콘텐츠의 외부 치수. */
 		const layout = await flow.page.evaluate(() => ({
@@ -444,7 +452,7 @@ describe.sequential("Electron 제품 흐름", () => {
 			contentHeight: document.documentElement.scrollHeight,
 		}));
 		expect(layout.width).toBe(380);
-		expect(layout.contentHeight).toBeLessThanOrEqual(layout.height);
+		expect(layout.contentHeight).toBe(layout.height);
 
 		/** 요약 탭 버튼. */
 		const summaryTab = flow.page.getByRole("tab", { name: "요약" });
@@ -1071,7 +1079,17 @@ describe.sequential("Electron 제품 흐름", () => {
 			.getByRole("button", { name: "휴가 등록" })
 			.boundingBox();
 		/** 팝오버의 실제 뷰포트 높이. */
-		const viewportHeight = await flow.page.evaluate(() => window.innerHeight);
+		await flow.page.waitForFunction(
+			() => document.documentElement.scrollHeight === window.innerHeight,
+		);
+		/** 긴 요약이 맞춘 팝오버의 외부 높이와 문서 높이. */
+		const longSummaryLayout = await flow.page.evaluate(() => ({
+			height: window.innerHeight,
+			contentHeight: document.documentElement.scrollHeight,
+		}));
+		expect(longSummaryLayout.contentHeight).toBe(longSummaryLayout.height);
+		/** 긴 요약에서 핵심 행동의 실제 뷰포트 높이. */
+		const viewportHeight = longSummaryLayout.height;
 		/** 요약 목록과 팝오버 외부의 스크롤 경계. */
 		const grantRegion = flow.page.getByRole("region", {
 			name: "살아 있는 발생분",
@@ -1092,6 +1110,17 @@ describe.sequential("Electron 제품 흐름", () => {
 			pageScrollable: false,
 		});
 		await expectVisible(flow.page.getByRole("button", { name: "휴가 등록" }));
+
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+		await flow.page.waitForFunction(
+			(previousHeight) =>
+				document.documentElement.scrollHeight === window.innerHeight &&
+				window.innerHeight !== previousHeight,
+			longSummaryLayout.height,
+		);
+		/** 이력 탭으로 내용이 바뀐 뒤의 팝오버 외부 높이. */
+		const historyHeight = await flow.page.evaluate(() => window.innerHeight);
+		expect(historyHeight).not.toBe(longSummaryLayout.height);
 	});
 
 	test("요약 원장이 고정된 수량 열과 상태 근거를 제공한다", async () => {
@@ -1123,7 +1152,10 @@ describe.sequential("Electron 제품 흐름", () => {
 		);
 		await expectVisible(flow.page.getByTitle("소멸 임박, D-30"));
 		await expectVisible(flow.page.getByTitle("소멸 임박, D-45"));
+		await flow.page.emulateMedia({ colorScheme: "light" });
 		await captureSummaryScreenshot(flow.page);
+		await flow.page.emulateMedia({ colorScheme: "dark" });
+		await captureDarkSummaryScreenshot(flow.page);
 
 		/** 모든 요약 행의 수량 셀이 같은 x 좌표에 서는지 확인한다. */
 		const cellX = await Promise.all(
@@ -1224,6 +1256,39 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(currentColumnBoxes.map((box) => box?.x)).toEqual(
 			plannedColumnBoxes.map((box) => box?.x),
 		);
+		await flow.page.emulateMedia({ colorScheme: "light" });
+		/** 날짜 열이 한 줄로 읽히는지 확인할 실제 텍스트 줄 수. */
+		const dateLineCounts = await Promise.all(
+			[
+				plannedRow.getByText("2025-12-15", { exact: true }),
+				currentRow.getByText("2025-11-28", { exact: true }),
+			].map((date) =>
+				date.evaluate((element) => {
+					/** 날짜 텍스트가 차지하는 시각적 줄 범위. */
+					const range = document.createRange();
+					range.selectNodeContents(element);
+					return range.getClientRects().length;
+				}),
+			),
+		);
+		expect(dateLineCounts).toEqual([1, 1]);
+		await flow.page.emulateMedia({ colorScheme: "dark" });
+		/** 다크 테마에서도 날짜 열이 유지하는 실제 텍스트 줄 수. */
+		const darkDateLineCounts = await Promise.all(
+			[
+				plannedRow.getByText("2025-12-15", { exact: true }),
+				currentRow.getByText("2025-11-28", { exact: true }),
+			].map((date) =>
+				date.evaluate((element) => {
+					/** 다크 테마 날짜 텍스트가 차지하는 시각적 줄 범위. */
+					const range = document.createRange();
+					range.selectNodeContents(element);
+					return range.getClientRects().length;
+				}),
+			),
+		);
+		expect(darkDateLineCounts).toEqual([1, 1]);
+		await flow.page.emulateMedia({ colorScheme: "light" });
 		/** 키보드 포커스로도 행 행동을 발견할 수 있는 수정 버튼. */
 		const editButton = plannedRow.getByRole("button", { name: "수정" });
 		await editButton.focus();
@@ -1233,6 +1298,10 @@ describe.sequential("Electron 제품 흐름", () => {
 		const plannedDateInput = flow.page.getByLabel("날짜");
 		await expectVisible(plannedDateInput);
 		await expectKeyboardFocus(plannedDateInput);
+		await captureHistoryEditScreenshot(flow.page);
+		await flow.page.emulateMedia({ colorScheme: "dark" });
+		await expectKeyboardFocus(plannedDateInput);
+		await captureDarkHistoryEditScreenshot(flow.page);
 		await flow.page.getByLabel("날짜").fill("2025-12-16");
 		await plannedRow.getByRole("button", { name: "반차", exact: true }).click();
 		/** 키보드로 인라인 수정을 저장해 닫힌 뒤 포커스 표시까지 확인한다. */
@@ -1322,7 +1391,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(
 			await flow.page.getByText("2025-11-27", { exact: true }).count(),
 		).toBe(0);
-	});
+	}, 60_000);
 
 	test("이력 변경 실패가 해당 행에 남고 입력 맥락을 보존한다", async () => {
 		flow = await launchProductFlow(HISTORY_DATA);
@@ -1551,7 +1620,14 @@ describe.sequential("Electron 제품 흐름", () => {
 				.getByRole("button", { name: "종일", exact: true })
 				.getAttribute("aria-pressed"),
 		).toBe("true");
+		await flow.page.emulateMedia({ colorScheme: "light" });
 		await captureEntryScreenshot(flow.page);
+		await flow.page.emulateMedia({ colorScheme: "dark" });
+		/** 다크 등록면에서 포커스 표시를 확인할 날짜 입력. */
+		const darkEntryDate = flow.page.getByLabel("날짜");
+		await darkEntryDate.focus();
+		await expectKeyboardFocus(darkEntryDate);
+		await captureDarkEntryScreenshot(flow.page);
 
 		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
 		/** 저장 성공을 등록면에서 확인한 뒤 닫힘을 기다린다. */
@@ -1564,7 +1640,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 		await expectVisible(flow.page.getByText(TEST_TODAY, { exact: true }));
 		await expectVisible(flow.page.getByText("종일", { exact: true }));
-	});
+	}, 60_000);
 
 	test("오늘 중복 등록은 막고 같은 등록면에서 다른 날짜를 고르게 한다", async () => {
 		flow = await launchProductFlow(DUPLICATE_ENTRY_DATA);
@@ -2523,27 +2599,47 @@ async function waitForStoredData(
 
 /** 승인된 컴프와 비교할 정상 요약 첫 화면을 임시 산출물로 남긴다. */
 async function captureSummaryScreenshot(page: Page): Promise<void> {
-	/** 기본은 임시 증거이고, 지정하면 리뷰에 남길 저장소 경로를 쓴다. */
-	const outputDirectory =
-		process.env.YEONCHA_E2E_ARTIFACT_DIR ?? SCREENSHOT_DIRECTORY;
-	await mkdir(outputDirectory, { recursive: true });
-	/** Playwright가 캡처한 화면 데이터. */
-	const screenshot = await page.screenshot();
-	/** 승인된 컴프 대조에 사용할 고정된 산출물 위치. */
-	const screenshotPath = path.join(outputDirectory, "summary-first-view.png");
-	await writeFile(screenshotPath, screenshot);
+	await captureVisualScreenshot(page, "summary-first-view.png");
 }
 
 /** 승인된 컴프와 비교할 빠른 등록면을 임시 또는 지정된 증거 폴더에 남긴다. */
 async function captureEntryScreenshot(page: Page): Promise<void> {
+	await captureVisualScreenshot(page, "quick-entry.png");
+}
+
+/** 다크 테마의 빠른 등록면을 비교용 캡처로 남긴다. */
+async function captureDarkEntryScreenshot(page: Page): Promise<void> {
+	await captureVisualScreenshot(page, "quick-entry-dark.png");
+}
+
+/** 승인된 컴프와 비교할 다크 테마 요약 첫 화면을 남긴다. */
+async function captureDarkSummaryScreenshot(page: Page): Promise<void> {
+	await captureVisualScreenshot(page, "summary-first-view-dark.png");
+}
+
+/** 승인된 컴프와 비교할 이력 인라인 수정 상태를 남긴다. */
+async function captureHistoryEditScreenshot(page: Page): Promise<void> {
+	await captureVisualScreenshot(page, "history-edit.png");
+}
+
+/** 다크 테마의 이력 인라인 수정 상태를 비교용 캡처로 남긴다. */
+async function captureDarkHistoryEditScreenshot(page: Page): Promise<void> {
+	await captureVisualScreenshot(page, "history-edit-dark.png");
+}
+
+/** 같은 제품 흐름에서 비교할 시각 상태를 지정된 증거 폴더에 저장한다. */
+async function captureVisualScreenshot(
+	page: Page,
+	fileName: VisualScreenshotName,
+): Promise<void> {
 	/** 기본은 임시 산출물이고, 지정하면 리뷰에 남길 저장소 경로를 쓴다. */
 	const outputDirectory =
 		process.env.YEONCHA_E2E_ARTIFACT_DIR ?? SCREENSHOT_DIRECTORY;
 	await mkdir(outputDirectory, { recursive: true });
-	/** Playwright가 캡처한 등록면 데이터. */
+	/** Playwright가 캡처한 사용자-visible 화면 데이터. */
 	const screenshot = await page.screenshot();
-	/** 기본값 검토에 사용할 고정된 산출물 위치. */
-	const screenshotPath = path.join(outputDirectory, "quick-entry.png");
+	/** 컴프 대조에 사용할 고정된 산출물 위치. */
+	const screenshotPath = path.join(outputDirectory, fileName);
 	await writeFile(screenshotPath, screenshot);
 }
 
