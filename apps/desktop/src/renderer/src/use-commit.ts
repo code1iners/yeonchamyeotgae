@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { AppState, HireDateDrop, LeaveDataChange } from "../../shared/ipc";
 import { failureReason } from "./failure-reason";
 
@@ -31,9 +31,16 @@ export function useCommit(): Commit {
 	const [saving, setSaving] = useState(false);
 	/** 저장 실패 문구. */
 	const [error, setError] = useState<string | null>(null);
+	/** 렌더링보다 먼저 갱신되어 같은 이벤트 묶음의 중복 커밋도 막는 잠금. */
+	const savingRef = useRef(false);
 
 	/** 셸 호출 한 번. 잠금과 실패 문구가 통로마다 갈라지지 않게 여기 하나로 모은다. */
 	const send = async (call: () => Promise<AppState>): Promise<boolean> => {
+		// 버튼이 disabled 되기 전의 빠른 재호출도 셸까지 내려보내지 않는다.
+		if (savingRef.current) {
+			return false;
+		}
+		savingRef.current = true;
 		setSaving(true);
 		try {
 			await call();
@@ -44,6 +51,7 @@ export function useCommit(): Commit {
 			setError(`저장하지 못했습니다 — ${failureReason(cause)}`);
 			return false;
 		} finally {
+			savingRef.current = false;
 			setSaving(false);
 		}
 	};

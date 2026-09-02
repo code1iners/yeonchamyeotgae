@@ -284,29 +284,75 @@ button:focus-visible {
 
 /* ── 조정 ─────────────────────────────────────────────────── */
 
-.adj {
-	padding: 2px 12px;
+.adjustments-table {
+	width: calc(100% - 24px);
+	margin: 0 12px;
+	table-layout: fixed;
+	border-collapse: collapse;
+	font-size: 11.5px;
 }
-.adj:hover {
+.adjustments-table th,
+.adjustments-table td {
+	padding: 4px 0;
+	border-bottom: 1px solid var(--line);
+	vertical-align: middle;
+}
+.adjustments-table th + th,
+.adjustments-table td + td {
+	padding-left: 4px;
+}
+.adjustments-table th {
+	padding-top: 2px;
+	padding-bottom: 3px;
+	color: var(--fg-2);
+	font-size: 11px;
+	font-weight: 600;
+	text-align: left;
+}
+.adjustments-table th:nth-child(1),
+.adjustments-table td:nth-child(1) {
+	width: 52px;
+	text-align: right;
+}
+.adjustments-table th:nth-child(2),
+.adjustments-table td:nth-child(2),
+.adjustments-table th:nth-child(3),
+.adjustments-table td:nth-child(3) {
+	width: 82px;
+	white-space: nowrap;
+}
+.adjustments-table th:nth-child(5),
+.adjustments-table td:nth-child(5) {
+	width: 88px;
+}
+.adj-row:hover {
 	background: var(--hover);
 }
-.adj-main {
-	display: flex;
-	align-items: baseline;
-	gap: 8px;
-	min-height: 21px;
-}
-.adj-main b {
+.adj-days {
 	font-weight: 600;
 }
 .adj-note {
-	font-size: 11.5px;
-	padding-bottom: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.adjustments-table td.adjustments-empty {
+	padding: 8px 0;
+	text-align: left;
+}
+.adj-action-cell {
+	white-space: nowrap;
 }
 .adj-actions {
 	display: flex;
 	gap: 2px;
-	margin-left: auto;
+	white-space: nowrap;
+}
+.adjustments-status {
+	margin: 0;
+	padding: 2px 12px 0;
+	font-size: 11.5px;
+	color: var(--accent);
 }
 
 /* 행 안에 들어가는 버튼 — 목록의 스캔을 방해하지 않을 만큼만 눌러둔다. */
@@ -326,6 +372,16 @@ button.mini:hover:not(:disabled) {
 	margin-top: 4px;
 	padding-top: 4px;
 	border-top: 1px solid var(--line);
+}
+.adj-form-title {
+	margin: 0;
+	padding: 0 12px 2px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--fg-2);
+}
+.field-error {
+	padding-left: 88px;
 }
 
 /* ── 데이터(23번) ─────────────────────────────────────────── */

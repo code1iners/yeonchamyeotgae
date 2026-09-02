@@ -99,6 +99,22 @@ const QUICK_ENTRY_DATA: LeaveData = {
 	],
 };
 
+/** 계산으로 만든 연차와 손으로 넣은 양수 조정을 함께 관리하는 저장 데이터. */
+const ADJUSTMENTS_DATA: LeaveData = {
+	schemaVersion: 1,
+	settings: { hireDate: "2024-01-01", grantBasis: "hireDate" },
+	entries: [],
+	adjustments: [
+		{
+			id: "adjustments-existing-positive",
+			grantDate: "2025-01-01",
+			expiryDate: "2026-12-31",
+			days: 4,
+			note: "기존 이월",
+		},
+	],
+};
+
 /** 오늘 중복 안내와 다른 날짜 선택을 확인할 저장 데이터. */
 const DUPLICATE_ENTRY_DATA: LeaveData = {
 	...QUICK_ENTRY_DATA,
@@ -1404,6 +1420,177 @@ describe.sequential("Electron 제품 흐름", () => {
 			await chmod(flow.userDataDirectory, 0o700);
 		}
 	});
+
+	test("조정 원장에서 양수·음수 추가·수정·삭제 후 잔여와 근거를 갱신한다", async () => {
+		flow = await launchProductFlow(ADJUSTMENTS_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 탭에서 조정을 나열하는 원장. */
+		const adjustmentTable = flow.page.getByRole("table", { name: "조정 목록" });
+		await expectVisible(adjustmentTable);
+		expect(
+			await adjustmentTable.getByRole("columnheader").allTextContents(),
+		).toEqual(["일수", "발생일", "소멸일", "메모", "행동"]);
+		await expectVisible(
+			flow.page.getByText(
+				"이월·사규 추가분·포상 휴가를 여기에 넣습니다. 월차와 연차는 계산이 만들며 고칠 수 없습니다.",
+				{ exact: true },
+			),
+		);
+		await expectVisible(flow.page.getByText("19일", { exact: true }));
+
+		await flow.page.getByRole("button", { name: "조정 추가" }).click();
+		/** 양수·음수 조정을 입력하는 추가 폼. */
+		const addForm = flow.page.getByRole("form", { name: "조정 추가" });
+		/** 추가할 일수 입력. */
+		const days = addForm.getByLabel("일수");
+		/** 추가 조정의 발생일 입력. */
+		const grantDate = addForm.getByLabel("발생일");
+		/** 추가 조정의 소멸일 입력. */
+		const expiryDate = addForm.getByLabel("소멸일");
+		/** 추가 조정의 메모 입력. */
+		const note = addForm.getByLabel("메모");
+		expect(await grantDate.inputValue()).toBe(TEST_TODAY);
+		expect(await expiryDate.inputValue()).toBe("2026-12-31");
+
+		// 잘못된 일수는 저장 전에 설명하고 입력면을 닫지 않는다.
+		await days.fill("0.3");
+		await addForm.getByRole("button", { name: "추가", exact: true }).click();
+		await expectVisible(
+			flow.page.getByText("일수는 0.25 단위로 넣어주세요", { exact: true }),
+		);
+		expect(await days.getAttribute("aria-invalid")).toBe("true");
+		expect(await flow.page.getByText("19일", { exact: true }).count()).toBe(1);
+
+		await days.fill("2.5");
+		await note.fill("  화면에서 추가한 양수  ");
+		await addForm.getByRole("button", { name: "추가", exact: true }).click();
+		await addForm.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("21.5일", { exact: true }));
+
+		/** 화면에서 새로 추가한 양수 조정 행. */
+		const positiveRow = adjustmentTable
+			.getByRole("row")
+			.filter({ hasText: "+2.5일" });
+		await expectVisible(positiveRow);
+		await expectVisible(positiveRow.getByText("2025-12-01", { exact: true }));
+		await expectVisible(positiveRow.getByText("2026-12-31", { exact: true }));
+		await expectVisible(
+			positiveRow.getByText("화면에서 추가한 양수", { exact: true }),
+		);
+		/** 기존 행과 새 행에서 비교할 네 개의 고정 원장 열. */
+		const existingRow = adjustmentTable
+			.getByRole("row")
+			.filter({ hasText: "+4일" });
+		/** 새 행의 일수·날짜·메모·행동 열 위치. */
+		const positiveColumns = await Promise.all([
+			positiveRow.getByRole("cell").nth(0).boundingBox(),
+			positiveRow.getByRole("cell").nth(1).boundingBox(),
+			positiveRow.getByRole("cell").nth(2).boundingBox(),
+			positiveRow.getByRole("cell").nth(4).boundingBox(),
+		]);
+		/** 기존 행의 같은 열 위치. 값의 자릿수가 달라도 열은 움직이지 않는다. */
+		const existingColumns = await Promise.all([
+			existingRow.getByRole("cell").nth(0).boundingBox(),
+			existingRow.getByRole("cell").nth(1).boundingBox(),
+			existingRow.getByRole("cell").nth(2).boundingBox(),
+			existingRow.getByRole("cell").nth(4).boundingBox(),
+		]);
+		if (!positiveColumns.every(Boolean) || !existingColumns.every(Boolean)) {
+			throw new Error("조정 원장 열의 위치를 읽지 못했습니다");
+		}
+		expect(positiveColumns.map((box) => box?.x)).toEqual(
+			existingColumns.map((box) => box?.x),
+		);
+
+		// 계산이 만든 연차는 조정 원장과 별도 근거로 계속 남는다.
+		await flow.page.getByRole("tab", { name: "요약" }).click();
+		/** 조정 후에도 계산된 발생분과 조정 발생분을 함께 보여주는 영역. */
+		const grants = flow.page.getByRole("region", { name: "살아 있는 발생분" });
+		await expectVisible(grants.getByText("연차", { exact: true }));
+		expect(await grants.getByText("조정", { exact: true }).count()).toBe(2);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		await positiveRow.getByRole("button", { name: "수정" }).click();
+		/** 같은 원장 맥락에서 양수를 음수로 바꾸는 수정 폼. */
+		const editForm = flow.page.getByRole("form", { name: "조정 수정" });
+		await editForm.getByLabel("일수").fill("-1.25");
+		await editForm.getByLabel("메모").fill("  화면에서 수정한 음수  ");
+		await editForm.getByRole("button", { name: "저장", exact: true }).click();
+		await editForm.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("17.75일", { exact: true }));
+		await flow.page.getByRole("tab", { name: "요약" }).click();
+		/** 수정 후에도 계산된 연차와 두 조정 발생분이 함께 남는 근거. */
+		const updatedGrants = flow.page.getByRole("region", {
+			name: "살아 있는 발생분",
+		});
+		await expectVisible(updatedGrants.getByText("연차", { exact: true }));
+		expect(await updatedGrants.getByText("조정", { exact: true }).count()).toBe(
+			2,
+		);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 수정 후 음수로 바뀐 조정 행. */
+		const negativeRow = adjustmentTable
+			.getByRole("row")
+			.filter({ hasText: "-1.25일" });
+		await expectVisible(negativeRow);
+		await expectVisible(
+			negativeRow.getByText("화면에서 수정한 음수", { exact: true }),
+		);
+
+		await negativeRow.getByRole("button", { name: "삭제" }).click();
+		await expectVisible(flow.page.getByText("19일", { exact: true }));
+		expect(
+			await adjustmentTable
+				.getByRole("row")
+				.filter({ hasText: "-1.25일" })
+				.count(),
+		).toBe(0);
+		await flow.page.getByRole("tab", { name: "요약" }).click();
+		/** 삭제 후 기존 조정 하나만 남은 발생분 근거. */
+		const remainingGrants = flow.page.getByRole("region", {
+			name: "살아 있는 발생분",
+		});
+		await expectVisible(remainingGrants.getByText("연차", { exact: true }));
+		expect(
+			await remainingGrants.getByText("조정", { exact: true }).count(),
+		).toBe(1);
+	});
+
+	test("조정 저장 실패 시 입력값과 열린 맥락을 유지하고 다시 시도할 수 있다", async () => {
+		flow = await launchProductFlow(ADJUSTMENTS_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+		await flow.page.getByRole("button", { name: "조정 추가" }).click();
+
+		/** 저장 실패 뒤에도 같은 폼에 남아야 하는 값. */
+		const addForm = flow.page.getByRole("form", { name: "조정 추가" });
+		/** 저장 실패 뒤에도 보존되어야 하는 일수 입력. */
+		const days = addForm.getByLabel("일수");
+		/** 저장 실패 뒤에도 보존되어야 하는 메모 입력. */
+		const note = addForm.getByLabel("메모");
+		await days.fill("2.5");
+		await note.fill("저장 실패 뒤에도 남는 조정");
+
+		// 원자적 저장을 실패시켜 제품 경계의 실패 상태를 확인한다.
+		await chmod(flow.userDataDirectory, 0o500);
+		try {
+			await addForm.getByRole("button", { name: "추가", exact: true }).click();
+			await expectVisible(
+				flow.page.getByRole("alert").filter({ hasText: "저장하지 못했습니다" }),
+			);
+			expect(await addForm.isVisible()).toBe(true);
+			expect(await days.inputValue()).toBe("2.5");
+			expect(await note.inputValue()).toBe("저장 실패 뒤에도 남는 조정");
+			expect(
+				await addForm
+					.getByRole("button", { name: "추가", exact: true })
+					.isEnabled(),
+			).toBe(true);
+		} finally {
+			await chmod(flow.userDataDirectory, 0o700);
+		}
+	}, 60_000);
 
 	test("초과 원인에서 조정을 추가하면 현재 날짜 맥락을 보존한다", async () => {
 		flow = await launchProductFlow(EXCESS_DATA);

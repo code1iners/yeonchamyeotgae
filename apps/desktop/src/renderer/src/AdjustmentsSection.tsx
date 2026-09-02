@@ -5,7 +5,7 @@ import type {
 	GrantDetail,
 } from "@yeoncha/core";
 import { latestLivingExpiry, validateAdjustmentDraft } from "@yeoncha/core";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useCommit } from "./use-commit";
 
 type Props = {
@@ -26,6 +26,13 @@ const EMPTY_DRAFT: AdjustmentDraft = {
 	expiryDate: "",
 	note: "",
 };
+
+/** 조정 영역 제목 식별자. 표와 폼의 접근 가능한 이름에 함께 쓴다. */
+const ADJUSTMENTS_TITLE_ID = "adjustments-title";
+/** 입력 폼 제목 식별자. 추가·수정 상태를 보조 기술에 알린다. */
+const ADJUSTMENT_FORM_TITLE_ID = "adjustment-form-title";
+/** 저장 실패 문구 식별자. 폼의 재시도 맥락과 연결한다. */
+const ADJUSTMENT_SAVE_ERROR_ID = "adjustment-save-error";
 
 /**
  * 설정 탭의 조정 섹션 — 이월·사규 추가분·포상 휴가가 전부 여기로 들어온다(스펙 5.4절).
@@ -52,9 +59,30 @@ export function AdjustmentsSection({
 	const [issues, setIssues] = useState<AdjustmentIssue[]>([]);
 	/** 셸에 변경을 커밋하는 통로 — 진행 중 잠금과 실패 문구가 함께 온다. */
 	const { commit, saving, error, clearError } = useCommit();
+	/** 저장 중 삭제·추가·수정의 공통 진행 상태. 폼이 닫혀 있어도 보인다. */
+	const savingStatus = saving ? (
+		<p className="adjustments-status" role="status" aria-live="polite">
+			저장 중…
+		</p>
+	) : null;
+	/** 커밋 실패 문구. 폼 안팎에서 같은 오류를 한 번만 만든다. */
+	const saveError = error ? (
+		<p
+			id={ADJUSTMENT_SAVE_ERROR_ID}
+			className="error"
+			role="alert"
+			aria-live="assertive"
+		>
+			{error}
+		</p>
+	) : null;
 
 	/** 추가 폼 열기 핸들러. */
 	const handleOpenAdd = () => {
+		if (saving) {
+			return;
+		}
+		clearError();
 		setDraft(addDraft({ grants, today }));
 		setEditingId(null);
 		setIssues([]);
@@ -63,6 +91,10 @@ export function AdjustmentsSection({
 
 	/** 수정 폼 열기 핸들러. */
 	const handleOpenEdit = (adjustment: Adjustment) => {
+		if (saving) {
+			return;
+		}
+		clearError();
 		setDraft({
 			days: String(adjustment.days),
 			grantDate: adjustment.grantDate,
@@ -84,7 +116,12 @@ export function AdjustmentsSection({
 	};
 
 	/** 폼 제출 핸들러 — 검증을 통과한 것만 커밋으로 넘어간다. */
-	const handleSubmit = async () => {
+	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		// 저장 중에는 Enter와 자동화된 재호출도 같은 변경을 다시 보내지 않는다.
+		if (saving) {
+			return;
+		}
 		/** 입력 판정 결과. 도메인 이상치는 파서가 아니라 여기서 막힌다(2절). */
 		const result = validateAdjustmentDraft(draft);
 
@@ -111,67 +148,117 @@ export function AdjustmentsSection({
 
 	/** 삭제 핸들러. */
 	const handleDelete = async (id: string) => {
-		// 지우는 레코드를 고치고 있었나요? 폼에 남은 것이 유령이 되지 않게 닫는다.
-		if (editingId === id) {
-			handleClose();
+		if (saving) {
+			return;
 		}
-		await commit({
+		/** 삭제할 레코드를 뺀 다음 상태. 성공할 때만 화면에도 반영된다. */
+		const didCommit = await commit({
 			adjustments: adjustments.filter((adjustment) => adjustment.id !== id),
 		});
+		// 지우는 레코드를 고치고 있었나요? 성공한 뒤에만 폼을 닫아 실패 시 맥락을 지킨다.
+		if (didCommit && editingId === id) {
+			handleClose();
+		}
 	};
 
 	return (
-		<>
-			<div className="sec-title">조정</div>
-			<div className="row dim">
+		<section
+			className="adjustments-section"
+			aria-labelledby={ADJUSTMENTS_TITLE_ID}
+			aria-busy={saving}
+		>
+			<h2 id={ADJUSTMENTS_TITLE_ID} className="sec-title">
+				조정
+			</h2>
+			<p className="row dim">
 				이월·사규 추가분·포상 휴가를 여기에 넣습니다. 월차와 연차는 계산이
 				만들며 고칠 수 없습니다.
-			</div>
+			</p>
+			{savingStatus}
 			{/* 넣은 순서 그대로 보여준다. 배정 순서(소멸일 ↑ → 발생일 ↑ → source → 입력
 			    순서, 3.4절)와는 다르다 — 그쪽은 요약 탭의 발생분 리스트가 보여준다. */}
-			{adjustments.map((adjustment) => (
-				<div className="adj" key={adjustment.id}>
-					<div className="adj-main">
-						<b className="num">{formatDays(adjustment.days)}</b>
-						<span className="dim num">
-							{adjustment.grantDate} → {adjustment.expiryDate}
-						</span>
-						<span className="adj-actions">
-							<button
-								type="button"
-								className="mini"
-								disabled={saving}
-								onClick={() => handleOpenEdit(adjustment)}
-							>
-								수정
-							</button>
-							<button
-								type="button"
-								className="mini"
-								disabled={saving}
-								onClick={() => handleDelete(adjustment.id)}
-							>
-								삭제
-							</button>
-						</span>
-					</div>
-					{adjustment.note && (
-						<div className="adj-note dim">{adjustment.note}</div>
+			<table className="adjustments-table" aria-label="조정 목록">
+				<caption className="sr-only">조정 목록</caption>
+				<thead>
+					<tr>
+						<th scope="col">일수</th>
+						<th scope="col">발생일</th>
+						<th scope="col">소멸일</th>
+						<th scope="col">메모</th>
+						<th scope="col">행동</th>
+					</tr>
+				</thead>
+				<tbody>
+					{adjustments.map((adjustment) => (
+						<tr className="adj-row" key={adjustment.id}>
+							<td className="adj-days num">{formatDays(adjustment.days)}</td>
+							<td className="adj-grant num">
+								<time dateTime={adjustment.grantDate}>
+									{adjustment.grantDate}
+								</time>
+							</td>
+							<td className="adj-expiry num">
+								<time dateTime={adjustment.expiryDate}>
+									{adjustment.expiryDate}
+								</time>
+							</td>
+							<td className="adj-note">
+								{adjustment.note || <span className="dim">메모 없음</span>}
+							</td>
+							<td className="adj-action-cell">
+								<div className="adj-actions">
+									<button
+										type="button"
+										className="mini"
+										disabled={saving}
+										onClick={() => handleOpenEdit(adjustment)}
+									>
+										수정
+									</button>
+									<button
+										type="button"
+										className="mini"
+										disabled={saving}
+										onClick={() => handleDelete(adjustment.id)}
+									>
+										삭제
+									</button>
+								</div>
+							</td>
+						</tr>
+					))}
+					{adjustments.length === 0 && (
+						<tr>
+							<td className="adjustments-empty dim" colSpan={5}>
+								넣은 조정이 없습니다.
+							</td>
+						</tr>
 					)}
-				</div>
-			))}
-			{adjustments.length === 0 && (
-				<div className="row dim">넣은 조정이 없습니다.</div>
-			)}
+				</tbody>
+			</table>
 			{open ? (
-				<div className="adj-form">
+				<form
+					className="adj-form"
+					aria-label={editingId ? "조정 수정" : "조정 추가"}
+					aria-labelledby={ADJUSTMENT_FORM_TITLE_ID}
+					aria-describedby={error ? ADJUSTMENT_SAVE_ERROR_ID : undefined}
+					aria-busy={saving}
+					onSubmit={handleSubmit}
+					noValidate
+				>
+					<h3 id={ADJUSTMENT_FORM_TITLE_ID} className="adj-form-title">
+						{editingId ? "조정 수정" : "조정 추가"}
+					</h3>
 					<label className="field">
 						<span>일수</span>
 						<input
 							type="number"
 							step="0.25"
+							inputMode="decimal"
 							value={draft.days}
+							disabled={saving}
 							aria-invalid={hasIssue(issues, "days")}
+							aria-describedby={issueId(issues, "days")}
 							onChange={(event) =>
 								setDraft({ ...draft, days: event.target.value })
 							}
@@ -182,7 +269,9 @@ export function AdjustmentsSection({
 						<input
 							type="date"
 							value={draft.grantDate}
+							disabled={saving}
 							aria-invalid={hasIssue(issues, "grantDate")}
+							aria-describedby={issueId(issues, "grantDate")}
 							onChange={(event) =>
 								setDraft({ ...draft, grantDate: event.target.value })
 							}
@@ -193,7 +282,9 @@ export function AdjustmentsSection({
 						<input
 							type="date"
 							value={draft.expiryDate}
+							disabled={saving}
 							aria-invalid={hasIssue(issues, "expiryDate")}
+							aria-describedby={issueId(issues, "expiryDate")}
 							onChange={(event) =>
 								setDraft({ ...draft, expiryDate: event.target.value })
 							}
@@ -204,34 +295,35 @@ export function AdjustmentsSection({
 						<input
 							type="text"
 							value={draft.note}
+							disabled={saving}
 							onChange={(event) =>
 								setDraft({ ...draft, note: event.target.value })
 							}
 						/>
 					</label>
 					{issues.map((issue) => (
-						<p className="error" key={issue.field}>
+						<p
+							className="error field-error"
+							id={errorId(issue.field)}
+							role="alert"
+							key={issue.field}
+						>
 							{issue.message}
 						</p>
 					))}
-					{error && <p className="error">{error}</p>}
+					{saveError}
 					<div className="cta">
-						<button
-							type="button"
-							className="primary"
-							disabled={saving}
-							onClick={handleSubmit}
-						>
-							{editingId ? "저장" : "추가"}
+						<button type="submit" className="primary" disabled={saving}>
+							{saving ? "저장 중…" : editingId ? "저장" : "추가"}
 						</button>
 						<button type="button" disabled={saving} onClick={handleClose}>
 							취소
 						</button>
 					</div>
-				</div>
+				</form>
 			) : (
 				<>
-					{error && <p className="error">{error}</p>}
+					{saveError}
 					<div className="cta">
 						<button type="button" disabled={saving} onClick={handleOpenAdd}>
 							조정 추가
@@ -239,7 +331,7 @@ export function AdjustmentsSection({
 					</div>
 				</>
 			)}
-		</>
+		</section>
 	);
 }
 
@@ -259,6 +351,19 @@ function addDraft({
 /** 그 필드가 이번 검증에 걸렸는가. */
 function hasIssue(issues: AdjustmentIssue[], field: AdjustmentIssue["field"]) {
 	return issues.some((issue) => issue.field === field);
+}
+
+/** 오류가 있는 입력에만 연결할 오류 문구 식별자. */
+function issueId(
+	issues: AdjustmentIssue[],
+	field: AdjustmentIssue["field"],
+): string | undefined {
+	return hasIssue(issues, field) ? errorId(field) : undefined;
+}
+
+/** 조정 입력 오류의 DOM 식별자. 필드와 문구를 일대일로 연결한다. */
+function errorId(field: AdjustmentIssue["field"]): string {
+	return `adjustment-${field}-error`;
 }
 
 /** 목록에 뜨는 일수 — 더하는 것인지 깎는 것인지가 부호로 먼저 읽혀야 한다. */
