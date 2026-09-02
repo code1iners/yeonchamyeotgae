@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TransferResult } from "../../shared/ipc";
 
 type Props = {
-	/** 저장 파일이 이미 있는가. 없으면 온보딩이며 내보낼 것도 열어볼 것도 없다. */
+	/** 저장 파일이 이미 있는가. 온보딩에서는 설정 탭이 이 영역 자체를 그리지 않는다. */
 	hasSavedFile: boolean;
 };
 
@@ -44,8 +44,8 @@ const OPERATION_MESSAGES: Record<DataOperation, string> = {
  * **내보내기 파일 = 저장 파일이다**(2절). 그래서 이 셋은 한 파일을 두고 하는 일이며,
  * 내보낸 것을 그대로 다시 가져올 수 있다.
  *
- * **온보딩에는 가져오기 하나만 남긴다.** 그 시점에는 저장 파일이 없으므로 나머지 둘은
- * 감추고, 가져오기는 새 기기에서 데이터를 넣는 유일한 경로다(사용자 스토리 45).
+ * 저장 파일이 없는 호출에서는 가져오기 하나만 남기는 호환 경로를 유지한다. 다만 현재
+ * 온보딩에서는 `SettingsTab`이 계산할 수 없는 데이터 영역 자체를 숨긴다.
  */
 export function DataSection({ hasSavedFile }: Props) {
 	/** 가져오기 확인을 띄우고 있는가. 전체 교체이므로 한 단계를 더 둔다. */

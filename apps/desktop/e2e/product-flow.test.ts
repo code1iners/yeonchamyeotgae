@@ -2011,12 +2011,34 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(flow.page.getByRole("button", { name: "조정 추가" }));
 	});
 
-	test("입사일이 없는 격리 데이터에서는 설정 온보딩만 연다", async () => {
+	test("입사일이 없는 격리 데이터에서는 설정만 열고 저장 뒤 정상 상태를 활성화한다", async () => {
 		flow = await launchProductFlow(null);
 
 		await expectVisible(
 			flow.page.getByText("입사일을 넣으면 연차를 계산합니다."),
 		);
+		await expectVisible(flow.page.getByRole("heading", { name: "기본 설정" }));
+		/** 온보딩의 첫 입력. 첫 실행에 바로 입력을 시작할 수 있어야 한다. */
+		const hireDate = flow.page.getByLabel("입사일");
+		await expectKeyboardFocus(hireDate);
+		expect(await hireDate.getAttribute("aria-invalid")).toBe("true");
+		/** 입사일이 비어 있을 때 저장할 수 없는 상태를 전달하는 버튼. */
+		const saveButton = flow.page.getByRole("button", {
+			name: "저장",
+			exact: true,
+		});
+		expect(await saveButton.isDisabled()).toBe(true);
+		await expectVisible(
+			flow.page
+				.getByRole("status")
+				.filter({ hasText: "입사일을 입력하면 저장할 수 있습니다." }),
+		);
+		expect(
+			await flow.page.getByRole("region", { name: "데이터" }).count(),
+		).toBe(0);
+		expect(
+			await flow.page.getByRole("button", { name: "데이터 가져오기" }).count(),
+		).toBe(0);
 		expect(
 			await flow.page.getByRole("tab", { name: "요약" }).isDisabled(),
 		).toBe(true);
@@ -2026,18 +2048,179 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(await flow.page.getByRole("tab", { name: "설정" }).isEnabled()).toBe(
 			true,
 		);
+
+		// 첫 설정을 저장하면 현재 설정 맥락을 유지한 채 계산 가능한 상태가 된다.
+		await hireDate.fill("2020-01-01");
+		await expectVisible(
+			flow.page
+				.getByRole("status")
+				.filter({ hasText: "변경한 설정을 저장할 수 있습니다." }),
+		);
+		// 저장 버튼에 키보드 포커스를 두고 Enter로 첫 설정을 저장한다.
+		await saveButton.focus();
+		await saveButton.press("Enter");
+		await expectVisible(flow.page.getByText("잔여", { exact: true }).first());
+		expect(
+			await flow.page
+				.getByRole("tab", { name: "설정" })
+				.getAttribute("aria-selected"),
+		).toBe("true");
+		expect(await flow.page.getByRole("tab", { name: "요약" }).isEnabled()).toBe(
+			true,
+		);
+		expect(await flow.page.getByRole("tab", { name: "이력" }).isEnabled()).toBe(
+			true,
+		);
+		await expectVisible(flow.page.getByRole("region", { name: "데이터" }));
+		/** 첫 설정 저장 뒤 키보드로 돌아갈 요약 탭. */
+		const summaryTab = flow.page.getByRole("tab", { name: "요약" });
+		await summaryTab.focus();
+		await summaryTab.press("Enter");
+		await expectVisible(flow.page.getByRole("button", { name: "휴가 등록" }));
+		/** 첫 설정 저장 뒤 실제 파일에 남은 데이터. */
+		const stored = await waitForStoredData(
+			flow.userDataDirectory,
+			(data) => data.settings.hireDate === "2020-01-01",
+		);
+		expect(stored.entries).toHaveLength(0);
 	});
 
-	test("읽지 못하는 격리 저장 파일은 복구 화면을 열고 원본을 바꾸지 않는다", async () => {
+	test("읽을 수 없는 JSON은 정상 셸과 분리하고 파일 위치 열기를 제공한다", async () => {
 		flow = await launchProductFlow("{ not valid JSON");
 
-		await expectVisible(flow.page.getByText("저장 파일을 읽지 못했습니다"));
+		/** 정상 탭을 대신하는 읽기 실패 화면. */
+		const recoveryScreen = flow.page.getByRole("main");
+		await expectVisible(recoveryScreen);
+		await expectVisible(
+			flow.page.getByRole("heading", { name: "저장 파일을 읽지 못했습니다" }),
+		);
+		await expectKeyboardFocus(recoveryScreen);
 		await expectVisible(
 			flow.page.getByText("파일이 JSON 형식이 아니거나 열 수 없습니다."),
 		);
+		expect(await flow.page.getByRole("tab").count()).toBe(0);
 		await expectVisible(
 			flow.page.getByRole("button", { name: "백업에서 복구" }),
 		);
+		/** 읽기 실패 화면의 키보드 순서에서 두 번째인 파일 위치 열기 버튼. */
+		const revealButton = flow.page.getByRole("button", {
+			name: "파일 위치 열기",
+		});
+		expect(await revealButton.count()).toBe(1);
+
+		await mockRevealDataFile(flow.app);
+		await recoveryScreen.press("Tab");
+		await flow.page.keyboard.press("Tab");
+		await expectKeyboardFocus(revealButton);
+		await revealButton.press("Enter");
+		await expectVisible(
+			flow.page
+				.getByRole("status")
+				.filter({ hasText: "파일 위치를 열었습니다" }),
+		);
+		expect(await readRevealedPath(flow.app)).toBe(
+			await realpath(path.join(flow.userDataDirectory, "data.json")),
+		);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe("{ not valid JSON");
+	});
+
+	test("저장 파일 구조가 다르면 구조 오류를 설명하고 탭을 숨긴다", async () => {
+		flow = await launchProductFlow(
+			JSON.stringify({ schemaVersion: 1, entries: [], adjustments: [] }),
+		);
+
+		await expectVisible(
+			flow.page.getByText("파일의 구조가 저장 형식과 다릅니다."),
+		);
+		expect(await flow.page.getByRole("tab").count()).toBe(0);
+		await expectVisible(
+			flow.page.getByRole("button", { name: "백업에서 복구" }),
+		);
+	});
+
+	test("더 새 저장 형식은 업데이트 안내만 표시하고 복구를 제안하지 않는다", async () => {
+		flow = await launchProductFlow(JSON.stringify({ schemaVersion: 2 }));
+
+		await expectVisible(
+			flow.page.getByText(
+				"더 새 버전의 앱이 쓴 파일입니다. 앱을 업데이트하세요.",
+			),
+		);
+		expect(await flow.page.getByRole("tab").count()).toBe(0);
+		expect(await flow.page.getByRole("button").count()).toBe(0);
+	});
+
+	test("유효한 백업을 복구하면 정상 탭과 계산 결과로 돌아온다", async () => {
+		flow = await launchProductFlow("{ not valid JSON");
+
+		/** 복구에 사용할 정상 저장 데이터. */
+		const backupData: LeaveData = {
+			schemaVersion: 1,
+			settings: { hireDate: "2020-01-01", grantBasis: "hireDate" },
+			entries: [],
+			adjustments: [],
+		};
+		await writeFile(
+			path.join(flow.userDataDirectory, "data.json.bak"),
+			JSON.stringify(backupData),
+			"utf8",
+		);
+
+		/** 읽기 실패 화면의 첫 키보드 행동인 백업 복구 버튼. */
+		const restoreButton = flow.page.getByRole("button", {
+			name: "백업에서 복구",
+		});
+		/** 복구 전후 정상 셸과 분리되는 읽기 실패 화면. */
+		const recoveryScreen = flow.page.getByRole("main");
+		await expectKeyboardFocus(recoveryScreen);
+		await recoveryScreen.press("Tab");
+		await expectKeyboardFocus(restoreButton);
+		await restoreButton.press("Enter");
+		await expectVisible(flow.page.getByRole("tab", { name: "요약" }));
+		await expectVisible(flow.page.getByText("잔여", { exact: true }).first());
+		expect(await flow.page.getByRole("tab").count()).toBe(3);
+		expect(await flow.page.getByRole("main").count()).toBe(0);
+		/** 복구 성공 뒤 파일에 저장된 정상 상태. */
+		const restored = await waitForStoredData(
+			flow.userDataDirectory,
+			(data) => data.settings.hireDate === backupData.settings.hireDate,
+		);
+		expect(restored).toEqual(backupData);
+	});
+
+	test("백업 복구에 실패하면 복구 화면과 원본을 유지한다", async () => {
+		flow = await launchProductFlow("{ not valid JSON");
+
+		/** 파싱할 수 없는 백업. 복구 전후 원본 보존을 확인한다. */
+		await writeFile(
+			path.join(flow.userDataDirectory, "data.json.bak"),
+			"{ not valid backup",
+			"utf8",
+		);
+		/** 실패 뒤 다시 시도할 수 있고 포커스를 돌려받아야 하는 복구 버튼. */
+		const restoreButton = flow.page.getByRole("button", {
+			name: "백업에서 복구",
+		});
+		/** 읽기 실패 화면에서 Tab으로 복구 행동에 도달해 Enter로 실행한다. */
+		const recoveryScreen = flow.page.getByRole("main");
+		await expectKeyboardFocus(recoveryScreen);
+		await recoveryScreen.press("Tab");
+		await expectKeyboardFocus(restoreButton);
+		await restoreButton.press("Enter");
+
+		await expectVisible(
+			flow.page.getByRole("alert").filter({ hasText: "복구하지 못했습니다" }),
+		);
+		await expectKeyboardFocus(restoreButton);
+		expect(await flow.page.getByRole("main").count()).toBe(1);
+		expect(await flow.page.getByRole("tab").count()).toBe(0);
+		expect(
+			await flow.page
+				.getByRole("button", { name: "백업에서 복구" })
+				.isEnabled(),
+		).toBe(true);
 		expect(
 			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
 		).toBe("{ not valid JSON");
@@ -2295,17 +2478,25 @@ async function expectVisible(
 	expect(await locator.isVisible()).toBe(true);
 }
 
-/** 탭 키로 도달한 조작의 포커스와 실제 포커스 테두리를 함께 확인한다. */
+/** 탭 키로 도달한 조작의 실제 포커스와 브라우저의 표시 상태를 함께 확인한다. */
 async function expectKeyboardFocus(
 	locator: ReturnType<Page["locator"]>,
 ): Promise<void> {
-	expect(
-		await locator.evaluate((element) => element === document.activeElement),
-	).toBe(true);
-	expect(
-		await locator.evaluate((element) => {
-			const style = getComputedStyle(element);
-			return style.outlineStyle !== "none" && style.outlineWidth !== "0px";
-		}),
-	).toBe(true);
+	/** 렌더러 효과와 네이티브 창 포커스가 정착할 때까지 확인할 횟수. */
+	const maxAttempts = 20;
+	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+		/** 요소가 실제 문서 포커스를 가지고 있는가. */
+		const hasFocus = await locator.evaluate(
+			(element) => element === document.activeElement,
+		);
+		/** 브라우저가 키보드 포커스를 사용자에게 표시할 상태인가. */
+		const hasVisibleFocus = await locator.evaluate((element) =>
+			element.matches(":focus-visible"),
+		);
+		if (hasFocus && hasVisibleFocus) {
+			return;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	throw new Error("키보드 포커스와 포커스 표시를 확인하지 못했습니다");
 }

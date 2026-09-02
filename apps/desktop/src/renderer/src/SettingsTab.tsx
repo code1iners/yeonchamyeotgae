@@ -78,9 +78,9 @@ const CHANGE_CONFIRM_DESCRIPTION_ID = "settings-change-confirm-description";
  * 설정 탭 — 입사일 · 기준방식 · 조정 · 데이터(5.4절). 온보딩의 입구이자 앱에
  * 파일이 생기는 유일한 자리다.
  *
- * 입사일이 없으면 조정 섹션 자체가 보이지 않는다 — 입사일도 없는데 조정을 넣을
- * 이유가 없다(5.4절). **데이터 섹션은 그때도 보인다** — 새 기기에서 가져오는 것이
- * 바로 그 시점의 일이다(23번).
+ * 입사일이 없으면 조정과 데이터 섹션 자체가 보이지 않는다 — 계산할 수 없는 상태에서
+ * 기록을 관리하거나 파일을 바꾸는 행동을 약속하지 않는다(5.4절). 첫 설정을 저장한
+ * 뒤에는 같은 화면에 두 섹션이 다시 나타난다.
  */
 export function SettingsTab({
 	settings,
@@ -136,6 +136,16 @@ export function SettingsTab({
 	const hireDateInputRef = useRef<HTMLInputElement>(null);
 	/** 확인 영역이 열려 있었는지 기억해 첫 렌더의 포커스 탈취를 막는다. */
 	const confirmationWasOpenRef = useRef(false);
+
+	useEffect(
+		function focusOnboardingInputEffect() {
+			// 첫 실행에는 설명을 읽은 뒤 바로 입사일을 입력할 수 있게 시작점을 둔다.
+			if (settings === null) {
+				hireDateInputRef.current?.focus();
+			}
+		},
+		[settings],
+	);
 
 	useEffect(
 		function syncSavedSettingsEffect() {
@@ -383,7 +393,7 @@ export function SettingsTab({
 					today={today}
 				/>
 			)}
-			<DataSection hasSavedFile={settings !== null} />
+			{settings !== null && <DataSection hasSavedFile />}
 		</div>
 	);
 }
