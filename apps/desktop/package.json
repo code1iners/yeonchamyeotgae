@@ -9,8 +9,8 @@
 		"dev": "electron-vite dev",
 		"lint": "biome check .",
 		"package": "pnpm build && electron-builder --publish never",
-		"test": "vitest run",
-		"test:product": "pnpm build && vitest run e2e",
+		"test": "vitest run --config vitest.unit.config.ts",
+		"test:product": "pnpm build && vitest run --config vitest.product.config.ts",
 		"typecheck": "tsc -p tsconfig.json"
 	},
 	"devDependencies": {
