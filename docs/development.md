@@ -31,6 +31,12 @@ pnpm verify:product
 CI (Continuous Integration: 커밋마다 자동으로 검사하는 통합 검증)·릴리스와 실제 운영체제 수용
 검증의 경계는 위 스펙을 참조합니다.
 
+훅 자체의 청결성·실행 순서·실패 경로를 실제 push 없이 확인하려면 다음 명령을 실행합니다.
+
+```bash
+pnpm test:hooks
+```
+
 ## 관련 문서
 
 - 용어와 도메인 모델: [CONTEXT.md](../CONTEXT.md)

@@ -7,6 +7,7 @@
 		"node": ">=24"
 	},
 	"scripts": {
+		"prepare": "husky",
 		"verify": "turbo run lint typecheck test",
 		"verify:product": "pnpm verify && pnpm test:product",
 		"verify:workflows": "node scripts/verify-workflows.mjs",
@@ -17,10 +18,12 @@
 		"test:product": "pnpm --filter @yeoncha/desktop test:product",
 		"test:product:foreground": "pnpm --filter @yeoncha/desktop test:product:foreground",
 		"typecheck": "turbo run typecheck",
-		"test": "turbo run test"
+		"test": "turbo run test",
+		"test:hooks": "node --test scripts/pre-push.test.mjs"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "~2.5.10",
+		"husky": "9.1.7",
 		"turbo": "^2.10.11",
 		"typescript": "^7.0.2"
 	}

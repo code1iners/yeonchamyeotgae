@@ -1,0 +1,136 @@
+#!/usr/bin/env sh
+
+set -eu
+
+# 훅이 검사한 커밋과 push 대상이 일치하는지 비교할 저장소 루트.
+REPOSITORY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+	printf '%s\n' '[pre-push] Git 저장소 루트를 찾지 못해 push를 차단했습니다.' >&2
+	exit 1
+}
+cd "$REPOSITORY_ROOT"
+
+# 실행 환경 문제를 해결할 명령을 한 곳에서 안내한다.
+print_environment_recovery() {
+	printf '%s\n' '[pre-push] 실행 환경이 준비되지 않아 push를 차단했습니다.' >&2
+	printf '%s\n' '복구 방법:' >&2
+	printf '%s\n' '  - `pnpm install`로 의존성을 설치합니다.' >&2
+	printf '%s\n' '  - `pnpm run prepare`로 Husky 훅을 준비합니다.' >&2
+	printf '%s\n' '  - 필요하면 `pnpm exec husky init`으로 Husky 초기화 파일을 만듭니다.' >&2
+	printf '%s\n' '  - `node --version`, `pnpm --version`, `command -v node`, `command -v pnpm`으로 Node/PATH를 확인합니다.' >&2
+}
+
+# 환경 오류를 출력하고 검증 성공으로 폴백하지 않는다.
+fail_environment() {
+	printf '%s\n' "[pre-push] $1" >&2
+	print_environment_recovery
+	exit 1
+}
+
+# Git이 전달한 push 대상 자체가 유효하지 않으면 별도 오류로 중단한다.
+fail_push_target() {
+	printf '%s\n' "[pre-push] $1 push를 확인하지 못해 차단했습니다." >&2
+	exit 1
+}
+
+# Git pre-push 입력으로 전달된 모든 push 대상이 현재 HEAD인지 확인한다.
+HEAD_SHA=$(git rev-parse --verify HEAD 2>/dev/null) || {
+	fail_environment '검사할 HEAD 커밋을 찾지 못했습니다.'
+}
+PUSH_TARGET_COUNT=0
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA
+do
+	if [ -z "${LOCAL_REF:-}" ]; then
+		continue
+	fi
+	PUSH_TARGET_COUNT=$((PUSH_TARGET_COUNT + 1))
+
+	case "${LOCAL_SHA:-}" in
+		0000000000000000000000000000000000000000)
+			continue
+			;;
+	esac
+
+	# push 입력의 SHA가 가리키는 실제 커밋을 검사 대상과 비교한다.
+	TARGET_SHA=$(git rev-parse --verify "${LOCAL_SHA}^{commit}" 2>/dev/null) || {
+		fail_push_target "push 대상 커밋을 확인하지 못했습니다: ${LOCAL_REF:-알 수 없음}"
+	}
+	if [ "$TARGET_SHA" != "$HEAD_SHA" ]; then
+		printf '%s\n' '[pre-push] 검사한 HEAD와 push 대상 커밋이 다릅니다. push를 차단했습니다.' >&2
+		printf '%s\n' "  검사 대상: $HEAD_SHA" >&2
+		printf '%s\n' "  push 대상: $TARGET_SHA ($LOCAL_REF)" >&2
+		exit 1
+	fi
+done
+
+if [ "$PUSH_TARGET_COUNT" -eq 0 ]; then
+	fail_push_target 'Git pre-push 입력에서 push 대상을 읽지 못했습니다.'
+fi
+
+# 수정·스테이징·무시되지 않은 새 파일을 서로 다른 경로로 확인한다.
+UNSTAGED_FILES=$(git diff --name-only --diff-filter=ACDMRTUXB --)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACDMRTUXB --)
+UNTRACKED_FILES=$(git ls-files --others --exclude-standard)
+WORKTREE_DIRTY=0
+
+if [ -n "$UNSTAGED_FILES" ]; then
+	WORKTREE_DIRTY=1
+	printf '%s\n' '[pre-push] 수정된 추적 파일이 있어 push를 차단했습니다.' >&2
+	printf '%s\n' "$UNSTAGED_FILES" >&2
+fi
+if [ -n "$STAGED_FILES" ]; then
+	WORKTREE_DIRTY=1
+	printf '%s\n' '[pre-push] 스테이징된 파일이 있어 push를 차단했습니다.' >&2
+	printf '%s\n' "$STAGED_FILES" >&2
+fi
+if [ -n "$UNTRACKED_FILES" ]; then
+	WORKTREE_DIRTY=1
+	printf '%s\n' '[pre-push] Git이 무시하지 않는 새 파일이 있어 push를 차단했습니다.' >&2
+	printf '%s\n' "$UNTRACKED_FILES" >&2
+fi
+if [ "$WORKTREE_DIRTY" -ne 0 ]; then
+	printf '%s\n' '변경사항을 커밋하거나 정리한 뒤 다시 push하세요. 의존성·빌드 산출물·캐시는 무시 파일이면 허용됩니다.' >&2
+	exit 1
+fi
+
+# Husky가 생성한 실행 경로가 없으면 검증을 시작하지 않는다.
+HUSKY_HOOKS_PATH=$(git config --get core.hooksPath 2>/dev/null || true)
+case "$HUSKY_HOOKS_PATH" in
+	.husky/_|./.husky/_|*/.husky/_)
+		;;
+	*)
+		fail_environment 'Husky 훅이 준비되지 않았습니다.'
+		;;
+esac
+if [ ! -f "$REPOSITORY_ROOT/.husky/_/h" ]; then
+	fail_environment 'Husky 초기화 파일을 찾지 못했습니다.'
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+	fail_environment 'Node를 PATH에서 찾지 못했습니다.'
+fi
+if ! command -v pnpm >/dev/null 2>&1; then
+	fail_environment 'pnpm을 PATH에서 찾지 못했습니다.'
+fi
+
+printf '%s\n' '[pre-push] 깨끗한 작업 트리입니다. 기본 검증을 시작합니다.'
+
+# 한 단계의 종료 코드와 push 차단 메시지를 공통으로 처리한다.
+run_verification_stage() {
+	STAGE_NAME=$1
+	shift
+	if "$@"; then
+		return 0
+	else
+		STAGE_EXIT_CODE=$?
+		printf '%s\n' "[pre-push] ${STAGE_NAME}이 실패해 push를 차단했습니다 (exit $STAGE_EXIT_CODE)." >&2
+		print_environment_recovery
+		exit "$STAGE_EXIT_CODE"
+	fi
+}
+
+run_verification_stage '기본 검증' pnpm verify
+
+printf '%s\n' '[pre-push] 전면 Electron 제품 흐름을 시작합니다. 네이티브 창이 열리고 포커스가 이동할 수 있습니다.'
+run_verification_stage '전면 Electron 제품 흐름' pnpm test:product:foreground
+
+printf '%s\n' '[pre-push] 기본 검증과 전면 Electron 제품 흐름이 모두 통과했습니다.'
