@@ -61,6 +61,10 @@ export function App() {
 	});
 	/** 휴가 등록 시트가 열려 있는가. 열리면 팝오버 전체를 덮는다 — 모드 전환이다(5.2절). */
 	const [entryOpen, setEntryOpen] = useState(false);
+	/** 등록면을 닫은 뒤 다시 포커스할 요약의 휴가 등록 버튼. */
+	const entryTriggerRef = useRef<HTMLButtonElement>(null);
+	/** 등록면이 사용자 조작으로 열렸는지 기억해 닫힘 뒤 포커스를 복귀시킨다. */
+	const restoreEntryFocusRef = useRef(false);
 
 	useEffect(function reportContentHeightEffect() {
 		const root = rootRef.current;
@@ -150,6 +154,33 @@ export function App() {
 		[onboarding],
 	);
 
+	useEffect(
+		function restoreEntryTriggerFocusEffect() {
+			if (entryOpen || !restoreEntryFocusRef.current) {
+				return;
+			}
+
+			/** 등록면이 닫힌 뒤 다시 포커스할 현재 DOM 버튼. */
+			const trigger = entryTriggerRef.current;
+			if (!trigger) {
+				return;
+			}
+			restoreEntryFocusRef.current = false;
+			trigger.focus();
+		},
+		[entryOpen],
+	);
+
+	/** 요약의 휴가 등록 버튼에서 전체 등록면으로 이동한다. */
+	const handleOpenEntry = () => {
+		restoreEntryFocusRef.current = true;
+		setEntryOpen(true);
+	};
+	/** 등록면을 닫고, 닫힘 효과가 원래 트리거를 찾게 한다. */
+	const handleCloseEntry = () => {
+		setEntryOpen(false);
+	};
+
 	// 높이를 재는 뿌리 요소는 하나로 둔다 — 화면을 갈아끼울 때 이 요소까지 바뀌면
 	// 마운트 때 건 ResizeObserver가 떨어져 나간 노드를 계속 보게 된다.
 	return (
@@ -168,7 +199,7 @@ export function App() {
 				<LeaveEntrySheet
 					entries={state.entries}
 					today={state.today}
-					onClose={() => setEntryOpen(false)}
+					onClose={handleCloseEntry}
 				/>
 			) : (
 				state && (
@@ -220,10 +251,11 @@ export function App() {
 								<SummaryTab
 									balance={state.balance}
 									today={state.today}
+									entryTriggerRef={entryTriggerRef}
 									onAddAdjustment={() =>
 										setSelected({ tab: "settings", openAdjustment: true })
 									}
-									onAddEntry={() => setEntryOpen(true)}
+									onAddEntry={handleOpenEntry}
 								/>
 							)}
 						</div>

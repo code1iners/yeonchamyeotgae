@@ -1,11 +1,14 @@
 import type { Balance, GrantSource, LivingGrant } from "@yeoncha/core";
 import { livingGrants } from "@yeoncha/core";
+import type { RefObject } from "react";
 
 type Props = {
 	/** 조회일 기준 잔여와 발생분별 내역. 이 화면의 모든 숫자가 여기서 나온다. */
 	balance: Balance;
 	/** 조회일. 소멸까지 남은 날을 세는 기준이다. */
 	today: string;
+	/** 등록면이 닫힌 뒤 포커스를 돌려줄 휴가 등록 버튼. */
+	entryTriggerRef: RefObject<HTMLButtonElement | null>;
 	/** `조정을 추가` 링크 — 설정 탭으로 넘어가며 조정 폼이 열린 채로 도착한다(5.1절). */
 	onAddAdjustment: () => void;
 	/** `[휴가 등록]` — 팝오버를 덮는 등록 시트가 열린다(5.2절). */
@@ -57,6 +60,7 @@ const SOURCE_LABEL: Record<GrantSource, string> = {
 export function SummaryTab({
 	balance,
 	today,
+	entryTriggerRef,
 	onAddAdjustment,
 	onAddEntry,
 }: Props) {
@@ -133,7 +137,12 @@ export function SummaryTab({
 				)}
 			</section>
 			<div className="cta">
-				<button type="button" className="primary" onClick={onAddEntry}>
+				<button
+					ref={entryTriggerRef}
+					type="button"
+					className="primary"
+					onClick={onAddEntry}
+				>
 					휴가 등록
 				</button>
 			</div>

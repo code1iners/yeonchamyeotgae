@@ -291,6 +291,11 @@ button:focus-visible {
 	border-collapse: collapse;
 	font-size: 11.5px;
 }
+/* 조정 행이 길어져도 기본 설정과 데이터 행동을 팝오버 안에 남긴다. */
+.adjustments-scroll {
+	max-height: 240px;
+	overflow-y: auto;
+}
 .adjustments-table th,
 .adjustments-table td {
 	padding: 4px 0;
@@ -882,7 +887,7 @@ button.hist-year:hover:not(:disabled) {
 	width: 10px;
 	flex: none;
 	color: var(--fg-2);
-	font-size: 10px;
+	font-size: 11px;
 }
 
 /* 기록 행을 감싼다 — 행 오류가 해당 기록 바로 아래에 남도록 한다. */
@@ -932,6 +937,12 @@ button.hist-year:hover:not(:disabled) {
 .hist-row-container:focus-within .hist-actions {
 	opacity: 1;
 	pointer-events: auto;
+}
+@media (hover: none) {
+	.hist-row .hist-actions {
+		opacity: 1;
+		pointer-events: auto;
+	}
 }
 .hist-note {
 	flex: 1;

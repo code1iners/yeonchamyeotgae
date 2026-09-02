@@ -6,7 +6,7 @@ import type {
 	LeaveEntry,
 } from "@yeoncha/core";
 import { expiryLosses, groupHistory } from "@yeoncha/core";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarGrid } from "./CalendarGrid";
 import { UNITS, unitLabel } from "./units";
 import { useCommit } from "./use-commit";
@@ -108,6 +108,14 @@ function HistoryList({
 	const [issue, setIssue] = useState<string | null>(null);
 	/** 삭제 실패를 붙일 기록의 식별자. 오류를 리스트 위로 떼지 않고 해당 행에 둔다. */
 	const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
+	/** 인라인 수정이 열릴 때 먼저 포커스할 날짜 입력. */
+	const editDateInputRef = useRef<HTMLInputElement>(null);
+	/** 수정 폼이 닫힌 뒤 돌아갈 행별 수정 버튼. */
+	const editButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+	/** 수정 폼을 연 기록 식별자. 닫힌 뒤 같은 행의 행동으로 돌아간다. */
+	const focusReturnIdRef = useRef<string | null>(null);
+	/** 수정 폼의 열림 상태만 감지해 입력값 변경 때 포커스를 빼앗지 않는다. */
+	const draftId = draft?.id ?? null;
 	/**
 	 * 수정 저장의 커밋 통로. 삭제와 나눈 이유는 실패 문구의 자리다 — 한 통로면 다른
 	 * 행의 삭제 실패가 열려 있는 수정 폼 안에 뜬다.
@@ -117,6 +125,37 @@ function HistoryList({
 	const remove = useCommit();
 	/** 어느 쪽이든 커밋이 오가는 중인가 — 그동안 모든 손잡이를 잠근다. */
 	const saving = edit.saving || remove.saving;
+
+	useEffect(
+		function manageHistoryEditFocusEffect() {
+			// 행이 수정 폼으로 바뀌면 날짜 입력에서 바로 다음 키보드 조작을 시작한다.
+			if (draftId) {
+				editDateInputRef.current?.focus();
+				return;
+			}
+
+			/** 수정 폼을 닫은 뒤 돌아갈 기록 식별자. */
+			const targetId = focusReturnIdRef.current;
+			if (!targetId) {
+				return;
+			}
+			focusReturnIdRef.current = null;
+			editButtonRefs.current.get(targetId)?.focus();
+		},
+		[draftId],
+	);
+
+	/** 이력 행의 수정 버튼을 현재 DOM과 함께 등록한다. */
+	const registerEditButton = (
+		id: string,
+		element: HTMLButtonElement | null,
+	) => {
+		if (element) {
+			editButtonRefs.current.set(id, element);
+		} else {
+			editButtonRefs.current.delete(id);
+		}
+	};
 
 	/** 연차 연도 섹션 접기·펼치기 핸들러. */
 	const handleToggleYear = (year: number) => {
@@ -130,6 +169,7 @@ function HistoryList({
 
 	/** 수정 시작 핸들러 — 행이 그 자리에서 폼으로 바뀐다. */
 	const handleOpenEdit = (entry: LeaveEntry) => {
+		focusReturnIdRef.current = entry.id;
 		setDraft({ id: entry.id, date: entry.date, days: entry.days });
 		setIssue(null);
 		edit.clearError();
@@ -139,6 +179,9 @@ function HistoryList({
 
 	/** 수정 닫기 핸들러. */
 	const handleCloseEdit = () => {
+		if (draft) {
+			focusReturnIdRef.current = draft.id;
+		}
 		setDraft(null);
 		setIssue(null);
 		edit.clearError();
@@ -213,6 +256,7 @@ function HistoryList({
 					<div className="hist-edit" aria-busy={edit.saving}>
 						<div className="hist-edit-fields">
 							<input
+								ref={isEditing ? editDateInputRef : undefined}
 								type="date"
 								aria-label="날짜"
 								aria-invalid={issue !== null}
@@ -288,6 +332,7 @@ function HistoryList({
 								type="button"
 								className="mini"
 								disabled={saving}
+								ref={(element) => registerEditButton(entry.id, element)}
 								onClick={() => handleOpenEdit(entry)}
 							>
 								수정
@@ -317,7 +362,11 @@ function HistoryList({
 	};
 
 	return (
-		<section className="hist-scroll" aria-label="휴가 이력 목록">
+		<section
+			className="hist-scroll"
+			aria-label="휴가 이력 목록"
+			aria-busy={saving}
+		>
 			{groups.planned.length === 0 && groups.years.length === 0 && (
 				<div className="row dim">휴가 기록이 없습니다.</div>
 			)}
@@ -386,6 +435,10 @@ function HistoryCalendar({
 	const [selected, setSelected] = useState<string | null>(null);
 	/** 셸에 변경을 커밋하는 통로. */
 	const { commit, saving, error, clearError } = useCommit();
+	/** 기록 삭제 뒤 상세 영역으로 포커스를 옮길 대상. */
+	const detailsRef = useRef<HTMLElement>(null);
+	/** 삭제 성공 뒤 상세 영역에 포커스를 요청했는가. */
+	const restoreDetailsFocusRef = useRef(false);
 
 	/** 날짜 → 그날의 휴가 기록. 하루 1건이라 값이 하나다. */
 	const entryByDate = new Map(entries.map((entry) => [entry.date, entry]));
@@ -405,6 +458,18 @@ function HistoryCalendar({
 		? plannedDates.has(selectedEntry.date)
 		: false;
 
+	useEffect(
+		function restoreCalendarDetailsFocusEffect() {
+			// 삭제가 실패했거나 아직 이전 기록이 남아 있으면 포커스를 빼앗지 않는다.
+			if (!restoreDetailsFocusRef.current || saving || selectedEntry) {
+				return;
+			}
+			restoreDetailsFocusRef.current = false;
+			detailsRef.current?.focus();
+		},
+		[saving, selectedEntry],
+	);
+
 	/** 단위 변경 핸들러 — 누르는 즉시 커밋한다. 폼이 아니라 그날 기록의 손잡이다. */
 	const handleChangeDays = async (entry: LeaveEntry, days: number) => {
 		clearError();
@@ -418,7 +483,13 @@ function HistoryCalendar({
 	/** 삭제 핸들러. */
 	const handleDelete = async (entry: LeaveEntry) => {
 		clearError();
-		await commit({ entries: entries.filter((item) => item.id !== entry.id) });
+		restoreDetailsFocusRef.current = true;
+		const committed = await commit({
+			entries: entries.filter((item) => item.id !== entry.id),
+		});
+		if (!committed) {
+			restoreDetailsFocusRef.current = false;
+		}
 	};
 
 	/** 날짜 선택 핸들러 — 이전 날짜의 저장 실패 문구를 새 날짜로 가져가지 않는다. */
@@ -472,9 +543,12 @@ function HistoryCalendar({
 			</div>
 			{selected && (
 				<section
+					ref={detailsRef}
 					className="hist-day"
 					aria-label="선택한 날짜 상세"
 					aria-live="polite"
+					aria-busy={saving}
+					tabIndex={-1}
 				>
 					<div className="hist-day-head">
 						<h3 className="sec-title num">{selected}</h3>

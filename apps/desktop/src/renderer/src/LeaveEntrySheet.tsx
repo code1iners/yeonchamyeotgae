@@ -7,6 +7,7 @@ import {
 	useState,
 } from "react";
 import { expandEntryDates } from "./entry-dates";
+import { trapFocus } from "./focus-scope";
 import { UNITS, unitLabel } from "./units";
 import { useCommit } from "./use-commit";
 
@@ -99,6 +100,7 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 			event.preventDefault();
 			onClose();
 		}
+		trapFocus(event);
 	};
 
 	/** 등록 범위를 바꾸는 핸들러. 입력한 날짜와 메모는 그대로 둔다. */
@@ -143,11 +145,11 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 
 	return (
 		<div
-			className="pane sheet"
+			className="pane"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="entry-sheet-title"
-			aria-busy={saving}
+			aria-busy={busy}
 			onKeyDown={handleKeyDown}
 		>
 			<div className="sheet-head">

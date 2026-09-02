@@ -1229,10 +1229,16 @@ describe.sequential("Electron 제품 흐름", () => {
 		await editButton.focus();
 		await expectVisible(plannedRow.getByRole("button", { name: "삭제" }));
 		await editButton.press("Enter");
-		await expectVisible(plannedRow.getByLabel("날짜"));
+		/** 인라인 수정이 열리면 날짜 입력부터 이어서 조작한다. */
+		const plannedDateInput = flow.page.getByLabel("날짜");
+		await expectVisible(plannedDateInput);
+		await expectKeyboardFocus(plannedDateInput);
 		await flow.page.getByLabel("날짜").fill("2025-12-16");
 		await plannedRow.getByRole("button", { name: "반차", exact: true }).click();
-		await plannedRow.getByRole("button", { name: "저장" }).click();
+		/** 키보드로 인라인 수정을 저장해 닫힌 뒤 포커스 표시까지 확인한다. */
+		const plannedSaveButton = plannedRow.getByRole("button", { name: "저장" });
+		await plannedSaveButton.focus();
+		await plannedSaveButton.press("Enter");
 
 		await expectVisible(flow.page.getByText("13.5일", { exact: true }));
 		await expectVisible(
@@ -1257,6 +1263,9 @@ describe.sequential("Electron 제품 흐름", () => {
 		const updatedPlannedRow = flow.page.getByRole("article", {
 			name: /2025-12-16 예정 휴가 기록/,
 		});
+		await expectKeyboardFocus(
+			updatedPlannedRow.getByRole("button", { name: "수정" }),
+		);
 		await updatedPlannedRow.hover();
 		await updatedPlannedRow.getByRole("button", { name: "삭제" }).click();
 		await expectVisible(flow.page.getByText("14일", { exact: true }));
@@ -1283,6 +1292,13 @@ describe.sequential("Electron 제품 흐름", () => {
 			name: /2025-11-28 사용 휴가 기록/,
 		});
 		await usedRow.hover();
+		await usedRow.getByRole("button", { name: "수정" }).click();
+		await expectKeyboardFocus(usedRow.getByLabel("날짜"));
+		/** 키보드로 수정 취소를 실행해 같은 행의 수정 버튼으로 돌아간다. */
+		const usedCancelButton = usedRow.getByRole("button", { name: "취소" });
+		await usedCancelButton.focus();
+		await usedCancelButton.press("Enter");
+		await expectKeyboardFocus(usedRow.getByRole("button", { name: "수정" }));
 		await usedRow.getByRole("button", { name: "수정" }).click();
 		await usedRow.getByLabel("날짜").fill("2024-12-20");
 		await usedRow.getByRole("button", { name: "저장" }).click();
@@ -1374,6 +1390,29 @@ describe.sequential("Electron 제품 흐름", () => {
 		});
 		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
 		await expectVisible(flow.page.getByRole("tab", { name: "이력" }));
+	});
+
+	test("긴 조정 원장에서도 설정 머리와 데이터 행동을 유지하고 목록만 스크롤한다", async () => {
+		flow = await launchProductFlow(LONG_SUMMARY_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 긴 조정 행만 스크롤할 접근성 영역. */
+		const adjustmentList = flow.page.getByRole("region", {
+			name: "조정 목록",
+		});
+		await expectVisible(adjustmentList);
+		/** 조정 목록과 팝오버 바깥의 스크롤 여부. */
+		const scrollState = await adjustmentList.evaluate((element) => ({
+			regionScrollable: element.scrollHeight > element.clientHeight,
+			pageScrollable:
+				document.documentElement.scrollHeight > window.innerHeight,
+		}));
+		expect(scrollState).toEqual({
+			regionScrollable: true,
+			pageScrollable: false,
+		});
+		await expectVisible(flow.page.getByRole("heading", { name: "기본 설정" }));
+		await expectVisible(flow.page.getByRole("region", { name: "데이터" }));
 	});
 
 	test("이력 달력에서 상태·소멸·선택 기록을 확인하고 키보드로 변경·삭제한다", async () => {
@@ -1474,6 +1513,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(
 			selectedDetails.getByText("이 날에는 기록이 없습니다.", { exact: true }),
 		);
+		await expectKeyboardFocus(selectedDetails);
 		await expectVisible(flow.page.getByText("10일", { exact: true }));
 		expect(
 			await calendar.getByRole("button", { name: /2025-12-15.*예정/ }).count(),
@@ -1751,9 +1791,20 @@ describe.sequential("Electron 제품 흐름", () => {
 				.getByLabel("날짜")
 				.evaluate((element) => element === document.activeElement),
 		).toBe(true);
+		/** 마지막 조작에서 첫 조작으로 순환해야 하는 등록면의 닫기 버튼. */
+		const closeButton = sheet.getByRole("button", { name: "닫기" });
+		/** 등록면 마지막에 놓인 취소 버튼. */
+		const cancelButton = sheet.getByRole("button", {
+			name: "취소",
+			exact: true,
+		});
+		await cancelButton.focus();
+		await cancelButton.press("Tab");
+		await expectKeyboardFocus(closeButton);
 
 		await flow.page.keyboard.press("Escape");
 		await sheet.waitFor({ state: "detached" });
+		await expectKeyboardFocus(trigger);
 
 		await trigger.focus();
 		await trigger.press("Enter");
@@ -1817,7 +1868,11 @@ describe.sequential("Electron 제품 흐름", () => {
 		);
 		await expectVisible(flow.page.getByText("19일", { exact: true }));
 
-		await flow.page.getByRole("button", { name: "조정 추가" }).click();
+		/** 닫힌 조정 폼으로 들어가는 트리거. */
+		const addAdjustmentButton = flow.page.getByRole("button", {
+			name: "조정 추가",
+		});
+		await addAdjustmentButton.click();
 		/** 양수·음수 조정을 입력하는 추가 폼. */
 		const addForm = flow.page.getByRole("form", { name: "조정 추가" });
 		/** 추가할 일수 입력. */
@@ -1828,6 +1883,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		const expiryDate = addForm.getByLabel("소멸일");
 		/** 추가 조정의 메모 입력. */
 		const note = addForm.getByLabel("메모");
+		await expectKeyboardFocus(days);
 		expect(await grantDate.inputValue()).toBe(TEST_TODAY);
 		expect(await expiryDate.inputValue()).toBe("2026-12-31");
 
@@ -1842,8 +1898,15 @@ describe.sequential("Electron 제품 흐름", () => {
 
 		await days.fill("2.5");
 		await note.fill("  화면에서 추가한 양수  ");
-		await addForm.getByRole("button", { name: "추가", exact: true }).click();
+		/** 키보드로 추가를 완료해 원래 조정 추가 버튼으로 포커스를 돌린다. */
+		const addSubmitButton = addForm.getByRole("button", {
+			name: "추가",
+			exact: true,
+		});
+		await addSubmitButton.focus();
+		await addSubmitButton.press("Enter");
 		await addForm.waitFor({ state: "detached" });
+		await expectKeyboardFocus(addAdjustmentButton);
 		await expectVisible(flow.page.getByText("21.5일", { exact: true }));
 
 		/** 화면에서 새로 추가한 양수 조정 행. */
@@ -1892,10 +1955,24 @@ describe.sequential("Electron 제품 흐름", () => {
 		await positiveRow.getByRole("button", { name: "수정" }).click();
 		/** 같은 원장 맥락에서 양수를 음수로 바꾸는 수정 폼. */
 		const editForm = flow.page.getByRole("form", { name: "조정 수정" });
+		await expectKeyboardFocus(editForm.getByLabel("일수"));
 		await editForm.getByLabel("일수").fill("-1.25");
 		await editForm.getByLabel("메모").fill("  화면에서 수정한 음수  ");
-		await editForm.getByRole("button", { name: "저장", exact: true }).click();
+		/** 키보드로 수정 저장을 완료해 같은 행의 수정 버튼으로 돌아간다. */
+		const adjustmentSaveButton = editForm.getByRole("button", {
+			name: "저장",
+			exact: true,
+		});
+		await adjustmentSaveButton.focus();
+		await adjustmentSaveButton.press("Enter");
 		await editForm.waitFor({ state: "detached" });
+		/** 수정 후에도 같은 조정 레코드의 수정 버튼으로 돌아오는지 확인할 행. */
+		const updatedAdjustmentRow = adjustmentTable
+			.getByRole("row")
+			.filter({ hasText: "화면에서 수정한 음수" });
+		await expectKeyboardFocus(
+			updatedAdjustmentRow.getByRole("button", { name: "수정" }),
+		);
 		await expectVisible(flow.page.getByText("17.75일", { exact: true }));
 		await flow.page.getByRole("tab", { name: "요약" }).click();
 		/** 수정 후에도 계산된 연차와 두 조정 발생분이 함께 남는 근거. */
@@ -1934,7 +2011,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(
 			await remainingGrants.getByText("조정", { exact: true }).count(),
 		).toBe(1);
-	});
+	}, 60_000);
 
 	test("조정 저장 실패 시 입력값과 열린 맥락을 유지하고 다시 시도할 수 있다", async () => {
 		flow = await launchProductFlow(ADJUSTMENTS_DATA);

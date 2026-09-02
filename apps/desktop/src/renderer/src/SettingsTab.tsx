@@ -393,7 +393,7 @@ export function SettingsTab({
 					today={today}
 				/>
 			)}
-			{settings !== null && <DataSection hasSavedFile />}
+			{settings !== null && <DataSection />}
 		</div>
 	);
 }

@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TransferResult } from "../../shared/ipc";
 
-type Props = {
-	/** 저장 파일이 이미 있는가. 온보딩에서는 설정 탭이 이 영역 자체를 그리지 않는다. */
-	hasSavedFile: boolean;
-};
-
 /** 데이터 영역 제목 식별자. 버튼과 상태를 하나의 설정 맥락으로 묶는다. */
 const DATA_TITLE_ID = "settings-data-title";
 /** 데이터 영역 설명 식별자. 세 가지 행동의 대상 파일을 알려준다. */
@@ -44,10 +39,10 @@ const OPERATION_MESSAGES: Record<DataOperation, string> = {
  * **내보내기 파일 = 저장 파일이다**(2절). 그래서 이 셋은 한 파일을 두고 하는 일이며,
  * 내보낸 것을 그대로 다시 가져올 수 있다.
  *
- * 저장 파일이 없는 호출에서는 가져오기 하나만 남기는 호환 경로를 유지한다. 다만 현재
- * 온보딩에서는 `SettingsTab`이 계산할 수 없는 데이터 영역 자체를 숨긴다.
+ * 설정이 저장된 화면에서만 이 영역이 마운트되므로, 별도의 저장 파일 유무 호환 분기는
+ * 두지 않는다. 온보딩은 `SettingsTab`이 계산할 수 없는 데이터 영역 자체를 숨긴다.
  */
-export function DataSection({ hasSavedFile }: Props) {
+export function DataSection() {
 	/** 가져오기 확인을 띄우고 있는가. 전체 교체이므로 한 단계를 더 둔다. */
 	const [confirming, setConfirming] = useState(false);
 	/** 현재 실행 중인 데이터 조작. 진행 문구와 모든 버튼 잠금에 함께 쓴다. */
@@ -271,9 +266,7 @@ export function DataSection({ hasSavedFile }: Props) {
 				데이터
 			</h2>
 			<p id={DATA_DESCRIPTION_ID} className="data-description">
-				{hasSavedFile
-					? "저장 파일을 열어보거나 내보내고, 다른 저장 파일을 가져올 수 있습니다."
-					: "다른 기기에서 내보낸 저장 파일을 가져올 수 있습니다."}
+				저장 파일을 열어보거나 내보내고, 다른 저장 파일을 가져올 수 있습니다.
 			</p>
 			{feedbackView}
 			{confirming ? (
@@ -316,33 +309,31 @@ export function DataSection({ hasSavedFile }: Props) {
 				</section>
 			) : (
 				<div className="data-actions">
-					{hasSavedFile && (
-						<div className="data-action-group">
-							<h3 className="data-action-title">저장 파일</h3>
-							<div className="cta">
-								<button
-									ref={revealButtonRef}
-									type="button"
-									disabled={operation !== null}
-									aria-describedby={DATA_DESCRIPTION_ID}
-									onClick={handleReveal}
-								>
-									{operation === "reveal"
-										? "파일 위치를 여는 중…"
-										: "파일 위치 열기"}
-								</button>
-								<button
-									ref={exportButtonRef}
-									type="button"
-									disabled={operation !== null}
-									aria-describedby={DATA_DESCRIPTION_ID}
-									onClick={handleExport}
-								>
-									{operation === "export" ? "내보내는 중…" : "내보내기"}
-								</button>
-							</div>
+					<div className="data-action-group">
+						<h3 className="data-action-title">저장 파일</h3>
+						<div className="cta">
+							<button
+								ref={revealButtonRef}
+								type="button"
+								disabled={operation !== null}
+								aria-describedby={DATA_DESCRIPTION_ID}
+								onClick={handleReveal}
+							>
+								{operation === "reveal"
+									? "파일 위치를 여는 중…"
+									: "파일 위치 열기"}
+							</button>
+							<button
+								ref={exportButtonRef}
+								type="button"
+								disabled={operation !== null}
+								aria-describedby={DATA_DESCRIPTION_ID}
+								onClick={handleExport}
+							>
+								{operation === "export" ? "내보내는 중…" : "내보내기"}
+							</button>
 						</div>
-					)}
+					</div>
 					<div className="data-action-group">
 						<h3 className="data-action-title">가져올 저장 파일</h3>
 						<div className="cta">
@@ -353,11 +344,7 @@ export function DataSection({ hasSavedFile }: Props) {
 								aria-describedby={DATA_DESCRIPTION_ID}
 								onClick={handleOpenConfirm}
 							>
-								{operation === "import"
-									? "가져오는 중…"
-									: hasSavedFile
-										? "가져오기"
-										: "데이터 가져오기"}
+								{operation === "import" ? "가져오는 중…" : "가져오기"}
 							</button>
 						</div>
 					</div>

@@ -5,7 +5,7 @@ import type {
 	GrantDetail,
 } from "@yeoncha/core";
 import { latestLivingExpiry, validateAdjustmentDraft } from "@yeoncha/core";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useCommit } from "./use-commit";
 
 type Props = {
@@ -34,6 +34,19 @@ const ADJUSTMENT_FORM_TITLE_ID = "adjustment-form-title";
 /** 저장 실패 문구 식별자. 폼의 재시도 맥락과 연결한다. */
 const ADJUSTMENT_SAVE_ERROR_ID = "adjustment-save-error";
 
+/** 조정 폼을 닫은 뒤 포커스를 돌려줄 논리적 대상. */
+type AdjustmentFocusTarget =
+	| {
+			/** 새 조정 폼을 연 추가 버튼을 가리킨다. */
+			kind: "add";
+	  }
+	| {
+			/** 수정 폼을 연 조정 레코드 식별자. */
+			kind: "edit";
+			/** 다시 포커스할 조정 레코드 식별자. */
+			id: string;
+	  };
+
 /**
  * 설정 탭의 조정 섹션 — 이월·사규 추가분·포상 휴가가 전부 여기로 들어온다(스펙 5.4절).
  *
@@ -57,8 +70,64 @@ export function AdjustmentsSection({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	/** 마지막 검증에서 걸린 것들. */
 	const [issues, setIssues] = useState<AdjustmentIssue[]>([]);
+	/** 폼이 열릴 때 가장 먼저 포커스할 일수 입력. */
+	const firstInputRef = useRef<HTMLInputElement>(null);
+	/** 닫힌 폼으로 돌아올 추가 버튼. */
+	const addButtonRef = useRef<HTMLButtonElement>(null);
+	/** 수정 폼이 닫힌 뒤 돌아갈 행별 수정 버튼. */
+	const editButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+	/** 폼을 닫은 뒤 복귀할 논리적 대상. */
+	const focusReturnRef = useRef<AdjustmentFocusTarget | null>(null);
+	/** 삭제처럼 폼 열림 상태가 바뀌지 않는 조작 뒤에도 포커스를 복귀시킬 대상. */
+	const [focusRestoreTarget, setFocusRestoreTarget] =
+		useState<AdjustmentFocusTarget | null>(null);
 	/** 셸에 변경을 커밋하는 통로 — 진행 중 잠금과 실패 문구가 함께 온다. */
 	const { commit, saving, error, clearError } = useCommit();
+
+	useEffect(
+		function manageAdjustmentFocusEffect() {
+			// 폼이 열리면 추가·수정 모두 일수 입력에서 키보드 흐름을 시작한다.
+			if (open) {
+				firstInputRef.current?.focus();
+				return;
+			}
+
+			/** 폼이 닫힌 뒤 다시 포커스할 논리적 대상. */
+			const target = focusReturnRef.current ?? focusRestoreTarget;
+			if (!target) {
+				return;
+			}
+			focusReturnRef.current = null;
+			if (focusRestoreTarget) {
+				setFocusRestoreTarget(null);
+			}
+			if (target.kind === "add") {
+				addButtonRef.current?.focus();
+				return;
+			}
+			// 수정한 행이 삭제되었으면 목록에 남은 추가 버튼으로 흐름을 잇는다.
+			(editButtonRefs.current.get(target.id) ?? addButtonRef.current)?.focus();
+		},
+		[focusRestoreTarget, open],
+	);
+
+	/** 행의 수정 버튼을 현재 DOM과 함께 등록한다. */
+	const registerEditButton = (
+		id: string,
+		element: HTMLButtonElement | null,
+	) => {
+		if (element) {
+			editButtonRefs.current.set(id, element);
+		} else {
+			editButtonRefs.current.delete(id);
+		}
+	};
+
+	/** 포커스 복귀 요청을 등록하고, 폼이 열려 있지 않아도 효과를 다시 실행한다. */
+	const requestFocusRestore = (target: AdjustmentFocusTarget) => {
+		focusReturnRef.current = target;
+		setFocusRestoreTarget(target);
+	};
 	/** 저장 중 삭제·추가·수정의 공통 진행 상태. 폼이 닫혀 있어도 보인다. */
 	const savingStatus = saving ? (
 		<p className="adjustments-status" role="status" aria-live="polite">
@@ -83,6 +152,7 @@ export function AdjustmentsSection({
 			return;
 		}
 		clearError();
+		focusReturnRef.current = { kind: "add" };
 		setDraft(addDraft({ grants, today }));
 		setEditingId(null);
 		setIssues([]);
@@ -95,6 +165,7 @@ export function AdjustmentsSection({
 			return;
 		}
 		clearError();
+		focusReturnRef.current = { kind: "edit", id: adjustment.id };
 		setDraft({
 			days: String(adjustment.days),
 			grantDate: adjustment.grantDate,
@@ -108,6 +179,11 @@ export function AdjustmentsSection({
 
 	/** 폼 닫기 핸들러. 남은 실패 문구까지 지운다 — 다음에 연 폼에 붙으면 거짓말이 된다. */
 	const handleClose = () => {
+		if (!focusReturnRef.current) {
+			focusReturnRef.current = editingId
+				? { kind: "edit", id: editingId }
+				: { kind: "add" };
+		}
 		setOpen(false);
 		setDraft(EMPTY_DRAFT);
 		setEditingId(null);
@@ -158,6 +234,8 @@ export function AdjustmentsSection({
 		// 지우는 레코드를 고치고 있었나요? 성공한 뒤에만 폼을 닫아 실패 시 맥락을 지킨다.
 		if (didCommit && editingId === id) {
 			handleClose();
+		} else if (didCommit) {
+			requestFocusRestore({ kind: "add" });
 		}
 	};
 
@@ -177,65 +255,70 @@ export function AdjustmentsSection({
 			{savingStatus}
 			{/* 넣은 순서 그대로 보여준다. 배정 순서(소멸일 ↑ → 발생일 ↑ → source → 입력
 			    순서, 3.4절)와는 다르다 — 그쪽은 요약 탭의 발생분 리스트가 보여준다. */}
-			<table className="adjustments-table" aria-label="조정 목록">
-				<caption className="sr-only">조정 목록</caption>
-				<thead>
-					<tr>
-						<th scope="col">일수</th>
-						<th scope="col">발생일</th>
-						<th scope="col">소멸일</th>
-						<th scope="col">메모</th>
-						<th scope="col">행동</th>
-					</tr>
-				</thead>
-				<tbody>
-					{adjustments.map((adjustment) => (
-						<tr className="adj-row" key={adjustment.id}>
-							<td className="adj-days num">{formatDays(adjustment.days)}</td>
-							<td className="adj-grant num">
-								<time dateTime={adjustment.grantDate}>
-									{adjustment.grantDate}
-								</time>
-							</td>
-							<td className="adj-expiry num">
-								<time dateTime={adjustment.expiryDate}>
-									{adjustment.expiryDate}
-								</time>
-							</td>
-							<td className="adj-note">
-								{adjustment.note || <span className="dim">메모 없음</span>}
-							</td>
-							<td className="adj-action-cell">
-								<div className="adj-actions">
-									<button
-										type="button"
-										className="mini"
-										disabled={saving}
-										onClick={() => handleOpenEdit(adjustment)}
-									>
-										수정
-									</button>
-									<button
-										type="button"
-										className="mini"
-										disabled={saving}
-										onClick={() => handleDelete(adjustment.id)}
-									>
-										삭제
-									</button>
-								</div>
-							</td>
-						</tr>
-					))}
-					{adjustments.length === 0 && (
+			<section className="adjustments-scroll" aria-label="조정 목록">
+				<table className="adjustments-table" aria-label="조정 목록">
+					<caption className="sr-only">조정 목록</caption>
+					<thead>
 						<tr>
-							<td className="adjustments-empty dim" colSpan={5}>
-								넣은 조정이 없습니다.
-							</td>
+							<th scope="col">일수</th>
+							<th scope="col">발생일</th>
+							<th scope="col">소멸일</th>
+							<th scope="col">메모</th>
+							<th scope="col">행동</th>
 						</tr>
-					)}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{adjustments.map((adjustment) => (
+							<tr className="adj-row" key={adjustment.id}>
+								<td className="adj-days num">{formatDays(adjustment.days)}</td>
+								<td className="adj-grant num">
+									<time dateTime={adjustment.grantDate}>
+										{adjustment.grantDate}
+									</time>
+								</td>
+								<td className="adj-expiry num">
+									<time dateTime={adjustment.expiryDate}>
+										{adjustment.expiryDate}
+									</time>
+								</td>
+								<td className="adj-note" title={adjustment.note || undefined}>
+									{adjustment.note || <span className="dim">메모 없음</span>}
+								</td>
+								<td className="adj-action-cell">
+									<div className="adj-actions">
+										<button
+											type="button"
+											className="mini"
+											disabled={saving}
+											ref={(element) =>
+												registerEditButton(adjustment.id, element)
+											}
+											onClick={() => handleOpenEdit(adjustment)}
+										>
+											수정
+										</button>
+										<button
+											type="button"
+											className="mini"
+											disabled={saving}
+											onClick={() => handleDelete(adjustment.id)}
+										>
+											삭제
+										</button>
+									</div>
+								</td>
+							</tr>
+						))}
+						{adjustments.length === 0 && (
+							<tr>
+								<td className="adjustments-empty dim" colSpan={5}>
+									넣은 조정이 없습니다.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</section>
 			{open ? (
 				<form
 					className="adj-form"
@@ -252,6 +335,7 @@ export function AdjustmentsSection({
 					<label className="field">
 						<span>일수</span>
 						<input
+							ref={firstInputRef}
 							type="number"
 							step="0.25"
 							inputMode="decimal"
@@ -325,7 +409,12 @@ export function AdjustmentsSection({
 				<>
 					{saveError}
 					<div className="cta">
-						<button type="button" disabled={saving} onClick={handleOpenAdd}>
+						<button
+							ref={addButtonRef}
+							type="button"
+							disabled={saving}
+							onClick={handleOpenAdd}
+						>
 							조정 추가
 						</button>
 					</div>
