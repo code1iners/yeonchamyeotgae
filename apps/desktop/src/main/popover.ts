@@ -2,6 +2,11 @@ import path from "node:path";
 import type { Display, Rectangle } from "electron";
 import { BrowserWindow, ipcMain, screen } from "electron";
 import { type AppState, IPC } from "../shared/ipc";
+import {
+	focusPopoverIfAllowed,
+	type PopoverDisplayMode,
+	showPopoverWindow,
+} from "./popover-display";
 
 /** 팝오버 고정 폭(5.6절) — 달력 한 주가 7칸 × 48px로 들어가는 최소 폭. */
 const POPOVER_WIDTH = 380;
@@ -121,7 +126,7 @@ export function showPopover(anchor?: Rectangle): void {
 		anchorBounds = anchor;
 	}
 	positionPopover(popover);
-	popover.show();
+	showPopoverWindow(popover, popoverDisplayMode(), process.platform);
 }
 
 /**
@@ -146,9 +151,17 @@ export async function withPopoverHeld<T>(
 		await externalBlur;
 		openDialogs -= 1;
 		if (openDialogs === 0 && popover?.isVisible()) {
-			popover.focus();
+			focusPopoverIfAllowed(popover, popoverDisplayMode());
 		}
 	}
+}
+
+/** 테스트 전용 입력에 따라 팝오버의 네이티브 표시 모드를 고른다. */
+function popoverDisplayMode(): PopoverDisplayMode {
+	return process.env.NODE_ENV === "test" &&
+		process.env.YEONCHA_PRODUCT_FLOW_MODE === "inactive"
+		? "inactive"
+		: "foreground";
 }
 
 /** 파일 관리자 호출 직후 또는 짧은 유예 시간 뒤에 팝오버 잠금을 해제한다. */

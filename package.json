@@ -8,10 +8,13 @@
 	},
 	"scripts": {
 		"verify": "turbo run lint typecheck test",
+		"verify:product": "pnpm verify && pnpm test:product",
 		"build": "turbo run build",
 		"dev": "pnpm --filter @yeoncha/desktop dev",
 		"format": "biome check --write .",
 		"lint": "turbo run lint",
+		"test:product": "pnpm --filter @yeoncha/desktop test:product",
+		"test:product:foreground": "pnpm --filter @yeoncha/desktop test:product:foreground",
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test"
 	},

@@ -29,11 +29,19 @@ const ELECTRON_EXECUTABLE = electronExecutable;
 const TEST_TODAY = "2025-12-01";
 /** 테스트 시드와 같은 조회일의 불변 날짜 객체. */
 const TEST_TODAY_DATE = Temporal.PlainDate.from(TEST_TODAY);
+/** 제품 흐름이 창을 비활성 또는 전면으로 표시할 실행 모드. */
+type ProductFlowMode = "inactive" | "foreground";
+/** 명시적인 제품 실행 명령이 없으면 기존 전면 동작을 유지한다. */
+const PRODUCT_FLOW_MODE: ProductFlowMode =
+	process.env.YEONCHA_PRODUCT_FLOW_MODE === "inactive"
+		? "inactive"
+		: "foreground";
 /** 시드와 같은 조회일을 실제 Electron의 메인 프로세스에 주입하는 환경. */
 const TEST_ENV = {
 	...process.env,
 	NODE_ENV: "test",
 	YEONCHA_TEST_TODAY: TEST_TODAY,
+	YEONCHA_PRODUCT_FLOW_MODE: PRODUCT_FLOW_MODE,
 };
 /** 긴 발생분 시드가 공유하는 고정 기준 날짜. Temporal 날짜는 불변이라 재사용한다. */
 const SUMMARY_GRANT_BASE_DATE = Temporal.PlainDate.from("2000-01-01");
@@ -749,6 +757,7 @@ describe.sequential("Electron 제품 흐름", () => {
 				.filter({ hasText: "내보내기를 완료했습니다" }),
 		);
 		await expectVisible(dataSection.getByText(exportPath, { exact: true }));
+		await expectInactivePopoverUnfocused(flow.app);
 		expect(await readFile(exportPath, "utf8")).toBe(originalRaw);
 		expect(await hireDate.inputValue()).toBe("2020-01-01");
 		expect(await grantBasis.inputValue()).toBe("hireDate");
@@ -765,6 +774,7 @@ describe.sequential("Electron 제품 흐름", () => {
 				.getByRole("status")
 				.filter({ hasText: "내보내기를 취소했습니다" }),
 		);
+		await expectInactivePopoverUnfocused(flow.app);
 		expect(
 			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
 		).toBe(originalRaw);
@@ -793,6 +803,7 @@ describe.sequential("Electron 제품 흐름", () => {
 				.getByRole("alert")
 				.filter({ hasText: "다른 위치를 선택해 다시 시도하세요." }),
 		);
+		await expectInactivePopoverUnfocused(flow.app);
 		expect(await hireDate.inputValue()).toBe("2020-01-01");
 		expect(await grantBasis.inputValue()).toBe("hireDate");
 		expect(
@@ -820,6 +831,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		);
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		expect(await isPopoverVisible(flow.app)).toBe(true);
+		await expectInactivePopoverUnfocused(flow.app);
 		expect(await readRevealedPath(flow.app)).toBe(dataPath);
 		expect(
 			await dataSection
@@ -887,6 +899,7 @@ describe.sequential("Electron 제품 흐름", () => {
 			.getByRole("button", { name: "파일 고르고 대체" })
 			.click();
 		await expectVisible(importButton);
+		await expectInactivePopoverUnfocused(flow.app);
 		expect(
 			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
 		).toBe(originalRaw);
@@ -914,6 +927,7 @@ describe.sequential("Electron 제품 흐름", () => {
 			dataSection.getByRole("status").filter({ hasText: importPath }),
 		);
 		await expectVisible(importButton);
+		await expectInactivePopoverUnfocused(flow.app);
 		expect(await hireDate.inputValue()).toBe("2022-05-05");
 		expect(await grantBasis.inputValue()).toBe("fiscalYear");
 		expect(JSON.parse(await readFile(importPath, "utf8"))).toEqual(
@@ -2060,6 +2074,7 @@ async function launchProductFlow(
 		await page.locator("body").waitFor({ state: "visible" });
 		await requestPopoverOpen(userDataDirectory);
 		await waitForPopoverVisible(app);
+		await expectInactivePopoverUnfocused(app);
 
 		return { app, page, userDataDirectory };
 	} catch (error) {
@@ -2176,6 +2191,25 @@ async function isPopoverVisible(app: ElectronApplication): Promise<boolean> {
 		const popover = BrowserWindow.getAllWindows()[0];
 		return popover?.isVisible() ?? false;
 	});
+}
+
+/** 제품 셸 팝오버의 네이티브 포커스 상태를 읽는다. */
+async function isPopoverFocused(app: ElectronApplication): Promise<boolean> {
+	return app.evaluate(({ BrowserWindow }) => {
+		/** 제품 셸이 만든 유일한 창. */
+		const popover = BrowserWindow.getAllWindows()[0];
+		return popover?.isFocused() ?? false;
+	});
+}
+
+/** 비활성 제품 흐름에서 네이티브 대화상자 종료 뒤 포커스가 복귀하지 않았는지 확인한다. */
+async function expectInactivePopoverUnfocused(
+	app: ElectronApplication,
+): Promise<void> {
+	if (PRODUCT_FLOW_MODE !== "inactive") {
+		return;
+	}
+	expect(await isPopoverFocused(app)).toBe(false);
 }
 
 /** 제품 경로가 연 팝오버가 운영체제에 표시될 때까지 기다린다. */

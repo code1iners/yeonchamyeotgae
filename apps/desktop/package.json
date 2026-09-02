@@ -10,7 +10,8 @@
 		"lint": "biome check .",
 		"package": "pnpm build && electron-builder --publish never",
 		"test": "vitest run --config vitest.unit.config.ts",
-		"test:product": "pnpm build && vitest run --config vitest.product.config.ts",
+		"test:product": "node scripts/run-product-flow.mjs inactive",
+		"test:product:foreground": "node scripts/run-product-flow.mjs foreground",
 		"typecheck": "tsc -p tsconfig.json"
 	},
 	"devDependencies": {
