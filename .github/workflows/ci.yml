@@ -28,7 +28,7 @@ jobs:
       - uses: pnpm/setup@v2
         with: { runtime: node@24, cache: true, install: false }
       - run: pnpm install --frozen-lockfile
-      # turbo 캐시(actions/cache의 .turbo, 원격 캐시)는 붙이지 않는다 — 매번 새 러너라
-      # 저장·복원 비용이 pnpm verify 콜드(1.19초)보다 비싸다(스펙 8.2절).
-      - run: pnpm verify
+      # turbo 캐시(actions/cache의 .turbo, 원격 캐시)는 붙이지 않는다 — 매번 새 러너에서
+      # 검증과 캐시의 비용·결과를 분리해 결정론적인 제품 검증 로그를 남긴다(스펙 8.2절).
+      - run: pnpm verify:product
       - run: pnpm build

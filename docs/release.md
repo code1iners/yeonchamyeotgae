@@ -7,14 +7,16 @@
 버전의 유일한 출처는 `apps/desktop/package.json`의 `version`입니다.
 
 ```bash
-pnpm verify
+pnpm verify:product
 pnpm build
 ```
+
+실행 정책은 [데스크톱 테스트 실행선 스펙](../.scratch/desktop-test-execution/spec.md)을 참조합니다.
 
 ## 릴리스 절차
 
 1. `apps/desktop/package.json`의 `version`을 올립니다.
-2. 검증과 빌드가 통과했는지 확인합니다.
+2. `pnpm verify:product`와 빌드가 통과했는지 확인합니다.
 3. 변경사항을 커밋하고 `main`에 푸시합니다.
 4. 버전과 같은 태그를 만들고 푸시합니다.
 

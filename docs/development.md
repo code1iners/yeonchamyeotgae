@@ -16,13 +16,20 @@ pnpm dev
 
 `pnpm dev`는 데스크톱 앱을 개발 모드로 실행합니다.
 
-## 검증
+## 검증 실행선
+
+실행 정책의 권위 문서는 [데스크톱 테스트 실행선 스펙](../.scratch/desktop-test-execution/spec.md)입니다.
+로컬에서 선택할 명령은 다음 네 가지입니다.
 
 ```bash
 pnpm verify
+pnpm test:product
+pnpm test:product:foreground
+pnpm verify:product
 ```
 
-`pnpm verify`는 lint, typecheck, test를 모두 실행합니다.
+CI (Continuous Integration: 커밋마다 자동으로 검사하는 통합 검증)·릴리스와 실제 운영체제 수용
+검증의 경계는 위 스펙을 참조합니다.
 
 ## 관련 문서
 

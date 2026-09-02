@@ -51,8 +51,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # 검증을 패키징보다 앞세워 별도 스텝으로 둔다 — CI 로그에서 "검증에서 깨졌다"와
       # "패키징에서 깨졌다"가 스텝 이름으로 갈린다(스펙 8.2절).
-      - name: 검증
-        run: pnpm verify
+      - name: 전체 제품 검증
+        run: pnpm verify:product
       - name: 앱 빌드
         working-directory: apps/desktop
         run: pnpm build

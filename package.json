@@ -9,6 +9,7 @@
 	"scripts": {
 		"verify": "turbo run lint typecheck test",
 		"verify:product": "pnpm verify && pnpm test:product",
+		"verify:workflows": "node scripts/verify-workflows.mjs",
 		"build": "turbo run build",
 		"dev": "pnpm --filter @yeoncha/desktop dev",
 		"format": "biome check --write .",
