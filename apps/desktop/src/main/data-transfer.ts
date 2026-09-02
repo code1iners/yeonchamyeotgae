@@ -6,6 +6,9 @@ import { exportDataFile, readImportFile } from "./data-file";
 import { withPopoverHeld } from "./popover";
 import { importData } from "./store";
 
+/** 파일 대화상자 뒤에 실패 안내를 붙일 데이터 조작 종류. */
+type TransferKind = "export" | "import";
+
 /**
  * 내보내기 파일의 기본 이름. 기기를 옮길 때 여러 벌이 한 폴더에 쌓이므로 날짜를 붙인다.
  * `data.json` 그대로 두면 받은 폴더에서 무엇의 파일인지 알 수 없다.
@@ -38,7 +41,10 @@ export function exportToFile(): Promise<TransferResult> {
 			exportDataFile(picked.filePath);
 			return { status: "done", path: picked.filePath } as const;
 		} catch (cause) {
-			return { status: "failed", message: failureMessage(cause) } as const;
+			return {
+				status: "failed",
+				message: failureMessage(cause, "export"),
+			} as const;
 		}
 	});
 }
@@ -69,7 +75,10 @@ export function importFromFile(): Promise<TransferResult> {
 			importData(readImportFile(sourcePath));
 			return { status: "done", path: sourcePath } as const;
 		} catch (cause) {
-			return { status: "failed", message: failureMessage(cause) } as const;
+			return {
+				status: "failed",
+				message: failureMessage(cause, "import"),
+			} as const;
 		}
 	});
 }
@@ -80,16 +89,18 @@ export function importFromFile(): Promise<TransferResult> {
  * 파서의 세 갈래는 사용자가 할 일이 서로 다르다 — 다른 파일을 고르는 것과 앱을
  * 업데이트하는 것은 같은 문구로 안내할 수 없다(2절 표).
  */
-function failureMessage(cause: unknown): string {
-	if (cause instanceof ParseError) {
+function failureMessage(cause: unknown, kind: TransferKind): string {
+	if (kind === "import" && cause instanceof ParseError) {
 		switch (cause.kind) {
 			case "invalid-json":
-				return "고른 파일이 JSON이 아닙니다";
+				return "고른 파일이 JSON이 아닙니다. 다른 저장 파일을 골라 다시 시도하세요.";
 			case "schema-mismatch":
-				return "고른 파일의 구조가 저장 형식과 다릅니다";
+				return "고른 파일의 구조가 저장 형식과 다릅니다. 다른 저장 파일을 골라 다시 시도하세요.";
 			case "future-version":
-				return "고른 파일이 더 새 버전입니다 — 앱을 업데이트하세요";
+				return "고른 파일이 더 새 버전입니다. 앱을 업데이트하세요.";
 		}
 	}
-	return cause instanceof Error ? cause.message : String(cause);
+	return kind === "export"
+		? "내보내지 못했습니다. 다른 위치를 선택해 다시 시도하세요."
+		: "가져오지 못했습니다. 다른 저장 파일을 골라 다시 시도하세요.";
 }

@@ -4,6 +4,7 @@ import {
 	mkdir,
 	mkdtemp,
 	readFile,
+	realpath,
 	rm,
 	writeFile,
 } from "node:fs/promises";
@@ -50,6 +51,29 @@ const NORMAL_DATA: LeaveData = {
 		},
 	],
 	adjustments: [],
+};
+
+/** 가져오기 성공 뒤 설정·휴가 기록·조정이 통째로 바뀌는지 확인할 저장 데이터. */
+const IMPORTED_DATA: LeaveData = {
+	schemaVersion: 1,
+	settings: { hireDate: "2022-05-05", grantBasis: "fiscalYear" },
+	entries: [
+		{
+			id: "imported-entry",
+			date: "2025-12-02",
+			days: 0.5,
+			note: "가져온 기록",
+		},
+	],
+	adjustments: [
+		{
+			id: "imported-adjustment",
+			grantDate: "2025-01-01",
+			expiryDate: "2026-12-31",
+			days: 7,
+			note: "가져온 조정",
+		},
+	],
 };
 
 /** 기준방식 전환에 따른 잔여 재계산을 확인할 설정 데이터. */
@@ -679,6 +703,346 @@ describe.sequential("Electron 제품 흐름", () => {
 		} finally {
 			await chmod(flow.userDataDirectory, 0o700);
 		}
+	}, 60_000);
+
+	test("설정의 데이터 관리가 저장 파일과 가져올 파일 행동을 구분한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 안에서 데이터 조작만 묶은 접근 가능한 영역. */
+		const dataSection = flow.page.getByRole("region", { name: "데이터" });
+		await expectVisible(dataSection);
+		await expectVisible(dataSection.getByRole("heading", { name: "데이터" }));
+		await expectVisible(dataSection.getByText("저장 파일", { exact: true }));
+		await expectVisible(
+			dataSection.getByText("가져올 저장 파일", { exact: true }),
+		);
+		await expectVisible(
+			dataSection.getByRole("button", { name: "파일 위치 열기" }),
+		);
+		await expectVisible(dataSection.getByRole("button", { name: "내보내기" }));
+		await expectVisible(dataSection.getByRole("button", { name: "가져오기" }));
+	});
+
+	test("데이터 내보내기의 완료·취소·실패를 같은 화면에 설명하고 설정을 보존한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 안의 데이터 조작 영역. */
+		const dataSection = flow.page.getByRole("region", { name: "데이터" });
+		/** 내보내기 전 저장 파일 원문. 내보내기는 이 바이트를 그대로 복사해야 한다. */
+		const originalRaw = await readFile(
+			path.join(flow.userDataDirectory, "data.json"),
+			"utf8",
+		);
+		/** 사용자가 고른 정상적인 내보내기 경로. */
+		const exportPath = path.join(flow.userDataDirectory, "exported.json");
+		/** 내보내기 뒤에도 유지되어야 하는 설정 입력. */
+		const hireDate = flow.page.getByLabel("입사일");
+		const grantBasis = flow.page.getByLabel("기준방식");
+
+		await mockSaveDialog(flow.app, { canceled: false, filePath: exportPath });
+		await dataSection.getByRole("button", { name: "내보내기" }).click();
+		await expectVisible(
+			dataSection
+				.getByRole("status")
+				.filter({ hasText: "내보내기를 완료했습니다" }),
+		);
+		await expectVisible(dataSection.getByText(exportPath, { exact: true }));
+		expect(await readFile(exportPath, "utf8")).toBe(originalRaw);
+		expect(await hireDate.inputValue()).toBe("2020-01-01");
+		expect(await grantBasis.inputValue()).toBe("hireDate");
+		expect(
+			await dataSection
+				.getByRole("button", { name: "내보내기" })
+				.evaluate((element) => element === document.activeElement),
+		).toBe(true);
+
+		await mockSaveDialog(flow.app, { canceled: true, filePath: "" });
+		await dataSection.getByRole("button", { name: "내보내기" }).click();
+		await expectVisible(
+			dataSection
+				.getByRole("status")
+				.filter({ hasText: "내보내기를 취소했습니다" }),
+		);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+		expect(
+			await dataSection
+				.getByRole("button", { name: "내보내기" })
+				.evaluate((element) => element === document.activeElement),
+		).toBe(true);
+
+		/** 파일 대신 디렉터리를 골라 쓰기 실패를 만든 경로. */
+		const failedExportPath = path.join(
+			flow.userDataDirectory,
+			"export-directory",
+		);
+		await mkdir(failedExportPath);
+		await mockSaveDialog(flow.app, {
+			canceled: false,
+			filePath: failedExportPath,
+		});
+		await dataSection.getByRole("button", { name: "내보내기" }).click();
+		await expectVisible(
+			dataSection.getByRole("alert").filter({ hasText: "내보내지 못했습니다" }),
+		);
+		await expectVisible(
+			dataSection
+				.getByRole("alert")
+				.filter({ hasText: "다른 위치를 선택해 다시 시도하세요." }),
+		);
+		expect(await hireDate.inputValue()).toBe("2020-01-01");
+		expect(await grantBasis.inputValue()).toBe("hireDate");
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+	}, 60_000);
+
+	test("저장 파일 위치 열기는 파일 관리자 호출을 마치고 같은 화면에 결과를 남긴다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 안에서 파일 위치를 여는 데이터 영역. */
+		const dataSection = flow.page.getByRole("region", { name: "데이터" });
+		/** OS 파일 관리자에 넘겨야 하는 저장 파일 경로. */
+		const dataPath = await realpath(
+			path.join(flow.userDataDirectory, "data.json"),
+		);
+		await mockRevealDataFile(flow.app);
+
+		await dataSection.getByRole("button", { name: "파일 위치 열기" }).click();
+		await expectVisible(
+			dataSection
+				.getByRole("status")
+				.filter({ hasText: "파일 위치를 열었습니다" }),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(await isPopoverVisible(flow.app)).toBe(true);
+		expect(await readRevealedPath(flow.app)).toBe(dataPath);
+		expect(
+			await dataSection
+				.getByRole("button", { name: "파일 위치 열기" })
+				.evaluate((element) => element === document.activeElement),
+		).toBe(true);
+	}, 60_000);
+
+	test("데이터 가져오기 확인과 취소는 원본·화면을 보존하고 성공 뒤 전체 상태를 갱신한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 안의 데이터 조작 영역. */
+		const dataSection = flow.page.getByRole("region", { name: "데이터" });
+		/** 가져오기 전 저장 파일 원문. 백업으로도 같은 원문을 보존해야 한다. */
+		const originalRaw = await readFile(
+			path.join(flow.userDataDirectory, "data.json"),
+			"utf8",
+		);
+		/** 가져오기 대화상자가 반환할 정상 파일. */
+		const importPath = path.join(flow.userDataDirectory, "import.json");
+		await writeFile(importPath, JSON.stringify(IMPORTED_DATA), "utf8");
+		/** 성공 뒤 셸 상태 푸시로 바뀌어야 하는 설정 필드. */
+		const hireDate = flow.page.getByLabel("입사일");
+		const grantBasis = flow.page.getByLabel("기준방식");
+		/** 가져오기 버튼. 확인을 취소하거나 대화상자가 끝난 뒤 같은 자리에 돌아온다. */
+		const importButton = dataSection.getByRole("button", { name: "가져오기" });
+
+		await importButton.click();
+		/** 파일을 고르기 전에 전체 교체와 백업을 설명하는 확인 영역. */
+		const confirmation = dataSection.getByRole("region", {
+			name: "가져오기 확인",
+		});
+		await expectVisible(confirmation);
+		await expectVisible(
+			confirmation.getByText("지금 데이터가 대체됩니다.", { exact: true }),
+		);
+		expect(
+			await confirmation.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+
+		await confirmation
+			.getByRole("button", { name: "취소", exact: true })
+			.click();
+		await confirmation.waitFor({ state: "detached" });
+		expect(
+			await importButton.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+
+		// 확인을 통과한 뒤 네이티브 파일 선택을 취소해도 현재 화면과 원본은 그대로다.
+		await importButton.click();
+		await mockOpenDialog(flow.app, { canceled: true, filePaths: [] });
+		await dataSection
+			.getByRole("region", { name: "가져오기 확인" })
+			.getByRole("button", { name: "파일 고르고 대체" })
+			.click();
+		await expectVisible(importButton);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+		expect(
+			await importButton.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+
+		await importButton.click();
+		await mockOpenDialog(flow.app, {
+			canceled: false,
+			filePaths: [importPath],
+		});
+		await dataSection
+			.getByRole("region", { name: "가져오기 확인" })
+			.getByRole("button", { name: "파일 고르고 대체" })
+			.click();
+		await expectVisible(
+			dataSection
+				.getByRole("status")
+				.filter({ hasText: "가져오기를 완료했습니다" }),
+		);
+		await expectVisible(
+			dataSection.getByRole("status").filter({ hasText: importPath }),
+		);
+		await expectVisible(importButton);
+		expect(await hireDate.inputValue()).toBe("2022-05-05");
+		expect(await grantBasis.inputValue()).toBe("fiscalYear");
+		expect(JSON.parse(await readFile(importPath, "utf8"))).toEqual(
+			IMPORTED_DATA,
+		);
+		expect(
+			JSON.parse(
+				await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+			),
+		).toEqual(IMPORTED_DATA);
+		expect(
+			await readFile(
+				path.join(flow.userDataDirectory, "data.json.bak"),
+				"utf8",
+			),
+		).toBe(originalRaw);
+		expect(
+			await importButton.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+	}, 60_000);
+
+	test("가져오기 실패는 원본을 덮지 않고 파일 종류별 다음 행동을 설명한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 안의 데이터 조작 영역. */
+		const dataSection = flow.page.getByRole("region", { name: "데이터" });
+		/** 실패 전 원본 저장 파일. 세 종류의 실패 뒤에도 같아야 한다. */
+		const originalRaw = await readFile(
+			path.join(flow.userDataDirectory, "data.json"),
+			"utf8",
+		);
+		/** JSON 파싱 자체가 실패하는 파일. */
+		const invalidPath = path.join(flow.userDataDirectory, "invalid.json");
+		/** 저장 형식 필드가 빠진 파일. */
+		const mismatchPath = path.join(flow.userDataDirectory, "mismatch.json");
+		/** 현재 앱보다 높은 저장 형식 버전의 파일. */
+		const futurePath = path.join(flow.userDataDirectory, "future.json");
+		await writeFile(invalidPath, "{ not valid JSON", "utf8");
+		await writeFile(
+			mismatchPath,
+			JSON.stringify({ schemaVersion: 1, entries: [], adjustments: [] }),
+			"utf8",
+		);
+		await writeFile(futurePath, JSON.stringify({ schemaVersion: 2 }), "utf8");
+		/** 파일을 고르고 확인하는 제품 경계를 반복하는 작은 흐름. */
+		const chooseImportFile = async (sourcePath: string) => {
+			await dataSection.getByRole("button", { name: "가져오기" }).click();
+			await mockOpenDialog(flow.app, {
+				canceled: false,
+				filePaths: [sourcePath],
+			});
+			await dataSection
+				.getByRole("region", { name: "가져오기 확인" })
+				.getByRole("button", { name: "파일 고르고 대체" })
+				.click();
+		};
+
+		await chooseImportFile(invalidPath);
+		await expectVisible(
+			dataSection
+				.getByRole("alert")
+				.filter({ hasText: "고른 파일이 JSON이 아닙니다" }),
+		);
+		await expectVisible(
+			dataSection
+				.getByRole("alert")
+				.filter({ hasText: "다른 저장 파일을 골라 다시 시도하세요" }),
+		);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+		await expect(
+			readFile(path.join(flow.userDataDirectory, "data.json.bak"), "utf8"),
+		).rejects.toThrow();
+
+		await chooseImportFile(mismatchPath);
+		await expectVisible(
+			dataSection
+				.getByRole("alert")
+				.filter({ hasText: "고른 파일의 구조가 저장 형식과 다릅니다" }),
+		);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+
+		await chooseImportFile(futurePath);
+		await expectVisible(
+			dataSection
+				.getByRole("alert")
+				.filter({ hasText: "고른 파일이 더 새 버전입니다" }),
+		);
+		await expectVisible(
+			dataSection.getByRole("alert").filter({ hasText: "앱을 업데이트하세요" }),
+		);
+		expect(
+			await readFile(path.join(flow.userDataDirectory, "data.json"), "utf8"),
+		).toBe(originalRaw);
+	}, 60_000);
+
+	test("데이터 대화상자 진행 중에는 모든 조작을 잠그고 팝오버를 유지한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+
+		/** 설정 안의 데이터 조작 영역. */
+		const dataSection = flow.page.getByRole("region", { name: "데이터" });
+		/** 진행 중인 내보내기를 시작할 버튼. */
+		const exportButton = dataSection.getByRole("button", { name: "내보내기" });
+		await holdSaveDialog(flow.app);
+		await exportButton.click();
+
+		await expectVisible(
+			dataSection.getByRole("status").filter({ hasText: "내보내는 중입니다" }),
+		);
+		expect(await dataSection.getAttribute("aria-busy")).toBe("true");
+		/** 데이터 조작 버튼 수. 저장 파일 두 개와 가져오기 하나다. */
+		const dataButtons = dataSection.getByRole("button");
+		expect(await dataButtons.count()).toBe(3);
+		// 하나의 네이티브 대화상자에 머무는 동안 충돌하는 세 조작을 모두 막는다.
+		expect(
+			await dataButtons.evaluateAll((buttons) =>
+				buttons.every((button) => button.matches(":disabled")),
+			),
+		).toBe(true);
+
+		await triggerPopoverBlur(flow.app);
+		expect(await isPopoverVisible(flow.app)).toBe(true);
 	}, 60_000);
 
 	test("긴 발생분 목록에서도 잔여와 휴가 등록이 최초 뷰포트에 남는다", async () => {
@@ -1703,6 +2067,62 @@ async function launchProductFlow(
 		await rm(userDataDirectory, { recursive: true, force: true });
 		throw error;
 	}
+}
+
+/** 제품 흐름에서 네이티브 저장 대화상자의 사용자가 고른 결과를 고정한다. */
+async function mockSaveDialog(
+	app: ElectronApplication,
+	result: { canceled: boolean; filePath: string },
+): Promise<void> {
+	await app.evaluate(({ dialog }, nextResult) => {
+		dialog.showSaveDialog = async () => nextResult;
+	}, result);
+}
+
+/** 제품 흐름에서 네이티브 열기 대화상자의 사용자가 고른 결과를 고정한다. */
+async function mockOpenDialog(
+	app: ElectronApplication,
+	result: { canceled: boolean; filePaths: string[] },
+): Promise<void> {
+	await app.evaluate(({ dialog }, nextResult) => {
+		dialog.showOpenDialog = async () => nextResult;
+	}, result);
+}
+
+/** 진행 중 상태와 팝오버 수명 주기를 검증할 수 있도록 저장 대화상자를 끝내지 않는다. */
+async function holdSaveDialog(app: ElectronApplication): Promise<void> {
+	await app.evaluate(({ dialog }) => {
+		dialog.showSaveDialog = () => new Promise(() => {});
+	});
+}
+
+/** 파일 관리자 호출을 실제 창 대신 메인 프로세스의 제품 흐름 표식으로 받는다. */
+async function mockRevealDataFile(app: ElectronApplication): Promise<void> {
+	await app.evaluate(({ BrowserWindow, shell }) => {
+		/** 파일 관리자 호출을 제품 흐름에서 읽을 표식. */
+		const state = globalThis as typeof globalThis & {
+			__yeonchaRevealedPath?: string | null;
+		};
+		state.__yeonchaRevealedPath = null;
+		shell.showItemInFolder = (filePath) => {
+			state.__yeonchaRevealedPath = filePath;
+			// 파일 관리자가 비동기로 포커스를 가져가는 순간에도 팝오버를 붙잡는지 확인한다.
+			setTimeout(() => BrowserWindow.getAllWindows()[0]?.emit("blur"), 25);
+		};
+	});
+}
+
+/** 메인 프로세스가 파일 관리자에 넘긴 저장 파일 경로를 읽는다. */
+async function readRevealedPath(
+	app: ElectronApplication,
+): Promise<string | null> {
+	return app.evaluate(() => {
+		/** 파일 관리자 호출 표식의 타입. */
+		const state = globalThis as typeof globalThis & {
+			__yeonchaRevealedPath?: string | null;
+		};
+		return state.__yeonchaRevealedPath ?? null;
+	});
 }
 
 /** 두 번째 앱 실행이라는 실제 제품 경로로 첫 인스턴스의 팝오버 열기를 요청한다. */

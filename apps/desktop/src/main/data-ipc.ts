@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import { type HireDateDrop, IPC, type LeaveDataChange } from "../shared/ipc";
 import { revealDataFile } from "./data-file";
 import { exportToFile, importFromFile } from "./data-transfer";
+import { withPopoverHeld } from "./popover";
 import {
 	commit,
 	dropRecordsBeforeHireDate,
@@ -22,7 +23,9 @@ export function registerDataIpc(): void {
 	ipcMain.handle(IPC.COMMIT, (_event, change: LeaveDataChange) =>
 		commit(change),
 	);
-	ipcMain.handle(IPC.REVEAL_FILE, () => revealDataFile());
+	ipcMain.handle(IPC.REVEAL_FILE, () =>
+		withPopoverHeld(() => revealDataFile(), { waitForExternalBlur: true }),
+	);
 	ipcMain.handle(IPC.EXPORT, () => exportToFile());
 	ipcMain.handle(IPC.IMPORT, () => importFromFile());
 	ipcMain.handle(IPC.RESTORE_BACKUP, () => restoreBackup());

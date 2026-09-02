@@ -115,9 +115,13 @@ export function backupDataFile(): void {
  * (입사일을 넣기 전) 폴더만 연다 — 없는 파일을 가리키면 아무 일도 일어나지 않아
  * 사용자에게는 버튼이 죽은 것처럼 보인다.
  */
-export function revealDataFile(): void {
+export async function revealDataFile(): Promise<void> {
 	if (readRaw(dataFilePath()) === null) {
-		shell.openPath(app.getPath("userData"));
+		/** 폴더를 열지 못했을 때 Electron이 돌려주는 사용자용 오류 문구. */
+		const error = await shell.openPath(app.getPath("userData"));
+		if (error) {
+			throw new Error(error);
+		}
 		return;
 	}
 	shell.showItemInFolder(dataFilePath());

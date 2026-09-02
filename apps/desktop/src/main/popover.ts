@@ -16,6 +16,8 @@ const TRAY_GAP = 4;
  * 팝오버를 곧바로 다시 열지 않게 하는 유예 시간(ms).
  */
 const REOPEN_SUPPRESS_MS = 250;
+/** 파일 관리자가 호출 완료 뒤 포커스를 가져가기까지 기다릴 최대 시간(ms). */
+const EXTERNAL_APP_BLUR_GRACE_MS = 250;
 
 /** 단 하나뿐인 팝오버 창. 닫힘은 숨김이며 파괴하지 않는다. */
 let popover: BrowserWindow | null = null;
@@ -28,6 +30,12 @@ let anchorBounds: Rectangle | null = null;
  * 불리언이면 중첩된 안쪽이 끝날 때 바깥의 붙잡음까지 풀어버린다.
  */
 let openDialogs = 0;
+
+/** 네이티브 파일 관리자 호출 뒤의 비동기 blur까지 붙잡을지 정하는 옵션. */
+type PopoverHoldOptions = {
+	/** `shell.showItemInFolder`처럼 반환 뒤 blur가 올 수 있는 호출인가. */
+	waitForExternalBlur?: boolean;
+};
 
 /** 팝오버 창을 만든다. 숨긴 채로 만들고 트레이 클릭이 열어준다. */
 export function createPopover(): BrowserWindow {
@@ -117,22 +125,61 @@ export function showPopover(anchor?: Rectangle): void {
 }
 
 /**
- * 네이티브 대화상자를 여는 동안 팝오버를 붙잡아 둔다(23번의 내보내기·가져오기).
+ * 네이티브 파일 대화상자나 파일 관리자 호출 동안 팝오버를 붙잡아 둔다(23번).
  *
  * 대화상자가 뜨면 팝오버가 blur로 닫히고, 그러면 파일을 고른 뒤 결과를 보여줄
  * 화면이 사라진다. 대화상자가 닫힌 뒤 포커스를 되돌려 놓는 것까지가 한 벌이다 —
  * 그러지 않으면 다음 바깥 클릭에 blur가 오지 않아 팝오버가 계속 떠 있는다.
  */
-export async function withPopoverHeld<T>(run: () => Promise<T>): Promise<T> {
+export async function withPopoverHeld<T>(
+	run: () => Promise<T>,
+	options: PopoverHoldOptions = {},
+): Promise<T> {
 	openDialogs += 1;
+	/** 외부 파일 관리자의 늦은 blur를 처리하고 나서 잠금을 풀기 위한 대기. */
+	const externalBlur = options.waitForExternalBlur
+		? waitForExternalBlur()
+		: null;
 	try {
 		return await run();
 	} finally {
+		await externalBlur;
 		openDialogs -= 1;
 		if (openDialogs === 0 && popover?.isVisible()) {
 			popover.focus();
 		}
 	}
+}
+
+/** 파일 관리자 호출 직후 또는 짧은 유예 시간 뒤에 팝오버 잠금을 해제한다. */
+function waitForExternalBlur(): Promise<void> {
+	/** 현재 잠금을 기다리는 팝오버 창. */
+	const currentPopover = popover;
+	if (!currentPopover) {
+		return Promise.resolve();
+	}
+
+	return new Promise((resolve) => {
+		/** blur나 유예 시간이 먼저 끝났는지 나타내는 상태. */
+		let settled = false;
+		/** 비동기 외부 앱 호출이 영원히 잠금을 잡지 않게 하는 타이머. */
+		let timeout: ReturnType<typeof setTimeout>;
+		/** 잠금 대기를 끝내고 등록한 blur 리스너와 타이머를 치운다. */
+		const finish = () => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			clearTimeout(timeout);
+			currentPopover.removeListener("blur", handleBlur);
+			resolve();
+		};
+		/** 외부 파일 관리자가 포커스를 가져간 순간. */
+		const handleBlur = () => finish();
+
+		currentPopover.on("blur", handleBlur);
+		timeout = setTimeout(finish, EXTERNAL_APP_BLUR_GRACE_MS);
+	});
 }
 
 /**
