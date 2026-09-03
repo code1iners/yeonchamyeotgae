@@ -6,8 +6,10 @@ import type {
 	LeaveEntry,
 } from "@yeoncha/core";
 import { expiryLosses, groupHistory } from "@yeoncha/core";
+import type { RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { CalendarGrid } from "./CalendarGrid";
+import { syncOpenYears } from "./history-state";
 import { UNITS, unitLabel } from "./units";
 import { useCommit } from "./use-commit";
 
@@ -20,6 +22,10 @@ type Props = {
 	adjustments: Adjustment[];
 	/** 조회일. 사용·예정의 경계이자 달력의 오늘 표시다. */
 	today: string;
+	/** 이력 빈 상태에서 등록면을 연 뒤 포커스를 돌려줄 버튼. */
+	entryTriggerRef: RefObject<HTMLButtonElement | null>;
+	/** 이력 빈 상태의 휴가 등록 CTA. */
+	onAddEntry: () => void;
 };
 
 /**
@@ -29,7 +35,14 @@ type Props = {
  * 예정은 상태 변경이 아니라 삭제다. 수정·삭제 커밋이 끝나면 셸이 상태를 다시 밀어주므로
  * 트레이 숫자와 요약 탭은 여기서 손대지 않아도 함께 갱신된다.
  */
-export function HistoryTab({ entries, balance, adjustments, today }: Props) {
+export function HistoryTab({
+	entries,
+	balance,
+	adjustments,
+	today,
+	entryTriggerRef,
+	onAddEntry,
+}: Props) {
 	/** 지금 보는 뷰. */
 	const [view, setView] = useState<"list" | "calendar">("list");
 
@@ -64,13 +77,21 @@ export function HistoryTab({ entries, balance, adjustments, today }: Props) {
 				</fieldset>
 			</div>
 			{view === "list" ? (
-				<HistoryList entries={entries} groups={groups} losses={losses} />
+				<HistoryList
+					entries={entries}
+					groups={groups}
+					losses={losses}
+					entryTriggerRef={entryTriggerRef}
+					onAddEntry={onAddEntry}
+				/>
 			) : (
 				<HistoryCalendar
 					entries={entries}
 					groups={groups}
 					losses={losses}
 					today={today}
+					entryTriggerRef={entryTriggerRef}
+					onAddEntry={onAddEntry}
 				/>
 			)}
 		</div>
@@ -88,7 +109,9 @@ function HistoryList({
 	entries,
 	groups,
 	losses,
-}: Pick<Props, "entries"> & {
+	entryTriggerRef,
+	onAddEntry,
+}: Pick<Props, "entries" | "entryTriggerRef" | "onAddEntry"> & {
 	/** 예정 / 연차 연도별 사용 그룹. */
 	groups: HistorySections;
 	/** 소멸 섹션에 올릴 줄들. */
@@ -108,12 +131,28 @@ function HistoryList({
 	const [issue, setIssue] = useState<string | null>(null);
 	/** 삭제 실패를 붙일 기록의 식별자. 오류를 리스트 위로 떼지 않고 해당 행에 둔다. */
 	const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
+	/** 삭제 확인을 열어 둔 기록의 식별자. 확인 전에는 저장하지 않는다. */
+	const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+	/** 마지막 성공 행동을 보조 기술에 알리는 문구. */
+	const [successStatus, setSuccessStatus] = useState<string | null>(null);
 	/** 인라인 수정이 열릴 때 먼저 포커스할 날짜 입력. */
 	const editDateInputRef = useRef<HTMLInputElement>(null);
 	/** 수정 폼이 닫힌 뒤 돌아갈 행별 수정 버튼. */
 	const editButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+	/** 삭제 확인이 열린 행의 focus 대상. */
+	const deleteConfirmRefs = useRef(new Map<string, HTMLElement>());
+	/** 삭제 확인을 닫은 뒤 돌아갈 삭제 버튼. */
+	const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
 	/** 수정 폼을 연 기록 식별자. 닫힌 뒤 같은 행의 행동으로 돌아간다. */
 	const focusReturnIdRef = useRef<string | null>(null);
+	/** 삭제 확인을 닫거나 삭제한 뒤 돌아갈 기록 식별자. */
+	const deleteFocusReturnIdRef = useRef<string | null>(null);
+	/** 삭제한 행이 사라진 뒤에도 focus를 둘 리스트 영역. */
+	const historyListRef = useRef<HTMLElement>(null);
+	/** 사용자가 직접 접거나 펼친 연도. 자동 연도 전환이 이 선택을 덮지 않는다. */
+	const touchedYearsRef = useRef(new Set<number>());
+	/** 직전 상태 push에서의 기본 현재 연도. */
+	const previousCurrentYearRef = useRef(groups.currentYear);
 	/** 수정 폼의 열림 상태만 감지해 입력값 변경 때 포커스를 빼앗지 않는다. */
 	const draftId = draft?.id ?? null;
 	/**
@@ -127,10 +166,45 @@ function HistoryList({
 	const saving = edit.saving || remove.saving;
 
 	useEffect(
+		function syncHistoryCurrentYearEffect() {
+			const previousCurrentYear = previousCurrentYearRef.current;
+			if (previousCurrentYear === groups.currentYear) {
+				return;
+			}
+			setOpenYears((current) =>
+				syncOpenYears({
+					openYears: current,
+					previousCurrentYear,
+					currentYear: groups.currentYear,
+					touchedYears: touchedYearsRef.current,
+				}),
+			);
+			previousCurrentYearRef.current = groups.currentYear;
+		},
+		[groups.currentYear],
+	);
+
+	useEffect(
 		function manageHistoryEditFocusEffect() {
+			if (deleteTargetId) {
+				return;
+			}
 			// 행이 수정 폼으로 바뀌면 날짜 입력에서 바로 다음 키보드 조작을 시작한다.
 			if (draftId) {
 				editDateInputRef.current?.focus();
+				return;
+			}
+
+			/** 삭제 확인을 닫은 뒤 돌아갈 기록 식별자. */
+			const deleteTarget = deleteFocusReturnIdRef.current;
+			if (deleteTarget) {
+				deleteFocusReturnIdRef.current = null;
+				deleteButtonRefs.current.get(deleteTarget)?.focus();
+				if (
+					document.activeElement !== deleteButtonRefs.current.get(deleteTarget)
+				) {
+					historyListRef.current?.focus();
+				}
 				return;
 			}
 
@@ -142,7 +216,17 @@ function HistoryList({
 			focusReturnIdRef.current = null;
 			editButtonRefs.current.get(targetId)?.focus();
 		},
-		[draftId],
+		[draftId, deleteTargetId],
+	);
+
+	useEffect(
+		function focusHistoryDeleteConfirmationEffect() {
+			if (!deleteTargetId) {
+				return;
+			}
+			deleteConfirmRefs.current.get(deleteTargetId)?.focus();
+		},
+		[deleteTargetId],
 	);
 
 	/** 이력 행의 수정 버튼을 현재 DOM과 함께 등록한다. */
@@ -157,8 +241,33 @@ function HistoryList({
 		}
 	};
 
+	/** 이력 행의 삭제 버튼을 현재 DOM과 함께 등록한다. */
+	const registerDeleteButton = (
+		id: string,
+		element: HTMLButtonElement | null,
+	) => {
+		if (element) {
+			deleteButtonRefs.current.set(id, element);
+		} else {
+			deleteButtonRefs.current.delete(id);
+		}
+	};
+
+	/** 행 안의 삭제 확인 영역을 현재 DOM과 함께 등록한다. */
+	const registerDeleteConfirmation = (
+		id: string,
+		element: HTMLElement | null,
+	) => {
+		if (element) {
+			deleteConfirmRefs.current.set(id, element);
+		} else {
+			deleteConfirmRefs.current.delete(id);
+		}
+	};
+
 	/** 연차 연도 섹션 접기·펼치기 핸들러. */
 	const handleToggleYear = (year: number) => {
+		touchedYearsRef.current.add(year);
 		/** 다음 펼침 상태. */
 		const next = new Set(openYears);
 		if (!next.delete(year)) {
@@ -169,9 +278,14 @@ function HistoryList({
 
 	/** 수정 시작 핸들러 — 행이 그 자리에서 폼으로 바뀐다. */
 	const handleOpenEdit = (entry: LeaveEntry) => {
+		if (saving) {
+			return;
+		}
 		focusReturnIdRef.current = entry.id;
 		setDraft({ id: entry.id, date: entry.date, days: entry.days });
 		setIssue(null);
+		setSuccessStatus(null);
+		setDeleteTargetId(null);
 		edit.clearError();
 		setDeleteErrorId(null);
 		remove.clearError();
@@ -216,25 +330,48 @@ function HistoryList({
 				: entry,
 		);
 		if (await edit.commit({ entries: next })) {
+			setSuccessStatus("휴가 기록을 수정했습니다.");
 			handleCloseEdit();
 		}
 	};
 
-	/** 삭제 핸들러 — 안 쓰게 된 예정도 이 문으로 나간다(3.9절). */
-	const handleDelete = async (id: string) => {
-		// 지우는 기록을 고치고 있었나요? 폼에 남은 것이 유령이 되지 않게 닫는다.
-		if (draft?.id === id) {
-			handleCloseEdit();
+	/** 삭제 버튼을 누르면 같은 행 안에서 확인 단계를 연다(3.9절). */
+	const handleDelete = (id: string) => {
+		if (saving) {
+			return;
 		}
+		setSuccessStatus(null);
 		remove.clearError();
 		setDeleteErrorId(id);
+		setDeleteTargetId(id);
+	};
+
+	/** 확인한 기록만 삭제하고, 실패하면 확인 영역과 행을 그대로 남긴다. */
+	const handleConfirmDelete = async (id: string) => {
+		if (saving || deleteTargetId !== id) {
+			return;
+		}
 		/** 삭제 커밋 결과. 실패하면 현재 행을 유지한다. */
 		const committed = await remove.commit({
 			entries: entries.filter((entry) => entry.id !== id),
 		});
 		if (committed) {
 			setDeleteErrorId(null);
+			setDeleteTargetId(null);
+			deleteFocusReturnIdRef.current = id;
+			setSuccessStatus("휴가 기록을 삭제했습니다.");
 		}
+	};
+
+	/** 삭제를 취소하고 같은 행의 삭제 버튼으로 포커스를 되돌린다. */
+	const handleCancelDelete = (id: string) => {
+		if (remove.saving) {
+			return;
+		}
+		setDeleteTargetId(null);
+		setDeleteErrorId(null);
+		deleteFocusReturnIdRef.current = id;
+		remove.clearError();
 	};
 
 	/** 행 하나 — 수정 중이면 그 자리가 폼이 된다. */
@@ -245,6 +382,9 @@ function HistoryList({
 		const rowLabel = `${entry.date} ${planned ? "예정" : "사용"} 휴가 기록`;
 		/** 이 행에서 표시할 삭제 실패 문구. */
 		const rowDeleteError = deleteErrorId === entry.id ? remove.error : null;
+		/** 이 행의 삭제 확인 제목·설명 식별자. */
+		const deleteTitleId = `history-delete-title-${entry.id}`;
+		const deleteDescriptionId = `history-delete-description-${entry.id}`;
 
 		return (
 			<article
@@ -314,48 +454,87 @@ function HistoryList({
 						</div>
 					</div>
 				) : (
-					<div className="row hist-row">
-						<b className="num hist-date">{entry.date}</b>
-						<span className="hist-unit">{unitLabel(entry.days)}</span>
-						<span
-							className={
-								planned
-									? "hist-status tag-planned"
-									: "hist-status hist-status-used"
-							}
-						>
-							{planned ? "예정" : "사용"}
-						</span>
-						<span className="dim hist-note">{entry.note}</span>
-						<span className="hist-actions">
-							<button
-								type="button"
-								className="mini"
-								disabled={saving}
-								ref={(element) => registerEditButton(entry.id, element)}
-								onClick={() => handleOpenEdit(entry)}
+					<>
+						<div className="row hist-row">
+							<b className="num hist-date selectable">{entry.date}</b>
+							<span className="hist-unit selectable">
+								{unitLabel(entry.days)}
+							</span>
+							<span
+								className={
+									planned
+										? "hist-status tag-planned"
+										: "hist-status hist-status-used"
+								}
 							>
-								수정
-							</button>
-							<button
-								type="button"
-								className="mini"
-								disabled={saving}
-								onClick={() => handleDelete(entry.id)}
+								{planned ? "예정" : "사용"}
+							</span>
+							<span className="dim hist-note selectable">{entry.note}</span>
+							<span className="hist-actions">
+								<button
+									type="button"
+									className="mini"
+									disabled={saving || deleteTargetId !== null}
+									ref={(element) => registerEditButton(entry.id, element)}
+									onClick={() => handleOpenEdit(entry)}
+								>
+									수정
+								</button>
+								<button
+									type="button"
+									className="mini"
+									disabled={saving || deleteTargetId !== null}
+									ref={(element) => registerDeleteButton(entry.id, element)}
+									onClick={() => handleDelete(entry.id)}
+								>
+									삭제
+								</button>
+							</span>
+						</div>
+						{deleteTargetId === entry.id && (
+							<div
+								ref={(element) => registerDeleteConfirmation(entry.id, element)}
+								className="hist-delete-confirm"
+								tabIndex={-1}
+								role="alertdialog"
+								aria-labelledby={deleteTitleId}
+								aria-describedby={deleteDescriptionId}
+								onKeyDown={(event) => {
+									if (event.key === "Escape") {
+										event.preventDefault();
+										handleCancelDelete(entry.id);
+									}
+								}}
 							>
-								삭제
-							</button>
-						</span>
-					</div>
-				)}
-				{rowDeleteError && (
-					<p
-						className="error hist-row-error"
-						role="alert"
-						aria-live="assertive"
-					>
-						{rowDeleteError}
-					</p>
+								<strong id={deleteTitleId}>삭제할까요?</strong>
+								<p id={deleteDescriptionId}>
+									{entry.date} 휴가 기록을 삭제합니다.
+								</p>
+								{rowDeleteError && (
+									<p className="error" role="alert" aria-live="assertive">
+										{rowDeleteError}
+									</p>
+								)}
+								<div className="hist-delete-actions">
+									<button
+										type="button"
+										className="danger"
+										disabled={saving}
+										onClick={() => handleConfirmDelete(entry.id)}
+									>
+										삭제
+									</button>
+									<button
+										type="button"
+										disabled={saving}
+										onClick={() => handleCancelDelete(entry.id)}
+									>
+										취소
+									</button>
+								</div>
+							</div>
+						)}
+					</>
 				)}
 			</article>
 		);
@@ -363,12 +542,34 @@ function HistoryList({
 
 	return (
 		<section
+			ref={historyListRef}
 			className="hist-scroll"
 			aria-label="휴가 이력 목록"
 			aria-busy={saving}
+			tabIndex={-1}
 		>
+			{saving && (
+				<p className="history-status" role="status" aria-live="polite">
+					저장 중…
+				</p>
+			)}
+			{successStatus && !saving && (
+				<p className="history-status" role="status" aria-live="polite">
+					{successStatus}
+				</p>
+			)}
 			{groups.planned.length === 0 && groups.years.length === 0 && (
-				<div className="row dim">휴가 기록이 없습니다.</div>
+				<div className="history-empty">
+					<p className="row dim">휴가 기록이 없습니다.</p>
+					<button
+						ref={entryTriggerRef}
+						type="button"
+						className="primary"
+						onClick={onAddEntry}
+					>
+						휴가 등록
+					</button>
+				</div>
 			)}
 			{groups.planned.length > 0 && (
 				<>
@@ -425,7 +626,9 @@ function HistoryCalendar({
 	groups,
 	losses,
 	today,
-}: Pick<Props, "entries" | "today"> & {
+	entryTriggerRef,
+	onAddEntry,
+}: Pick<Props, "entries" | "today" | "entryTriggerRef" | "onAddEntry"> & {
 	/** 예정 / 사용 판정의 출처 — 녹색 점과 회색 점이 리스트의 섹션과 같은 경계를 쓴다. */
 	groups: HistorySections;
 	/** 빨간 밑줄을 붙일 소멸 줄들. */
@@ -439,6 +642,14 @@ function HistoryCalendar({
 	const detailsRef = useRef<HTMLElement>(null);
 	/** 삭제 성공 뒤 상세 영역에 포커스를 요청했는가. */
 	const restoreDetailsFocusRef = useRef(false);
+	/** 삭제 확인을 열어 둔 기록의 식별자. */
+	const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+	/** 마지막 성공 행동을 보조 기술에 알리는 문구. */
+	const [successStatus, setSuccessStatus] = useState<string | null>(null);
+	/** 삭제 확인 영역에 포커스를 둘 대상. */
+	const deleteConfirmationRef = useRef<HTMLDivElement>(null);
+	/** 삭제 확인을 취소한 뒤 돌아갈 삭제 버튼. */
+	const deleteButtonRef = useRef<HTMLButtonElement>(null);
 
 	/** 날짜 → 그날의 휴가 기록. 하루 1건이라 값이 하나다. */
 	const entryByDate = new Map(entries.map((entry) => [entry.date, entry]));
@@ -470,31 +681,73 @@ function HistoryCalendar({
 		[saving, selectedEntry],
 	);
 
+	useEffect(
+		function focusCalendarDeleteConfirmationEffect() {
+			if (deleteTargetId) {
+				deleteConfirmationRef.current?.focus();
+			}
+		},
+		[deleteTargetId],
+	);
+
 	/** 단위 변경 핸들러 — 누르는 즉시 커밋한다. 폼이 아니라 그날 기록의 손잡이다. */
 	const handleChangeDays = async (entry: LeaveEntry, days: number) => {
+		if (saving || deleteTargetId !== null) {
+			return;
+		}
 		clearError();
-		await commit({
-			entries: entries.map((item) =>
-				item.id === entry.id ? { ...item, days } : item,
-			),
-		});
+		if (
+			await commit({
+				entries: entries.map((item) =>
+					item.id === entry.id ? { ...item, days } : item,
+				),
+			})
+		) {
+			setSuccessStatus("휴가 기록을 수정했습니다.");
+		}
 	};
 
-	/** 삭제 핸들러. */
-	const handleDelete = async (entry: LeaveEntry) => {
+	/** 삭제 버튼을 누르면 상세 안에서 확인 단계를 연다. */
+	const handleDelete = (entry: LeaveEntry) => {
+		if (saving) {
+			return;
+		}
 		clearError();
+		setSuccessStatus(null);
+		setDeleteTargetId(entry.id);
+	};
+
+	/** 확인한 기록만 삭제하고, 실패하면 상세와 확인 영역을 유지한다. */
+	const handleConfirmDelete = async (entry: LeaveEntry) => {
+		if (saving || deleteTargetId !== entry.id) {
+			return;
+		}
 		restoreDetailsFocusRef.current = true;
 		const committed = await commit({
 			entries: entries.filter((item) => item.id !== entry.id),
 		});
-		if (!committed) {
+		if (committed) {
+			setDeleteTargetId(null);
+			setSuccessStatus("휴가 기록을 삭제했습니다.");
+		} else {
 			restoreDetailsFocusRef.current = false;
 		}
+	};
+
+	/** 삭제를 취소하고 상세의 삭제 버튼으로 포커스를 되돌린다. */
+	const handleCancelDelete = () => {
+		if (saving) {
+			return;
+		}
+		setDeleteTargetId(null);
+		clearError();
+		deleteButtonRef.current?.focus();
 	};
 
 	/** 날짜 선택 핸들러 — 이전 날짜의 저장 실패 문구를 새 날짜로 가져가지 않는다. */
 	const handlePickDate = (date: string) => {
 		clearError();
+		setDeleteTargetId(null);
 		setSelected(date);
 	};
 
@@ -541,6 +794,29 @@ function HistoryCalendar({
 					onPick={handlePickDate}
 				/>
 			</div>
+			{saving && (
+				<p className="history-status" role="status" aria-live="polite">
+					저장 중…
+				</p>
+			)}
+			{successStatus && !saving && (
+				<p className="history-status" role="status" aria-live="polite">
+					{successStatus}
+				</p>
+			)}
+			{entries.length === 0 && (
+				<div className="history-empty">
+					<p className="row dim">휴가 기록이 없습니다.</p>
+					<button
+						ref={entryTriggerRef}
+						type="button"
+						className="primary"
+						onClick={onAddEntry}
+					>
+						휴가 등록
+					</button>
+				</div>
+			)}
 			{selected && (
 				<section
 					ref={detailsRef}
@@ -573,15 +849,19 @@ function HistoryCalendar({
 							<dl className="hist-day-record">
 								<div>
 									<dt>날짜</dt>
-									<dd className="num">{selectedEntry.date}</dd>
+									<dd className="num selectable">{selectedEntry.date}</dd>
 								</div>
 								<div>
 									<dt>단위</dt>
-									<dd>{unitLabel(selectedEntry.days)}</dd>
+									<dd className="selectable">
+										{unitLabel(selectedEntry.days)}
+									</dd>
 								</div>
 								<div>
 									<dt>메모</dt>
-									<dd className="dim">{selectedEntry.note || "메모 없음"}</dd>
+									<dd className="dim selectable">
+										{selectedEntry.note || "메모 없음"}
+									</dd>
 								</div>
 							</dl>
 							<div className="hist-day-actions">
@@ -593,7 +873,7 @@ function HistoryCalendar({
 												type="button"
 												key={unit.days}
 												aria-pressed={selectedEntry.days === unit.days}
-												disabled={saving}
+												disabled={saving || deleteTargetId !== null}
 												onClick={() =>
 													handleChangeDays(selectedEntry, unit.days)
 												}
@@ -606,19 +886,65 @@ function HistoryCalendar({
 								<button
 									type="button"
 									className="mini"
-									disabled={saving}
+									disabled={saving || deleteTargetId !== null}
+									ref={deleteButtonRef}
 									onClick={() => handleDelete(selectedEntry)}
 								>
 									삭제
 								</button>
 							</div>
+							{deleteTargetId === selectedEntry.id && (
+								<div
+									ref={deleteConfirmationRef}
+									className="hist-delete-confirm"
+									tabIndex={-1}
+									role="alertdialog"
+									aria-labelledby="history-calendar-delete-title"
+									aria-describedby="history-calendar-delete-description"
+									onKeyDown={(event) => {
+										if (event.key === "Escape") {
+											event.preventDefault();
+											handleCancelDelete();
+										}
+									}}
+								>
+									<strong id="history-calendar-delete-title">
+										삭제할까요?
+									</strong>
+									<p id="history-calendar-delete-description">
+										{selectedEntry.date} 휴가 기록을 삭제합니다.
+									</p>
+									{error && (
+										<p className="error" role="alert" aria-live="assertive">
+											{error}
+										</p>
+									)}
+									<div className="hist-delete-actions">
+										<button
+											type="button"
+											className="danger"
+											disabled={saving}
+											onClick={() => handleConfirmDelete(selectedEntry)}
+										>
+											삭제
+										</button>
+										<button
+											type="button"
+											disabled={saving}
+											onClick={handleCancelDelete}
+										>
+											취소
+										</button>
+									</div>
+								</div>
+							)}
 						</>
 					) : (
 						selectedLosses.length === 0 && (
 							<div className="row dim">이 날에는 기록이 없습니다.</div>
 						)
 					)}
-					{error && (
+					{error && !deleteTargetId && (
 						<p className="error" role="alert" aria-live="assertive">
 							{error}
 						</p>

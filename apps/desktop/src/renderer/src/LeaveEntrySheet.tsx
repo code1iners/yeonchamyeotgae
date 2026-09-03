@@ -91,6 +91,9 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 	const duplicateStart = !isRange && startDate !== "" && taken.has(startDate);
 	/** 종료일이 비어 있어 기간을 계산할 수 없는가. */
 	const missingEndDate = isRange && endDate === "";
+	/** 종료일이 시작일보다 이른가 — 사용자의 기간을 자동으로 뒤집지 않는다. */
+	const reversedRange =
+		isRange && startDate !== "" && endDate !== "" && endDate < startDate;
 	/** 현재 단위의 사용자 문구. 저장 전에 어떤 양이 들어가는지 설명한다. */
 	const selectedUnitLabel = unitLabel(days);
 
@@ -135,13 +138,15 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 		? startDate === today
 			? "오늘은 이미 휴가 기록이 있습니다. 다른 날짜를 선택하세요."
 			: `${startDate}에는 이미 휴가 기록이 있습니다. 다른 날짜를 선택하세요.`
-		: isRange && dates.length === 0 && !missingEndDate
-			? "선택한 기간에는 등록할 수 있는 날이 없습니다."
-			: isRange && dates.length > 0
-				? `휴가 기록 ${dates.length}건을 ${selectedUnitLabel}로 등록합니다.`
-				: startDate
-					? `${startDate === today ? "오늘" : startDate} ${selectedUnitLabel} 휴가를 등록합니다.`
-					: "날짜를 입력하세요.";
+		: reversedRange
+			? "종료일은 시작일 이후여야 합니다. 시작일과 종료일을 다시 선택하세요."
+			: isRange && dates.length === 0 && !missingEndDate
+				? "선택한 기간에는 등록할 수 있는 날이 없습니다."
+				: isRange && dates.length > 0
+					? `휴가 기록 ${dates.length}건을 ${selectedUnitLabel}로 등록합니다.`
+					: startDate
+						? `${startDate === today ? "오늘" : startDate} ${selectedUnitLabel} 휴가를 등록합니다.`
+						: "날짜를 입력하세요.";
 
 	return (
 		<div
@@ -211,7 +216,7 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 								type="date"
 								value={endDate}
 								disabled={busy}
-								aria-invalid={missingEndDate}
+								aria-invalid={missingEndDate || reversedRange}
 								aria-describedby={ENTRY_DATE_DESCRIPTION_ID}
 								onChange={(event) => setEndDate(event.target.value)}
 							/>
@@ -258,8 +263,12 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 
 				<p
 					id={ENTRY_DATE_DESCRIPTION_ID}
-					className={`entry-status ${duplicateStart ? "entry-status-warning" : "dim"}`}
-					role={duplicateStart || dates.length === 0 ? "alert" : "status"}
+					className={`entry-status ${duplicateStart || reversedRange ? "entry-status-warning" : "dim"}`}
+					role={
+						duplicateStart || reversedRange || dates.length === 0
+							? "alert"
+							: "status"
+					}
 					aria-live="polite"
 				>
 					{missingEndDate ? "종료일을 입력하세요." : dateDescription}
@@ -284,7 +293,7 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 					<button
 						type="submit"
 						className="primary"
-						disabled={busy || dates.length === 0}
+						disabled={busy || dates.length === 0 || reversedRange}
 					>
 						{saving ? "저장 중…" : completed ? "저장됨" : "등록"}
 					</button>

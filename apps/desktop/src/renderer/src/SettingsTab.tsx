@@ -98,6 +98,8 @@ export function SettingsTab({
 	);
 	/** 새 입사일로 갈라둔 기록. `null`이 아니면 지울지 묻는 중이다(5.4절). */
 	const [pendingSplit, setPendingSplit] = useState<HireDateSplit | null>(null);
+	/** 마지막으로 성공한 저장을 보조 기술에 알리는 문구. */
+	const [successStatus, setSuccessStatus] = useState<string | null>(null);
 	/** 셸에 변경을 커밋하는 통로 — 진행 중 잠금과 실패 문구가 함께 온다. */
 	const { commit, dropBeforeHireDate, saving, error } = useCommit();
 
@@ -201,7 +203,9 @@ export function SettingsTab({
 				return;
 			}
 		}
-		await commit({ settings: { hireDate, grantBasis } });
+		if (await commit({ settings: { hireDate, grantBasis } })) {
+			setSuccessStatus("설정을 저장했습니다.");
+		}
 	};
 
 	/**
@@ -222,6 +226,7 @@ export function SettingsTab({
 			})
 		) {
 			setPendingSplit(null);
+			setSuccessStatus("설정을 저장했습니다.");
 		}
 	};
 
@@ -232,6 +237,7 @@ export function SettingsTab({
 		}
 		if (await commit({ settings: { hireDate, grantBasis } })) {
 			setPendingSplit(null);
+			setSuccessStatus("설정을 저장했습니다.");
 		}
 	};
 
@@ -265,6 +271,7 @@ export function SettingsTab({
 							aria-describedby={`${HIRE_DATE_HELP_ID} ${SAVE_STATUS_ID}${describedBySuffix}`}
 							onChange={(event) => {
 								setHireDate(event.target.value);
+								setSuccessStatus(null);
 								// 묻던 중에 값을 다시 바꿨나요? 갈라둔 것이 다른 입사일의 결과가 된다.
 								setPendingSplit(null);
 							}}
@@ -287,6 +294,7 @@ export function SettingsTab({
 								);
 								if (picked) {
 									setGrantBasis(picked.value);
+									setSuccessStatus(null);
 								}
 							}}
 						>
@@ -306,7 +314,7 @@ export function SettingsTab({
 						role="status"
 						aria-live="polite"
 					>
-						{saveHint}
+						{successStatus ?? saveHint}
 					</p>
 					{error && (
 						<p
@@ -346,16 +354,17 @@ export function SettingsTab({
 									type="button"
 									className="primary"
 									disabled={saving}
-									onClick={() => handleSaveDropping(pendingSplit)}
+									onClick={handleSaveKeeping}
 								>
-									{saving ? "저장 중…" : "지우고 저장"}
+									{saving ? "저장 중…" : "남기고 저장"}
 								</button>
 								<button
 									type="button"
+									className="danger"
 									disabled={saving}
-									onClick={handleSaveKeeping}
+									onClick={() => handleSaveDropping(pendingSplit)}
 								>
-									남기고 저장
+									지우고 저장
 								</button>
 								<button
 									type="button"

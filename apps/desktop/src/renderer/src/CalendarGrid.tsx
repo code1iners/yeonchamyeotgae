@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Temporal } from "temporal-polyfill";
+import { syncCalendarMonth } from "./calendar-state";
 
 /**
  * 달력 한 칸에 얹는 장식. 등록 시트(25번)는 선택·비활성만 쓰고, 이력 달력(26번)이
@@ -41,6 +42,25 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 	const [month, setMonth] = useState(() =>
 		Temporal.PlainDate.from(initialMonth).toPlainYearMonth(),
 	);
+	/** 사용자가 이전·다음 달을 직접 움직였는지. 상태 push 때 기본 월 복귀 여부를 가른다. */
+	const userNavigatedRef = useRef(false);
+
+	useEffect(
+		function syncCalendarTodayMonthEffect() {
+			/** 현재 월의 문자열 표현. 순수 상태 판정과 Temporal 값을 연결한다. */
+			const currentMonth = month.toString();
+			/** 상태 push 뒤에도 따라가야 할 월. 사용자의 명시적 탐색은 보존한다. */
+			const nextMonth = syncCalendarMonth({
+				currentMonth,
+				today: initialMonth,
+				userNavigated: userNavigatedRef.current,
+			});
+			if (nextMonth !== currentMonth) {
+				setMonth(Temporal.PlainYearMonth.from(nextMonth));
+			}
+		},
+		[initialMonth, month],
+	);
 
 	/** 그 달의 1일. 요일과 길이가 여기서 나온다. */
 	const first = month.toPlainDate({ day: 1 });
@@ -55,7 +75,10 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 					type="button"
 					className="mini"
 					aria-label="이전 달"
-					onClick={() => setMonth(month.subtract({ months: 1 }))}
+					onClick={() => {
+						userNavigatedRef.current = true;
+						setMonth(month.subtract({ months: 1 }));
+					}}
 				>
 					‹
 				</button>
@@ -66,7 +89,10 @@ export function CalendarGrid({ today, initialMonth, onPick, decorate }: Props) {
 					type="button"
 					className="mini"
 					aria-label="다음 달"
-					onClick={() => setMonth(month.add({ months: 1 }))}
+					onClick={() => {
+						userNavigatedRef.current = true;
+						setMonth(month.add({ months: 1 }));
+					}}
 				>
 					›
 				</button>

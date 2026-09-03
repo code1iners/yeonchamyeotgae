@@ -528,6 +528,91 @@ describe.sequential("Electron 제품 흐름", () => {
 		await waitForPopoverHidden(flow.app);
 	});
 
+	test("용어 도움말과 앱 단축키가 맥락·입력 포커스를 보존한다", async () => {
+		flow = await launchProductFlow(NORMAL_DATA);
+
+		/** 헤더의 공통 단축키 도움말 버튼. */
+		const shortcutHelp = flow.page.getByRole("button", {
+			name: "단축키 도움말",
+		});
+		await shortcutHelp.click();
+		/** 헤더 도움말에서 실제로 읽을 수 있는 설명. */
+		const shortcutTooltip = flow.page
+			.getByRole("tooltip")
+			.filter({ hasText: "휴가 등록" });
+		await expectVisible(shortcutTooltip);
+		expect(await shortcutHelp.getAttribute("aria-expanded")).toBe("true");
+		const tooltipId = await shortcutTooltip.getAttribute("id");
+		expect(await shortcutHelp.getAttribute("aria-describedby")).toBe(tooltipId);
+		await flow.page.keyboard.press("Escape");
+		expect(await shortcutHelp.getAttribute("aria-expanded")).toBe("false");
+		expect(
+			await shortcutHelp.evaluate(
+				(element) => element === document.activeElement,
+			),
+		).toBe(true);
+
+		/** 요약 행의 발생 설명 버튼. focus만으로도 같은 용어의 도움말이 열린다. */
+		const grantedHelp = flow.page.getByRole("button", { name: "발생 도움말" });
+		await grantedHelp.focus();
+		await expectVisible(
+			flow.page.getByRole("tooltip").filter({ hasText: "근속에 따라" }),
+		);
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+		expect(await grantedHelp.count()).toBe(0);
+		expect(
+			await flow.page
+				.getByRole("tooltip")
+				.filter({ hasText: "근속에 따라" })
+				.count(),
+		).toBe(0);
+
+		/** 비편집 영역에서 물리 코드 단축키를 보내면 해당 탭으로 이동한다. */
+		const shortcutResult = await flow.page.evaluate(() => {
+			const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+			const event = new KeyboardEvent("keydown", {
+				bubbles: true,
+				cancelable: true,
+				code: "Digit1",
+				ctrlKey: !mac,
+				metaKey: mac,
+				shiftKey: true,
+			});
+			window.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		expect(shortcutResult).toBe(true);
+		expect(
+			await flow.page
+				.getByRole("tab", { name: "요약" })
+				.getAttribute("aria-selected"),
+		).toBe("true");
+
+		/** 입력 포커스 중 같은 조합은 앱 단축키가 가로채지 않는다. */
+		await flow.page.getByRole("tab", { name: "설정" }).click();
+		const hireDate = flow.page.getByLabel("입사일");
+		await hireDate.focus();
+		const editableShortcutResult = await hireDate.evaluate((input) => {
+			const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+			const event = new KeyboardEvent("keydown", {
+				bubbles: true,
+				cancelable: true,
+				code: "Digit1",
+				ctrlKey: !mac,
+				metaKey: mac,
+				shiftKey: true,
+			});
+			input.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		expect(editableShortcutResult).toBe(false);
+		expect(
+			await flow.page
+				.getByRole("tab", { name: "설정" })
+				.getAttribute("aria-selected"),
+		).toBe("true");
+	}, 60_000);
+
 	test("설정에서 기준방식 설명·유효성·저장 후 잔여 재계산을 확인한다", async () => {
 		flow = await launchProductFlow(BASIS_CHANGE_DATA);
 		await flow.page.getByRole("tab", { name: "설정" }).click();
@@ -580,11 +665,9 @@ describe.sequential("Electron 제품 흐름", () => {
 		await save.click();
 		await expectVisible(flow.page.getByText("7.5일", { exact: true }));
 		expect(await grantBasis.inputValue()).toBe("fiscalYear");
-		expect(
-			await flow.page
-				.getByText("변경한 값이 없습니다.", { exact: true })
-				.isVisible(),
-		).toBe(true);
+		await expectVisible(
+			flow.page.getByText("설정을 저장했습니다.", { exact: true }),
+		);
 	}, 60_000);
 
 	test("입사일 변경에서 기록 보존과 삭제를 고르고 삭제 전 백업을 확인한다", async () => {
@@ -1140,15 +1223,15 @@ describe.sequential("Electron 제품 흐름", () => {
 		] as const;
 		for (const [label, value] of expectedRows) {
 			/** 라벨과 수량이 한 행에 있는지 확인한다. */
-			const row = ledger.getByRole("row").filter({ hasText: label });
+			const row = ledger
+				.getByRole("row")
+				.filter({ hasText: new RegExp(`^${label}`) });
 			await expectVisible(row);
 			expect(await row.getByRole("cell").first().textContent()).toBe(value);
 		}
 
 		await expectVisible(
-			flow.page.getByText(
-				"등록한 예정 1.25일은 전부 아직 생기지 않은 발생분에서 나갑니다 — 지금 잔여에 없습니다",
-			),
+			flow.page.getByText("등록 예정 총 1.25일 · 잔여 미반영 1.25일"),
 		);
 		await expectVisible(flow.page.getByTitle("소멸 임박, D-30"));
 		await expectVisible(flow.page.getByTitle("소멸 임박, D-45"));
@@ -1224,7 +1307,6 @@ describe.sequential("Electron 제품 흐름", () => {
 		const dateBefore = await plannedRow
 			.getByText("2025-12-15", { exact: true })
 			.boundingBox();
-		await plannedRow.hover();
 		await expectVisible(plannedRow.getByRole("button", { name: "수정" }));
 		/** 값의 길이와 행동 노출이 달라도 다섯 고정 열의 시작 위치가 같다. */
 		const plannedColumnBoxes = await Promise.all([
@@ -1238,7 +1320,6 @@ describe.sequential("Electron 제품 흐름", () => {
 		const currentRow = flow.page.getByRole("article", {
 			name: /2025-11-28 사용 휴가 기록/,
 		});
-		await currentRow.hover();
 		await expectVisible(currentRow.getByRole("button", { name: "수정" }));
 		const currentColumnBoxes = await Promise.all([
 			currentRow.getByText("2025-11-28", { exact: true }).boundingBox(),
@@ -1337,6 +1418,22 @@ describe.sequential("Electron 제품 흐름", () => {
 		);
 		await updatedPlannedRow.hover();
 		await updatedPlannedRow.getByRole("button", { name: "삭제" }).click();
+		await expectVisible(
+			updatedPlannedRow.getByText("삭제할까요?", { exact: true }),
+		);
+		const cancelDelete = updatedPlannedRow.getByRole("button", {
+			name: "취소",
+		});
+		await cancelDelete.focus();
+		await cancelDelete.press("Enter");
+		await expectKeyboardFocus(
+			updatedPlannedRow.getByRole("button", { name: "삭제" }),
+		);
+		await updatedPlannedRow.getByRole("button", { name: "삭제" }).click();
+		await updatedPlannedRow
+			.getByRole("button", { name: "삭제", exact: true })
+			.last()
+			.click();
 		await expectVisible(flow.page.getByText("14일", { exact: true }));
 		expect(
 			await flow.page.getByText("2025-12-16", { exact: true }).count(),
@@ -1387,10 +1484,36 @@ describe.sequential("Electron 제품 흐름", () => {
 		});
 		await updatedUsedRow.hover();
 		await updatedUsedRow.getByRole("button", { name: "삭제" }).click();
+		await expectVisible(
+			updatedUsedRow.getByText("삭제할까요?", { exact: true }),
+		);
+		await updatedUsedRow
+			.getByRole("button", { name: "삭제", exact: true })
+			.last()
+			.click();
 		await expectVisible(flow.page.getByText("15일", { exact: true }));
 		expect(
 			await flow.page.getByText("2025-11-27", { exact: true }).count(),
 		).toBe(0);
+	}, 60_000);
+
+	test("빈 이력에서 휴가 등록을 시작하고 닫힌 뒤 원래 CTA로 포커스를 돌린다", async () => {
+		flow = await launchProductFlow(QUICK_ENTRY_DATA);
+		await flow.page.getByRole("tab", { name: "이력" }).click();
+
+		/** 기록이 없을 때도 다음 행동을 바로 시작할 CTA. */
+		const emptyEntryButton = flow.page.getByRole("button", {
+			name: "휴가 등록",
+		});
+		await expectVisible(
+			flow.page.getByText("휴가 기록이 없습니다.", { exact: true }),
+		);
+		await emptyEntryButton.click();
+		const sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await expectVisible(sheet);
+		await flow.page.keyboard.press("Escape");
+		await sheet.waitFor({ state: "detached" });
+		await expectKeyboardFocus(emptyEntryButton);
 	}, 60_000);
 
 	test("이력 변경 실패가 해당 행에 남고 입력 맥락을 보존한다", async () => {
@@ -1429,6 +1552,11 @@ describe.sequential("Electron 제품 흐름", () => {
 		await chmod(flow.userDataDirectory, 0o500);
 		try {
 			await usedRow.getByRole("button", { name: "삭제" }).click();
+			await expectVisible(usedRow.getByText("삭제할까요?", { exact: true }));
+			await usedRow
+				.getByRole("button", { name: "삭제", exact: true })
+				.last()
+				.click();
 			await expectVisible(
 				usedRow.getByText(/저장하지 못했습니다/, { exact: false }),
 			);
@@ -1579,6 +1707,14 @@ describe.sequential("Electron 제품 흐름", () => {
 		const deleteEntry = selectedDetails.getByRole("button", { name: "삭제" });
 		await deleteEntry.focus();
 		await deleteEntry.press("Enter");
+		await expectVisible(
+			selectedDetails.getByText("삭제할까요?", { exact: true }),
+		);
+		const confirmDeleteEntry = selectedDetails
+			.getByRole("button", { name: "삭제", exact: true })
+			.last();
+		await confirmDeleteEntry.focus();
+		await confirmDeleteEntry.press("Enter");
 		await expectVisible(
 			selectedDetails.getByText("이 날에는 기록이 없습니다.", { exact: true }),
 		);
@@ -1733,14 +1869,14 @@ describe.sequential("Electron 제품 흐름", () => {
 		await sheet.waitFor({ state: "detached" });
 		await expectVisible(flow.page.getByText("8.25일", { exact: true }));
 
-		// 시작일과 종료일을 역순으로 넣어도 주말과 기존 기록을 뺀 2건을 미리 보여준다.
+		// 정상적인 기간은 시작일이 먼저 오고, 기존 기록이 없는 두 날을 펼친다.
 		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
 		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
 		await flow.page
 			.getByRole("button", { name: "기간으로", exact: true })
 			.click();
-		await flow.page.getByLabel("날짜").fill("2025-12-09");
-		await flow.page.getByLabel("종료일").fill("2025-12-05");
+		await flow.page.getByLabel("날짜").fill("2025-12-08");
+		await flow.page.getByLabel("종료일").fill("2025-12-09");
 		await flow.page.getByLabel("메모").fill("  기간 메모  ");
 		expect(await flow.page.getByLabel("주말 제외").isChecked()).toBe(true);
 		await expectVisible(
@@ -1748,9 +1884,30 @@ describe.sequential("Electron 제품 흐름", () => {
 				exact: true,
 			}),
 		);
-
 		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
 		await sheet.waitFor({ state: "detached" });
+		await expectVisible(flow.page.getByText("6.25일", { exact: true }));
+
+		// 시작일과 종료일이 역순이면 자동으로 뒤집지 않고 등록을 막는다.
+		await flow.page.getByRole("button", { name: "휴가 등록" }).click();
+		sheet = flow.page.getByRole("dialog", { name: "휴가 등록" });
+		await flow.page
+			.getByRole("button", { name: "기간으로", exact: true })
+			.click();
+		await flow.page.getByLabel("날짜").fill("2025-12-09");
+		await flow.page.getByLabel("종료일").fill("2025-12-05");
+		await expectVisible(
+			flow.page.getByText(
+				"종료일은 시작일 이후여야 합니다. 시작일과 종료일을 다시 선택하세요.",
+				{ exact: true },
+			),
+		);
+		expect(
+			await flow.page
+				.getByRole("button", { name: "등록", exact: true })
+				.isDisabled(),
+		).toBe(true);
+		await flow.page.getByRole("button", { name: "취소", exact: true }).click();
 		await expectVisible(flow.page.getByText("6.25일", { exact: true }));
 
 		// 주말 제외를 끄면 주말도 실제 휴가 기록으로 펼쳐진다.
@@ -2025,7 +2182,10 @@ describe.sequential("Electron 제품 흐름", () => {
 		/** 조정 후에도 계산된 발생분과 조정 발생분을 함께 보여주는 영역. */
 		const grants = flow.page.getByRole("region", { name: "살아 있는 발생분" });
 		await expectVisible(grants.getByText("연차", { exact: true }));
-		expect(await grants.getByText("조정", { exact: true }).count()).toBe(2);
+		await expectVisible(grants.getByText("조정 · 기존 이월", { exact: true }));
+		await expectVisible(
+			grants.getByText("조정 · 화면에서 추가한 양수", { exact: true }),
+		);
 		await flow.page.getByRole("tab", { name: "설정" }).click();
 
 		await positiveRow.getByRole("button", { name: "수정" }).click();
@@ -2056,8 +2216,11 @@ describe.sequential("Electron 제품 흐름", () => {
 			name: "살아 있는 발생분",
 		});
 		await expectVisible(updatedGrants.getByText("연차", { exact: true }));
-		expect(await updatedGrants.getByText("조정", { exact: true }).count()).toBe(
-			2,
+		await expectVisible(
+			updatedGrants.getByText("조정 · 기존 이월", { exact: true }),
+		);
+		await expectVisible(
+			updatedGrants.getByText("조정 · 화면에서 수정한 음수", { exact: true }),
 		);
 		await flow.page.getByRole("tab", { name: "설정" }).click();
 
@@ -2071,6 +2234,15 @@ describe.sequential("Electron 제품 흐름", () => {
 		);
 
 		await negativeRow.getByRole("button", { name: "삭제" }).click();
+		const adjustmentDeleteConfirmation = adjustmentTable
+			.getByRole("row")
+			.filter({ hasText: "삭제할까요?" });
+		await expectVisible(
+			adjustmentDeleteConfirmation.getByText("삭제할까요?", { exact: true }),
+		);
+		await adjustmentDeleteConfirmation
+			.getByRole("button", { name: "삭제", exact: true })
+			.click();
 		await expectVisible(flow.page.getByText("19일", { exact: true }));
 		expect(
 			await adjustmentTable
@@ -2084,9 +2256,9 @@ describe.sequential("Electron 제품 흐름", () => {
 			name: "살아 있는 발생분",
 		});
 		await expectVisible(remainingGrants.getByText("연차", { exact: true }));
-		expect(
-			await remainingGrants.getByText("조정", { exact: true }).count(),
-		).toBe(1);
+		await expectVisible(
+			remainingGrants.getByText("조정 · 기존 이월", { exact: true }),
+		);
 	}, 60_000);
 
 	test("조정 저장 실패 시 입력값과 열린 맥락을 유지하고 다시 시도할 수 있다", async () => {

@@ -1,12 +1,20 @@
-import type { Balance, GrantSource, LivingGrant } from "@yeoncha/core";
-import { livingGrants } from "@yeoncha/core";
+import type { Adjustment, Balance } from "@yeoncha/core";
 import type { RefObject } from "react";
+import { HelpTooltip } from "./HelpTooltip";
+import { type LedgerHelpTerm, TERM_HELP } from "./help-content";
+import {
+	type SummaryGrant,
+	summaryGrantLabel,
+	summaryGrants,
+} from "./summary-grants";
 
 type Props = {
 	/** 조회일 기준 잔여와 발생분별 내역. 이 화면의 모든 숫자가 여기서 나온다. */
 	balance: Balance;
 	/** 조회일. 소멸까지 남은 날을 세는 기준이다. */
 	today: string;
+	/** 조정 원본. 발생분 행의 이름을 계산 결과와 연결한다. */
+	adjustments: Adjustment[];
 	/** 등록면이 닫힌 뒤 포커스를 돌려줄 휴가 등록 버튼. */
 	entryTriggerRef: RefObject<HTMLButtonElement | null>;
 	/** `조정을 추가` 링크 — 설정 탭으로 넘어가며 조정 폼이 열린 채로 도착한다(5.1절). */
@@ -28,7 +36,7 @@ const LINES = [
 	/** 살아 있는 발생분에 배정된 몫 중 오늘까지의 휴가 기록. */
 	{ key: "used", label: "사용", note: "오늘까지 쓴 휴가" },
 	/** 살아 있는 발생분에 배정된 몫 중 오늘 이후의 휴가 기록. 각주가 나머지를 말한다. */
-	{ key: "planned", label: "예정", note: "앞으로 쓸 휴가 중 배정된 몫" },
+	{ key: "planned", label: "예정", note: "현재 발생분에 배정된 예정" },
 	/** 어느 발생분에도 배정되지 못한 일수(3.6절). 0보다 클 때만 행이 붙는다. */
 	{ key: "excess", label: "초과", note: "배정되지 못해 잔여를 깎는 몫" },
 	/** 위의 항들을 더하고 뺀 결과. 트레이에 뜨는 숫자와 같은 값이다(4절). */
@@ -38,13 +46,6 @@ const LINES = [
 	label: string;
 	note: string;
 }[];
-
-/** 발생분 리스트의 출처 문구(CONTEXT.md). */
-const SOURCE_LABEL: Record<GrantSource, string> = {
-	monthly: "월차",
-	annual: "연차",
-	adjustment: "조정",
-};
 
 /**
  * 요약 탭 — **"지금 몇 개인지"의 근거**다(스펙 5.1절). 트레이 숫자가 왜 그 값인지가
@@ -60,16 +61,29 @@ const SOURCE_LABEL: Record<GrantSource, string> = {
 export function SummaryTab({
 	balance,
 	today,
+	adjustments,
 	entryTriggerRef,
 	onAddAdjustment,
 	onAddEntry,
 }: Props) {
 	/** 조회일에 살아 있는 발생분. 소멸 임박 순으로 정렬되어 온다(3.4절). */
-	const grants = livingGrants({ grants: balance.grants, today });
+	const grants = summaryGrants({ balance, adjustments, today });
 	/** 초과가 있는가 — 초과 행과 상단의 원인 한 줄이 이 값에 달려 있다. */
 	const hasExcess = balance.excess > 0;
-	/** 표 아래 각주. 미래 발생분에서 나가는 예정이 없으면 `null`이다. */
-	const footnote = footnoteOf(balance);
+	/** 표 아래에서 등록 총량과 아직 잔여에 반영되지 않은 양을 항상 보여준다. */
+	/** 같은 발생일의 빈 메모 조정 수를 세어 반복된 화면 이름을 구분한다. */
+	const blankAdjustmentDateCounts = grants.reduce((counts, grant) => {
+		if (grant.source === "adjustment" && !grant.adjustmentNote?.trim()) {
+			counts.set(grant.grantDate, (counts.get(grant.grantDate) ?? 0) + 1);
+		}
+		return counts;
+	}, new Map<string, number>());
+	/** 같은 발생일의 빈 메모 조정이 둘 이상인 날짜. */
+	const duplicateBlankAdjustmentDates = new Set(
+		[...blankAdjustmentDateCounts]
+			.filter(([, count]) => count > 1)
+			.map(([date]) => date),
+	);
 
 	return (
 		<div className="pane">
@@ -95,10 +109,17 @@ export function SummaryTab({
 								<th className="sum-label" scope="row">
 									{label}
 								</th>
-								<td className="sum-number num">
+								<td className="sum-number num selectable">
 									<b>{balance[key]}</b>
 								</td>
-								<td className="sum-note dim">{note}</td>
+								<td className="sum-note dim">
+									<span className="sum-note-content">{note}</span>
+									{lineHelpTerms(key).map((term) => (
+										<HelpTooltip key={term} label={`${term} 도움말`}>
+											{TERM_HELP[term]}
+										</HelpTooltip>
+									))}
+								</td>
 							</tr>
 						),
 					)}
@@ -108,32 +129,46 @@ export function SummaryTab({
 			 * 각주가 유일한 해답이다(5.1절). 4줄의 `예정`에 등록 총량을 쓰면 검산이 깨지고,
 			 * 배정분만 쓰고 각주가 없으면 사용자가 등록한 나머지가 요약에서 사라진다.
 			 */}
-			{footnote && <p className="footnote dim">{footnote}</p>}
+			<p className="footnote planned-summary dim">
+				{plannedSummaryOf(balance)}
+			</p>
 			{/* 발생분이 많아져도 목록만 줄이고, 기록 시작 행동은 최초 뷰포트에 남긴다. */}
 			<section className="summary-grants" aria-label="살아 있는 발생분">
 				<div className="sec-title">살아 있는 발생분</div>
 				{grants.length === 0 ? (
 					<div className="row dim">지금 살아 있는 발생분이 없습니다.</div>
 				) : (
-					grants.map((grant) => (
-						<div className="grant" key={keyOf(grant)}>
-							<span>{SOURCE_LABEL[grant.source]}</span>
-							<b className="num grant-amount">
-								{grant.remaining}/{grant.days}
-							</b>
-							{/* 60일 이내면 날짜 대신 D-day다 — 날짜는 남은 시간을 계산하게 시킨다. */}
-							{grant.expiringSoon ? (
-								<span
-									className="badge num warn"
-									title={`소멸 임박, D-${grant.daysUntilExpiry}`}
-								>
-									D-{grant.daysUntilExpiry}
+					grants.map((grant, index) => {
+						/** 행에서 읽을 출처 이름. 긴 메모는 CSS로 줄이고 전체는 title에 남긴다. */
+						const sourceLabel = summaryGrantLabel(grant, {
+							duplicateBlankDate: duplicateBlankAdjustmentDates.has(
+								grant.grantDate,
+							),
+						});
+						return (
+							<div className="grant" key={keyOf(grant, index)}>
+								<span className="grant-source selectable" title={sourceLabel}>
+									{sourceLabel}
 								</span>
-							) : (
-								<span className="grant-expiry dim num">{grant.expiryDate}</span>
-							)}
-						</div>
-					))
+								<b className="num grant-amount selectable">
+									{grant.remaining}/{grant.days}
+								</b>
+								{/* 60일 이내면 날짜 대신 D-day다 — 날짜는 남은 시간을 계산하게 시킨다. */}
+								{grant.expiringSoon ? (
+									<span
+										className="badge num warn"
+										title={`소멸 임박, D-${grant.daysUntilExpiry}`}
+									>
+										D-{grant.daysUntilExpiry}
+									</span>
+								) : (
+									<span className="grant-expiry dim num selectable">
+										{grant.expiryDate}
+									</span>
+								)}
+							</div>
+						);
+					})
 				)}
 			</section>
 			<div className="cta">
@@ -150,29 +185,38 @@ export function SummaryTab({
 	);
 }
 
-/**
- * 미래 발생분에서 나가는 예정을 말하는 각주(스펙 5.1절). 없으면 `null`이다.
- *
- * 스펙의 예시는 `내년 발생분`이지만 실제로 그 발생분이 내년 것이라는 보장이 없어
- * (회계연도 기준의 월차·비례분도 미래 발생분이 된다) 시점을 단정하지 않는다.
- */
-function footnoteOf(balance: Balance): string | null {
-	/** 미래 발생분에서 나가는 예정. */
-	const onFuture = balance.plannedOnFutureGrants;
-
-	// 미래 발생분에서 나가는 예정이 있나요? 없으면 4줄이 그대로 전부다.
-	if (onFuture <= 0) {
-		return null;
-	}
-	// 등록한 예정이 전부 미래 발생분에서 나가나요? 같은 숫자를 두 번 적으면
-	// (`3일이지만 3일은`) 두 값이 다른 것을 말하는 문장이 스스로를 배반한다.
-	if (onFuture === balance.plannedTotal) {
-		return `등록한 예정 ${onFuture}일은 전부 아직 생기지 않은 발생분에서 나갑니다 — 지금 잔여에 없습니다`;
-	}
-	return `등록한 예정은 ${balance.plannedTotal}일이지만 ${onFuture}일은 아직 생기지 않은 발생분에서 나갑니다 — 지금 잔여에 없습니다`;
+/** 등록 예정 총량과 아직 현재 잔여에 반영되지 않은 양을 말하는 각주(스펙 5.1절). */
+function plannedSummaryOf(balance: Balance): string {
+	return (
+		"등록 예정 총 " +
+		balance.plannedTotal +
+		"일 · 잔여 미반영 " +
+		balance.plannedOnFutureGrants +
+		"일"
+	);
 }
 
-/** 발생분 행의 key. 발생 레코드에는 `id`가 없으므로 레코드를 이루는 값으로 만든다. */
-function keyOf(grant: LivingGrant): string {
-	return `${grant.source}-${grant.grantDate}-${grant.expiryDate}-${grant.days}`;
+/** 요약 행에서 용어 설명을 열 물음표의 순서. */
+function lineHelpTerms(key: (typeof LINES)[number]["key"]): LedgerHelpTerm[] {
+	if (key === "granted") {
+		return ["발생"];
+	}
+	if (key === "planned") {
+		return ["예정", "배정"];
+	}
+	if (key === "excess") {
+		return ["초과"];
+	}
+	return [];
+}
+
+/** 발생분 행의 key. 화면 모델의 조정 ID와 index로 같은 값을 안전하게 구분한다. */
+function keyOf(grant: SummaryGrant, index: number): string {
+	return [
+		grant.source,
+		grant.grantDate,
+		grant.expiryDate,
+		grant.days,
+		grant.adjustmentId ?? index,
+	].join("-");
 }

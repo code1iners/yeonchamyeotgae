@@ -46,8 +46,8 @@ describe("expandEntryDates", () => {
 		).toEqual(["2026-03-23", "2026-03-25"]);
 	});
 
-	// 종료일을 시작일보다 앞으로 고를 수 있다 — 순서를 뒤집어 같은 기간으로 다룬다.
-	it("역순 입력을 정규화한다", () => {
+	// 종료일이 시작일보다 앞서면 등록하지 않는다 — 시트가 오류와 비활성 버튼을 보여 준다.
+	it("역순 입력은 빈 배열로 거부한다", () => {
 		expect(
 			expandEntryDates({
 				start: "2026-03-24",
@@ -55,7 +55,7 @@ describe("expandEntryDates", () => {
 				excludeWeekends: true,
 				taken: NONE,
 			}),
-		).toEqual(["2026-03-23", "2026-03-24"]);
+		).toEqual([]);
 	});
 
 	it("시작일과 종료일이 같으면 그 하루다", () => {

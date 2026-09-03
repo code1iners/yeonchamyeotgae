@@ -87,7 +87,7 @@ export type Balance = {
 	planned: number;
 	/**
 	 * 아직 유효하지 않은 미래 발생분에 배정된 예정. 잔여에서 빠지지 않는다.
-	 * 요약 탭의 각주(`등록한 예정은 4일이지만 1일은 내년 발생분에서 나갑니다`)가 이 값을 쓴다.
+	 * 요약 탭의 예정 총량·잔여 미반영 각주가 이 값을 쓴다.
 	 */
 	plannedOnFutureGrants: number;
 	/**

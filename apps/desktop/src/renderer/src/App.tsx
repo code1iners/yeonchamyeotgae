@@ -1,9 +1,22 @@
 import type { Balance } from "@yeoncha/core";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import { AppLoadingScreen, AppStateErrorScreen } from "./AppStateScreen";
+import { HelpTooltip } from "./HelpTooltip";
 import { HistoryTab } from "./HistoryTab";
 import { LeaveEntrySheet } from "./LeaveEntrySheet";
 import { SettingsTab } from "./SettingsTab";
 import { SummaryTab } from "./SummaryTab";
+import {
+	isEditableTarget,
+	matchesAppShortcut,
+	shortcutLabel,
+} from "./shortcuts";
 import { UnreadableScreen } from "./UnreadableScreen";
 import { useAppState } from "./use-app-state";
 
@@ -19,6 +32,9 @@ const TABS = [
 
 /** 탭 식별자. */
 type TabKey = (typeof TABS)[number]["key"];
+
+/** 휴가 등록면을 닫은 뒤 포커스를 되돌릴 탭. */
+type EntryFocusTarget = "summary" | "history";
 
 /** 탭과 연결된 버튼의 고유 식별자. */
 function tabId(key: TabKey): string {
@@ -52,8 +68,10 @@ type Selection = {
 export function App() {
 	/** 높이 측정 대상인 팝오버 본문 요소. */
 	const rootRef = useRef<HTMLDivElement>(null);
-	/** 셸이 준 상태. 아직 못 받았으면 `null`이다. */
-	const state = useAppState();
+	/** 셸 상태의 loading·ready·error 경계와 재시도 행동. */
+	const appState = useAppState();
+	/** ready 상태에서만 실제 화면에 넘길 셸 상태. */
+	const state = appState.status === "ready" ? appState.state : null;
 	/** 사용자가 고른 탭과 그 이유. 입사일이 없는 동안에는 설정으로 고정된다. */
 	const [selected, setSelected] = useState<Selection>({
 		tab: "summary",
@@ -63,8 +81,12 @@ export function App() {
 	const [entryOpen, setEntryOpen] = useState(false);
 	/** 등록면을 닫은 뒤 다시 포커스할 요약의 휴가 등록 버튼. */
 	const entryTriggerRef = useRef<HTMLButtonElement>(null);
+	/** 이력 빈 상태에서 등록면을 연 뒤 다시 포커스할 등록 버튼. */
+	const historyEntryTriggerRef = useRef<HTMLButtonElement>(null);
 	/** 등록면이 사용자 조작으로 열렸는지 기억해 닫힘 뒤 포커스를 복귀시킨다. */
 	const restoreEntryFocusRef = useRef(false);
+	/** 등록면을 열기 전의 탭을 기억해 닫힌 뒤 같은 맥락으로 돌아간다. */
+	const entryFocusTargetRef = useRef<EntryFocusTarget>("summary");
 
 	useEffect(function reportContentHeightEffect() {
 		const root = rootRef.current;
@@ -93,9 +115,9 @@ export function App() {
 	/** 실제로 그릴 탭. */
 	const tab: TabKey = onboarding ? "settings" : selected.tab;
 	/** 탭을 선택하고 조정 추가 같은 이전 진입 맥락은 닫는다. */
-	const selectTab = (nextTab: TabKey) => {
+	const selectTab = useCallback((nextTab: TabKey) => {
 		setSelected({ tab: nextTab, openAdjustment: false });
-	};
+	}, []);
 	/** 탭 목록에서 키보드로 다음 화면을 고르는 핸들러. */
 	const handleTabKeyDown = (
 		event: KeyboardEvent<HTMLButtonElement>,
@@ -161,7 +183,10 @@ export function App() {
 			}
 
 			/** 등록면이 닫힌 뒤 다시 포커스할 현재 DOM 버튼. */
-			const trigger = entryTriggerRef.current;
+			const trigger =
+				entryFocusTargetRef.current === "history"
+					? historyEntryTriggerRef.current
+					: entryTriggerRef.current;
 			if (!trigger) {
 				return;
 			}
@@ -171,15 +196,68 @@ export function App() {
 		[entryOpen],
 	);
 
-	/** 요약의 휴가 등록 버튼에서 전체 등록면으로 이동한다. */
-	const handleOpenEntry = () => {
-		restoreEntryFocusRef.current = true;
-		setEntryOpen(true);
-	};
+	/** 요약·이력의 등록 행동에서 전체 등록면으로 이동한다. */
+	const handleOpenEntry = useCallback(
+		(target: EntryFocusTarget = "summary") => {
+			entryFocusTargetRef.current = target;
+			restoreEntryFocusRef.current = true;
+			setEntryOpen(true);
+		},
+		[],
+	);
 	/** 등록면을 닫고, 닫힘 효과가 원래 트리거를 찾게 한다. */
 	const handleCloseEntry = () => {
 		setEntryOpen(false);
 	};
+
+	useEffect(
+		function registerAppShortcutEffect() {
+			if (entryOpen || onboarding || !state?.balance) {
+				return;
+			}
+
+			/** 브라우저 편집 영역에서는 앱 단축키를 가로채지 않는다. */
+			const handleShortcutKeyDown = (event: globalThis.KeyboardEvent) => {
+				if (isEditableTarget(event.target)) {
+					return;
+				}
+				const platform =
+					typeof navigator === "undefined" ? "" : navigator.platform;
+				if (matchesAppShortcut(event, "open-entry", platform)) {
+					event.preventDefault();
+					handleOpenEntry("summary");
+					return;
+				}
+
+				const shortcutTabs: Array<
+					[TabKey, "summary-tab" | "history-tab" | "settings-tab"]
+				> = [
+					["summary", "summary-tab"],
+					["history", "history-tab"],
+					["settings", "settings-tab"],
+				];
+				for (const [nextTab, shortcut] of shortcutTabs) {
+					if (!matchesAppShortcut(event, shortcut, platform)) {
+						continue;
+					}
+					event.preventDefault();
+					selectTab(nextTab);
+					document.getElementById(tabId(nextTab))?.focus();
+					return;
+				}
+			};
+
+			window.addEventListener("keydown", handleShortcutKeyDown);
+			return () => {
+				window.removeEventListener("keydown", handleShortcutKeyDown);
+			};
+		},
+		[entryOpen, onboarding, state?.balance, handleOpenEntry, selectTab],
+	);
+
+	/** 단축키 안내와 이벤트 판정이 공유하는 현재 플랫폼 문자열. */
+	const shortcutPlatform =
+		typeof navigator === "undefined" ? "" : navigator.platform;
 
 	// 높이를 재는 뿌리 요소는 하나로 둔다 — 화면을 갈아끼울 때 이 요소까지 바뀌면
 	// 마운트 때 건 ResizeObserver가 떨어져 나간 노드를 계속 보게 된다.
@@ -191,7 +269,11 @@ export function App() {
 			 * 것이라 `입사일을 넣으면…`이 사실이 아니고, 탭을 띄우면 쓸 수 없는 입력이
 			 * 열린다.
 			 */}
-			{state?.read.status === "error" ? (
+			{appState.status === "loading" ? (
+				<AppLoadingScreen />
+			) : appState.status === "error" ? (
+				<AppStateErrorScreen cause={appState.error} onRetry={appState.retry} />
+			) : state?.read.status === "error" ? (
 				<UnreadableScreen kind={state.read.kind} />
 			) : entryOpen && state?.balance ? (
 				/* 등록 시트는 탭 위에 겹치는 레이어가 아니라 팝오버 전체를 대신한다(5.2절).
@@ -206,18 +288,39 @@ export function App() {
 					<>
 						<header className="head">
 							<h1 className="product-name">연차몇개</h1>
-							{!onboarding && (
-								<div className="head-balance">
-									<span className="head-balance-label">잔여</span>
-									{/* 초과가 있으면 경고색이다(5.1절). 요약 탭의 초과 행·원인 한 줄과
+							<div className="head-actions">
+								{!onboarding && (
+									<div className="head-balance">
+										<span className="head-balance-label">잔여</span>
+										{/* 초과가 있으면 경고색이다(5.1절). 요약 탭의 초과 행·원인 한 줄과
 									    같은 조건이어야 한다 — 갈리면 헤더와 본문이 다른 말을 한다. */}
-									<strong
-										className={`num ${state.balance && state.balance.excess > 0 ? "warn" : ""}`}
-									>
-										{formatBalance(state.balance)}
-									</strong>
-								</div>
-							)}
+										<strong
+											className={`num ${state.balance && state.balance.excess > 0 ? "warn" : ""}`}
+										>
+											{formatBalance(state.balance)}
+										</strong>
+									</div>
+								)}
+								<HelpTooltip label="단축키 도움말">
+									<span className="help-content-title">단축키</span>
+									<span>
+										휴가 등록{" "}
+										<kbd>{shortcutLabel("open-entry", shortcutPlatform)}</kbd>
+									</span>
+									<span>
+										요약{" "}
+										<kbd>{shortcutLabel("summary-tab", shortcutPlatform)}</kbd>
+									</span>
+									<span>
+										이력{" "}
+										<kbd>{shortcutLabel("history-tab", shortcutPlatform)}</kbd>
+									</span>
+									<span>
+										설정{" "}
+										<kbd>{shortcutLabel("settings-tab", shortcutPlatform)}</kbd>
+									</span>
+								</HelpTooltip>
+							</div>
 						</header>
 						<div className="tabs" role="tablist" aria-label="연차 화면">
 							{TABS.map(({ key, label }) => (
@@ -251,6 +354,7 @@ export function App() {
 								<SummaryTab
 									balance={state.balance}
 									today={state.today}
+									adjustments={state.adjustments}
 									entryTriggerRef={entryTriggerRef}
 									onAddAdjustment={() =>
 										setSelected({ tab: "settings", openAdjustment: true })
@@ -272,6 +376,8 @@ export function App() {
 									balance={state.balance}
 									adjustments={state.adjustments}
 									today={state.today}
+									entryTriggerRef={historyEntryTriggerRef}
+									onAddEntry={() => handleOpenEntry("history")}
 								/>
 							)}
 						</div>

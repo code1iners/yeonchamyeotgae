@@ -510,6 +510,225 @@ button.mini:hover:not(:disabled) {
 	padding-right: 0;
 }
 
+/* 초기 셸 통신 상태 — 빈 팝오버 대신 현재 상태와 다음 행동을 한 자리에서 말한다. */
+.app-state-screen {
+	padding: 16px 12px;
+}
+.app-state-screen[tabindex="-1"]:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+.app-state-title {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 600;
+}
+.app-state-body,
+.app-state-error-detail {
+	margin: 5px 0 0;
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--fg-2);
+}
+.app-state-error-detail {
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+	color: var(--danger);
+	overflow-wrap: anywhere;
+}
+.app-state-screen .cta {
+	padding-left: 0;
+	padding-right: 0;
+}
+
+/* 헤더 도움말과 잔여를 한 줄에 둔다. */
+.head-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+/* 복사할 수 있는 원장 값은 body의 드래그 억제를 되돌린다. 버튼은 계속 선택되지 않는다. */
+button,
+button * {
+	user-select: none;
+}
+.selectable,
+time,
+.data-path,
+.hist-note,
+.adj-note {
+	user-select: text;
+	cursor: text;
+}
+
+/* 용어·단축키 도움말 — layout을 밀지 않는 평면 popover다. */
+.help-tooltip {
+	position: relative;
+	display: inline-flex;
+	vertical-align: middle;
+	margin-left: 4px;
+}
+.help-trigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border-color: var(--line-strong);
+	border-radius: 50%;
+	background: transparent;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--fg-2);
+	cursor: default;
+}
+.help-trigger:hover:not(:disabled) {
+	background: var(--hover);
+}
+.help-popover[hidden] {
+	display: none;
+}
+.help-popover {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: min(260px, calc(100vw - 24px));
+	padding: 8px 10px;
+	border: 1px solid var(--line-strong);
+	background: var(--bg);
+	color: var(--fg);
+	font-size: 11.5px;
+	font-weight: 400;
+	line-height: 1.45;
+	text-align: left;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.help-popover > span {
+	display: block;
+}
+.help-popover kbd {
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+	font-size: 10.5px;
+	color: var(--fg-2);
+}
+.help-content-title {
+	font-weight: 600;
+	color: var(--fg);
+}
+.sec-title .help-popover {
+	right: auto;
+	left: 0;
+}
+
+/* 파괴적 확인의 두 번째 선택지. 주요 저장은 primary가 먼저다. */
+button.danger {
+	border-color: var(--danger);
+	background: transparent;
+	color: var(--danger);
+}
+button.danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+/* 요약의 원장 설명과 발생분 이름. 긴 메모도 날짜·수량 열을 밀지 않는다. */
+.sum-note {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+.sum-note-content {
+	min-width: 0;
+	flex: 1;
+}
+.planned-summary {
+	min-height: 17px;
+}
+.grant-source {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 이력 행동은 hover 여부와 무관하게 항상 보인다. 열 폭은 기존에 확보한 값을 지킨다. */
+.hist-actions button {
+	white-space: nowrap;
+}
+.history-status {
+	margin: 0;
+	padding: 2px 12px 0;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--accent);
+}
+.history-empty {
+	padding: 8px 12px;
+}
+.history-empty .row {
+	padding: 0;
+}
+.history-empty > button {
+	width: 100%;
+	margin-top: 4px;
+}
+
+/* 리스트·달력의 삭제 확인은 대상 바로 아래에만 펼친다. */
+.hist-delete-confirm,
+.adj-delete-confirm {
+	margin: 2px 12px 4px;
+	padding: 7px 8px;
+	border-top: 1px solid var(--line);
+	background: var(--fill);
+	font-size: 11.5px;
+	line-height: 1.4;
+}
+.hist-delete-confirm:focus-visible,
+.adj-delete-confirm:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+.hist-delete-confirm strong,
+.adj-delete-confirm strong {
+	display: block;
+	font-weight: 600;
+}
+.hist-delete-confirm p,
+.adj-delete-confirm p {
+	margin: 2px 0 0;
+	overflow-wrap: anywhere;
+}
+.hist-delete-confirm .error,
+.adj-delete-confirm .error {
+	padding: 4px 0 0;
+}
+.hist-delete-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 4px;
+	padding-top: 6px;
+}
+.hist-delete-actions button {
+	flex: 0 0 auto;
+}
+.adj-delete-row td {
+	padding: 0;
+	border-bottom: 1px solid var(--line);
+}
+.adj-delete-confirm {
+	margin: 0;
+	padding: 7px 4px;
+}
+
 /* ── 요약(24번) ───────────────────────────────────────────── */
 
 /* 경고색 한 겹. `.dim`과 같은 자리의 유틸이며 헤더 숫자·원인 한 줄·배지가 함께 쓴다. */
@@ -929,8 +1148,8 @@ button.hist-year:hover:not(:disabled) {
 	gap: 2px;
 	width: 100%;
 	grid-column: 5;
-	opacity: 0;
-	pointer-events: none;
+	opacity: 1;
+	pointer-events: auto;
 }
 .hist-row-container:hover .hist-row,
 .hist-row-container:focus-within .hist-row {
@@ -993,9 +1212,6 @@ button.hist-year:hover:not(:disabled) {
 .hist-edit .error {
 	padding-left: 0;
 	padding-right: 0;
-}
-.hist-row-error {
-	padding: 0 12px 4px;
 }
 .hist-edit-cta {
 	display: flex;

@@ -5,7 +5,9 @@ import type {
 	GrantDetail,
 } from "@yeoncha/core";
 import { latestLivingExpiry, validateAdjustmentDraft } from "@yeoncha/core";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, Fragment, useEffect, useRef, useState } from "react";
+import { HelpTooltip } from "./HelpTooltip";
+import { TERM_HELP } from "./help-content";
 import { useCommit } from "./use-commit";
 
 type Props = {
@@ -45,6 +47,12 @@ type AdjustmentFocusTarget =
 			kind: "edit";
 			/** 다시 포커스할 조정 레코드 식별자. */
 			id: string;
+	  }
+	| {
+			/** 삭제 확인을 연 조정 레코드 식별자. */
+			kind: "delete";
+			/** 취소 뒤 다시 포커스할 조정 레코드 식별자. */
+			id: string;
 	  };
 
 /**
@@ -70,12 +78,20 @@ export function AdjustmentsSection({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	/** 마지막 검증에서 걸린 것들. */
 	const [issues, setIssues] = useState<AdjustmentIssue[]>([]);
+	/** 삭제 확인을 열어 둔 조정의 식별자. */
+	const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+	/** 마지막 성공 행동을 보조 기술에 알리는 문구. */
+	const [successStatus, setSuccessStatus] = useState<string | null>(null);
 	/** 폼이 열릴 때 가장 먼저 포커스할 일수 입력. */
 	const firstInputRef = useRef<HTMLInputElement>(null);
 	/** 닫힌 폼으로 돌아올 추가 버튼. */
 	const addButtonRef = useRef<HTMLButtonElement>(null);
 	/** 수정 폼이 닫힌 뒤 돌아갈 행별 수정 버튼. */
 	const editButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+	/** 삭제 확인을 닫은 뒤 돌아갈 행별 삭제 버튼. */
+	const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+	/** 삭제 확인 영역에 포커스를 둘 대상. */
+	const deleteConfirmRefs = useRef(new Map<string, HTMLDivElement>());
 	/** 폼을 닫은 뒤 복귀할 논리적 대상. */
 	const focusReturnRef = useRef<AdjustmentFocusTarget | null>(null);
 	/** 삭제처럼 폼 열림 상태가 바뀌지 않는 조작 뒤에도 포커스를 복귀시킬 대상. */
@@ -86,6 +102,10 @@ export function AdjustmentsSection({
 
 	useEffect(
 		function manageAdjustmentFocusEffect() {
+			if (deleteTargetId) {
+				deleteConfirmRefs.current.get(deleteTargetId)?.focus();
+				return;
+			}
 			// 폼이 열리면 추가·수정 모두 일수 입력에서 키보드 흐름을 시작한다.
 			if (open) {
 				firstInputRef.current?.focus();
@@ -105,10 +125,14 @@ export function AdjustmentsSection({
 				addButtonRef.current?.focus();
 				return;
 			}
+			if (target.kind === "delete") {
+				deleteButtonRefs.current.get(target.id)?.focus();
+				return;
+			}
 			// 수정한 행이 삭제되었으면 목록에 남은 추가 버튼으로 흐름을 잇는다.
 			(editButtonRefs.current.get(target.id) ?? addButtonRef.current)?.focus();
 		},
-		[focusRestoreTarget, open],
+		[deleteTargetId, focusRestoreTarget, open],
 	);
 
 	/** 행의 수정 버튼을 현재 DOM과 함께 등록한다. */
@@ -120,6 +144,30 @@ export function AdjustmentsSection({
 			editButtonRefs.current.set(id, element);
 		} else {
 			editButtonRefs.current.delete(id);
+		}
+	};
+
+	/** 행의 삭제 버튼을 현재 DOM과 함께 등록한다. */
+	const registerDeleteButton = (
+		id: string,
+		element: HTMLButtonElement | null,
+	) => {
+		if (element) {
+			deleteButtonRefs.current.set(id, element);
+		} else {
+			deleteButtonRefs.current.delete(id);
+		}
+	};
+
+	/** 행 안의 삭제 확인 영역을 현재 DOM과 함께 등록한다. */
+	const registerDeleteConfirmation = (
+		id: string,
+		element: HTMLDivElement | null,
+	) => {
+		if (element) {
+			deleteConfirmRefs.current.set(id, element);
+		} else {
+			deleteConfirmRefs.current.delete(id);
 		}
 	};
 
@@ -152,6 +200,8 @@ export function AdjustmentsSection({
 			return;
 		}
 		clearError();
+		setSuccessStatus(null);
+		setDeleteTargetId(null);
 		focusReturnRef.current = { kind: "add" };
 		setDraft(addDraft({ grants, today }));
 		setEditingId(null);
@@ -165,6 +215,8 @@ export function AdjustmentsSection({
 			return;
 		}
 		clearError();
+		setSuccessStatus(null);
+		setDeleteTargetId(null);
 		focusReturnRef.current = { kind: "edit", id: adjustment.id };
 		setDraft({
 			days: String(adjustment.days),
@@ -218,25 +270,47 @@ export function AdjustmentsSection({
 			: [...adjustments, { ...result.value, id: crypto.randomUUID() }];
 
 		if (await commit({ adjustments: next })) {
+			setSuccessStatus(
+				editingId ? "조정을 수정했습니다." : "조정을 추가했습니다.",
+			);
 			handleClose();
 		}
 	};
 
-	/** 삭제 핸들러. */
-	const handleDelete = async (id: string) => {
+	/** 삭제 버튼을 누르면 표 안에서 확인 단계를 연다. */
+	const handleDelete = (id: string) => {
 		if (saving) {
+			return;
+		}
+		setSuccessStatus(null);
+		clearError();
+		setDeleteTargetId(id);
+	};
+
+	/** 확인한 조정만 삭제하고, 실패하면 확인 영역과 행을 그대로 남긴다. */
+	const handleConfirmDelete = async (id: string) => {
+		if (saving || deleteTargetId !== id) {
 			return;
 		}
 		/** 삭제할 레코드를 뺀 다음 상태. 성공할 때만 화면에도 반영된다. */
 		const didCommit = await commit({
 			adjustments: adjustments.filter((adjustment) => adjustment.id !== id),
 		});
-		// 지우는 레코드를 고치고 있었나요? 성공한 뒤에만 폼을 닫아 실패 시 맥락을 지킨다.
-		if (didCommit && editingId === id) {
-			handleClose();
-		} else if (didCommit) {
+		if (didCommit) {
+			setDeleteTargetId(null);
+			setSuccessStatus("조정을 삭제했습니다.");
 			requestFocusRestore({ kind: "add" });
 		}
+	};
+
+	/** 삭제를 취소하고 같은 행의 삭제 버튼으로 포커스를 되돌린다. */
+	const handleCancelDelete = (id: string) => {
+		if (saving) {
+			return;
+		}
+		setDeleteTargetId(null);
+		clearError();
+		requestFocusRestore({ kind: "delete", id });
 	};
 
 	return (
@@ -247,12 +321,18 @@ export function AdjustmentsSection({
 		>
 			<h2 id={ADJUSTMENTS_TITLE_ID} className="sec-title">
 				조정
+				<HelpTooltip label="조정 도움말">{TERM_HELP.조정}</HelpTooltip>
 			</h2>
 			<p className="row dim">
 				이월·사규 추가분·포상 휴가를 여기에 넣습니다. 월차와 연차는 계산이
 				만들며 고칠 수 없습니다.
 			</p>
 			{savingStatus}
+			{successStatus && !saving && (
+				<p className="adjustments-status" role="status" aria-live="polite">
+					{successStatus}
+				</p>
+			)}
 			{/* 넣은 순서 그대로 보여준다. 배정 순서(소멸일 ↑ → 발생일 ↑ → source → 입력
 			    순서, 3.4절)와는 다르다 — 그쪽은 요약 탭의 발생분 리스트가 보여준다. */}
 			<section className="adjustments-scroll" aria-label="조정 목록">
@@ -268,47 +348,118 @@ export function AdjustmentsSection({
 						</tr>
 					</thead>
 					<tbody>
-						{adjustments.map((adjustment) => (
-							<tr className="adj-row" key={adjustment.id}>
-								<td className="adj-days num">{formatDays(adjustment.days)}</td>
-								<td className="adj-grant num">
-									<time dateTime={adjustment.grantDate}>
-										{adjustment.grantDate}
-									</time>
-								</td>
-								<td className="adj-expiry num">
-									<time dateTime={adjustment.expiryDate}>
-										{adjustment.expiryDate}
-									</time>
-								</td>
-								<td className="adj-note" title={adjustment.note || undefined}>
-									{adjustment.note || <span className="dim">메모 없음</span>}
-								</td>
-								<td className="adj-action-cell">
-									<div className="adj-actions">
-										<button
-											type="button"
-											className="mini"
-											disabled={saving}
-											ref={(element) =>
-												registerEditButton(adjustment.id, element)
-											}
-											onClick={() => handleOpenEdit(adjustment)}
+						{adjustments.map((adjustment) => {
+							/** 현재 행의 삭제 확인 여부와 접근성 식별자. */
+							const isDeleting = deleteTargetId === adjustment.id;
+							const deleteTitleId = `adjustment-delete-title-${adjustment.id}`;
+							const deleteDescriptionId = `adjustment-delete-description-${adjustment.id}`;
+							return (
+								<Fragment key={adjustment.id}>
+									<tr className="adj-row">
+										<td className="adj-days num selectable">
+											{formatDays(adjustment.days)}
+										</td>
+										<td className="adj-grant num selectable">
+											<time dateTime={adjustment.grantDate}>
+												{adjustment.grantDate}
+											</time>
+										</td>
+										<td className="adj-expiry num selectable">
+											<time dateTime={adjustment.expiryDate}>
+												{adjustment.expiryDate}
+											</time>
+										</td>
+										<td
+											className="adj-note selectable"
+											title={adjustment.note || undefined}
 										>
-											수정
-										</button>
-										<button
-											type="button"
-											className="mini"
-											disabled={saving}
-											onClick={() => handleDelete(adjustment.id)}
-										>
-											삭제
-										</button>
-									</div>
-								</td>
-							</tr>
-						))}
+											{adjustment.note || (
+												<span className="dim">메모 없음</span>
+											)}
+										</td>
+										<td className="adj-action-cell">
+											<div className="adj-actions">
+												<button
+													type="button"
+													className="mini"
+													disabled={saving || deleteTargetId !== null}
+													ref={(element) =>
+														registerEditButton(adjustment.id, element)
+													}
+													onClick={() => handleOpenEdit(adjustment)}
+												>
+													수정
+												</button>
+												<button
+													type="button"
+													className="mini"
+													disabled={saving || deleteTargetId !== null}
+													ref={(element) =>
+														registerDeleteButton(adjustment.id, element)
+													}
+													onClick={() => handleDelete(adjustment.id)}
+												>
+													삭제
+												</button>
+											</div>
+										</td>
+									</tr>
+									{isDeleting && (
+										<tr className="adj-delete-row">
+											<td colSpan={5}>
+												<div
+													ref={(element) =>
+														registerDeleteConfirmation(adjustment.id, element)
+													}
+													className="adj-delete-confirm"
+													tabIndex={-1}
+													role="alertdialog"
+													aria-labelledby={deleteTitleId}
+													aria-describedby={deleteDescriptionId}
+													onKeyDown={(event) => {
+														if (event.key === "Escape") {
+															event.preventDefault();
+															handleCancelDelete(adjustment.id);
+														}
+													}}
+												>
+													<strong id={deleteTitleId}>삭제할까요?</strong>
+													<p id={deleteDescriptionId}>
+														{adjustment.note || "이 조정을 삭제합니다."}
+													</p>
+													{error && (
+														<p
+															className="error"
+															role="alert"
+															aria-live="assertive"
+														>
+															{error}
+														</p>
+													)}
+													<div className="hist-delete-actions">
+														<button
+															type="button"
+															className="danger"
+															disabled={saving}
+															onClick={() => handleConfirmDelete(adjustment.id)}
+														>
+															삭제
+														</button>
+														<button
+															type="button"
+															disabled={saving}
+															onClick={() => handleCancelDelete(adjustment.id)}
+														>
+															취소
+														</button>
+													</div>
+												</div>
+											</td>
+										</tr>
+									)}
+								</Fragment>
+							);
+						})}
 						{adjustments.length === 0 && (
 							<tr>
 								<td className="adjustments-empty dim" colSpan={5}>
@@ -395,7 +546,7 @@ export function AdjustmentsSection({
 							{issue.message}
 						</p>
 					))}
-					{saveError}
+					{!deleteTargetId && saveError}
 					<div className="cta">
 						<button type="submit" className="primary" disabled={saving}>
 							{saving ? "저장 중…" : editingId ? "저장" : "추가"}
@@ -407,7 +558,7 @@ export function AdjustmentsSection({
 				</form>
 			) : (
 				<>
-					{saveError}
+					{!deleteTargetId && saveError}
 					<div className="cta">
 						<button
 							ref={addButtonRef}

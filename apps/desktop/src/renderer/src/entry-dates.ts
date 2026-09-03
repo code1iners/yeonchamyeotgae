@@ -5,8 +5,9 @@ import { Temporal } from "temporal-polyfill";
  * 기간 레코드를 만들지 않으므로 저장 직전의 모양이 여기서 정해진다.
  *
  * 이미 기록이 있는 날짜는 뺀다 — 하루 1건 불변식을 UI가 지키는 자리다(파서는 중복
- * date를 구조 위반으로 거부한다). 시작·종료의 순서는 정규화한다 — 달력에서 종료일을
- * 시작일보다 앞으로 고르는 것을 오류로 만들지 않는다.
+ * date를 구조 위반으로 거부한다). 시작일보다 이른 종료일은 빈 배열로 돌려준다 —
+ * 호출자가 입력 오류를 표시하고 등록을 막을 수 있게, 사용자의 두 날짜를 자동으로
+ * 바꾸지 않는다.
  */
 export function expandEntryDates({
 	start,
@@ -26,11 +27,15 @@ export function expandEntryDates({
 	/** 고른 두 날. 아직 순서를 모른다. */
 	const picked = Temporal.PlainDate.from(start);
 	const other = Temporal.PlainDate.from(end);
-	/** 종료일이 시작일보다 앞인가. */
-	const backwards = Temporal.PlainDate.compare(picked, other) > 0;
-	/** 앞뒤가 정규화된 기간의 두 끝. */
-	const first = backwards ? other : picked;
-	const last = backwards ? picked : other;
+	// 종료일이 시작일보다 이른가요? 잘못된 의도를 다른 기간으로 바꾸지 않는다.
+	if (Temporal.PlainDate.compare(picked, other) > 0) {
+		return [];
+	}
+
+	/** 정상 순서로 입력된 기간의 시작일. */
+	const first = picked;
+	/** 정상 순서로 입력된 기간의 종료일. */
+	const last = other;
 
 	/** 펼쳐진 날짜들. */
 	const dates: string[] = [];
