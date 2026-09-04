@@ -8,6 +8,8 @@ colors:
   muted-dark: "#a7b4ac"
   accent: "#1d6b52"
   accent-dark: "#287c60"
+  accent-text: "#1d6b52"
+  accent-text-dark: "#4fae88"
   accent-soft: "rgba(29, 107, 82, 0.12)"
   accent-soft-dark: "rgba(40, 124, 96, 0.22)"
   on-accent: "#fff"
@@ -97,7 +99,7 @@ components:
     padding: "3px 9px"
   planned-tag:
     backgroundColor: "{colors.accent-soft}"
-    textColor: "{colors.accent}"
+    textColor: "{colors.accent-text}"
     typography: "{typography.supporting}"
     rounded: "{rounded.sm}"
     padding: "0 5px"
@@ -154,8 +156,11 @@ components:
 
 ### Primary
 
-- **Ledger Green** (`--accent`): 선택된 탭, 주요 버튼, 현재 날짜, 예정 표시처럼 사용자가 지금
-  보거나 실행해야 하는 상태를 표시한다. 다크 테마에서는 `--accent-dark`를 따른다.
+- **Ledger Green** (`--accent`): 선택된 탭, 주요 버튼, 예정 점처럼 사용자가 지금 보거나
+  실행해야 하는 상태의 면과 표식을 표시한다. 다크 테마에서는 `--accent-dark`를 따른다.
+- **Ledger Green Text** (`--accent-text`): 링크·진행 상태·오늘 날짜처럼 배경 위에 직접 놓이는
+  작은 텍스트에 사용한다. 다크 테마에서는 원장 녹색의 정체성을 유지하면서 AA 대비를 확보한
+  `--accent-text-dark`를 따른다.
 - **On Accent** (`--on-accent`): 녹색 강조면 위의 텍스트와 선택된 달력 점에 사용한다.
 
 ### Neutral
@@ -217,8 +222,11 @@ components:
 
 달력은 7열 × 48px 셀을 중심으로 배치한다. 이 그리드가 380px 팝오버 안에서 날짜를 충분히
 읽게 하는 고정 기준이다. 긴 발생분·조정 목록은 최대 240px, 이력 리스트는 최대 356px
-높이에서 각각 스크롤하고, 나머지 화면은 내용에 따라 팝오버 높이가 변한다. 별도의 모바일 브레이크포인트나
-반응형 재배치는 현재 시스템에 없다.
+높이에서 각각 스크롤하고, 나머지 화면은 내용에 따라 팝오버 높이가 변한다. 기본 크기에서는 별도의
+반응형 재배치를 하지 않는다. 페이지 확대나 작은 작업 영역 때문에 팝오버가 340 CSS px 이하로
+좁아지면 헤더 행동과 확인 버튼만 줄을 바꾸고, 달력과 조정 표처럼 2차원 구조가 의미를 갖는 영역은
+해당 영역 안에서만 가로로 탐색한다. 화면 높이보다 내용이 길어진 경우에는 목록별 스크롤을 우선하되
+팝오버 전체에도 세로 스크롤 폴백을 제공한다.
 
 ## Elevation & Depth
 

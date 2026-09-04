@@ -1286,7 +1286,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		expect(layout.bodyWidth).toBeLessThanOrEqual(layout.width);
 		expect(layout.bodyHeight).toBeLessThanOrEqual(layout.height);
 		expect(layout.bodyOverflowX).toBe("hidden");
-		expect(layout.bodyOverflowY).toBe("hidden");
+		expect(layout.bodyOverflowY).toBe("auto");
 		for (const box of [balanceBox, entryBox, equationBox, grantHeaderBox]) {
 			expect(box.x).toBeGreaterThanOrEqual(0);
 			expect(box.x + box.width).toBeLessThanOrEqual(layout.width);
@@ -1742,6 +1742,9 @@ describe.sequential("Electron 제품 흐름", () => {
 		});
 		await expectVisible(calendar);
 		await expectVisible(calendar.getByText("2025년 12월", { exact: true }));
+		await expectVisible(
+			calendar.getByRole("table", { name: "2025년 12월 달력" }),
+		);
 
 		/** 이전 달로 이동하는 키보드 조작. */
 		const previousMonth = calendar.getByRole("button", { name: "이전 달" });
@@ -1757,9 +1760,24 @@ describe.sequential("Electron 제품 흐름", () => {
 		});
 		await expectVisible(usedDay);
 		await expectVisible(expiryDay);
+		/** 날짜 격자는 Tab 정지점을 하나만 두고 방향키로 인접 날짜를 이동한다. */
+		expect(
+			await calendar
+				.locator(".cal-day")
+				.evaluateAll(
+					(days) =>
+						days.filter((day) => day.getAttribute("tabindex") === "0").length,
+				),
+		).toBe(1);
+		await usedDay.focus();
+		await usedDay.press("ArrowLeft");
+		await expectKeyboardFocus(
+			calendar.getByRole("button", { name: "2025-11-27", exact: true }),
+		);
+		await flow.page.keyboard.press("ArrowRight");
+		await expectKeyboardFocus(usedDay);
 
 		/** 사용 기록을 키보드로 선택한다. */
-		await usedDay.focus();
 		await usedDay.press("Enter");
 		/** 선택 날짜의 기록·소멸 상세 영역. */
 		const selectedDetails = flow.page.getByRole("region", {

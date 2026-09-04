@@ -91,7 +91,7 @@ export function AdjustmentsSection({
 	/** 삭제 확인을 닫은 뒤 돌아갈 행별 삭제 버튼. */
 	const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
 	/** 삭제 확인 영역에 포커스를 둘 대상. */
-	const deleteConfirmRefs = useRef(new Map<string, HTMLDivElement>());
+	const deleteConfirmRefs = useRef(new Map<string, HTMLFieldSetElement>());
 	/** 폼을 닫은 뒤 복귀할 논리적 대상. */
 	const focusReturnRef = useRef<AdjustmentFocusTarget | null>(null);
 	/** 삭제처럼 폼 열림 상태가 바뀌지 않는 조작 뒤에도 포커스를 복귀시킬 대상. */
@@ -162,7 +162,7 @@ export function AdjustmentsSection({
 	/** 행 안의 삭제 확인 영역을 현재 DOM과 함께 등록한다. */
 	const registerDeleteConfirmation = (
 		id: string,
-		element: HTMLDivElement | null,
+		element: HTMLFieldSetElement | null,
 	) => {
 		if (element) {
 			deleteConfirmRefs.current.set(id, element);
@@ -409,13 +409,12 @@ export function AdjustmentsSection({
 									{isDeleting && (
 										<tr className="adj-delete-row">
 											<td colSpan={5}>
-												<div
+												<fieldset
 													ref={(element) =>
 														registerDeleteConfirmation(adjustment.id, element)
 													}
 													className="adj-delete-confirm"
 													tabIndex={-1}
-													role="alertdialog"
 													aria-labelledby={deleteTitleId}
 													aria-describedby={deleteDescriptionId}
 													onKeyDown={(event) => {
@@ -425,7 +424,7 @@ export function AdjustmentsSection({
 														}
 													}}
 												>
-													<strong id={deleteTitleId}>삭제할까요?</strong>
+													<legend id={deleteTitleId}>삭제할까요?</legend>
 													<p id={deleteDescriptionId}>
 														{adjustment.note || "이 조정을 삭제합니다."}
 													</p>
@@ -455,7 +454,7 @@ export function AdjustmentsSection({
 															취소
 														</button>
 													</div>
-												</div>
+												</fieldset>
 											</td>
 										</tr>
 									)}

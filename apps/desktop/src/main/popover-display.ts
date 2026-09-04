@@ -3,6 +3,8 @@ export type PopoverDisplayMode = "inactive" | "foreground";
 
 /** 표시 정책이 관찰하는 BrowserWindow의 최소 계약. */
 export type PopoverWindow = {
+	/** 창이 운영체제 포커스를 받을 수 있는지 바꾼다. */
+	setFocusable?: (focusable: boolean) => void;
 	/** 전면으로 창을 표시한다. */
 	show(): void;
 	/** 포커스 없이 창을 표시한다. 지원하지 않는 환경에는 없을 수 있다. */
@@ -20,6 +22,7 @@ export function showPopoverWindow(
 	platform: NodeJS.Platform,
 ): void {
 	if (mode === "foreground") {
+		window.setFocusable?.(true);
 		window.show();
 		return;
 	}
@@ -37,6 +40,8 @@ export function showPopoverWindow(
 
 	// 지원 계약이 없으면 전면 표시나 화면 밖 이동으로 우회하지 않는다.
 	try {
+		// 비활성 검증 창은 렌더러의 프로그램적 focus도 OS 활성화로 번지지 않게 막는다.
+		window.setFocusable?.(false);
 		window.showInactive();
 	} catch (cause) {
 		throw new Error("비활성 Electron 제품 흐름을 표시하지 못했습니다.", {

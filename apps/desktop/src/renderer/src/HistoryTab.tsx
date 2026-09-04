@@ -473,11 +473,10 @@ function HistoryList({
 							</span>
 						</div>
 						{deleteTargetId === entry.id && (
-							<div
+							<fieldset
 								ref={(element) => registerDeleteConfirmation(entry.id, element)}
 								className="hist-delete-confirm"
 								tabIndex={-1}
-								role="alertdialog"
 								aria-labelledby={deleteTitleId}
 								aria-describedby={deleteDescriptionId}
 								onKeyDown={(event) => {
@@ -487,7 +486,7 @@ function HistoryList({
 									}
 								}}
 							>
-								<strong id={deleteTitleId}>삭제할까요?</strong>
+								<legend id={deleteTitleId}>삭제할까요?</legend>
 								<p id={deleteDescriptionId}>
 									{entry.date} 휴가 기록을 삭제합니다.
 								</p>
@@ -513,7 +512,7 @@ function HistoryList({
 										취소
 									</button>
 								</div>
-							</div>
+							</fieldset>
 						)}
 					</>
 				)}
@@ -618,7 +617,7 @@ function HistoryCalendar({
 	/** 마지막 성공 행동을 보조 기술에 알리는 문구. */
 	const [successStatus, setSuccessStatus] = useState<string | null>(null);
 	/** 삭제 확인 영역에 포커스를 둘 대상. */
-	const deleteConfirmationRef = useRef<HTMLDivElement>(null);
+	const deleteConfirmationRef = useRef<HTMLFieldSetElement>(null);
 	/** 삭제 확인을 취소한 뒤 돌아갈 삭제 버튼. */
 	const deleteButtonRef = useRef<HTMLButtonElement>(null);
 	/** 선택한 기록에서 바꾼 단위의 저장 전 초안. */
@@ -982,11 +981,10 @@ function HistoryCalendar({
 								)}
 							</div>
 							{deleteTargetId === selectedEntry.id && (
-								<div
+								<fieldset
 									ref={deleteConfirmationRef}
 									className="hist-delete-confirm"
 									tabIndex={-1}
-									role="alertdialog"
 									aria-labelledby="history-calendar-delete-title"
 									aria-describedby="history-calendar-delete-description"
 									onKeyDown={(event) => {
@@ -996,9 +994,9 @@ function HistoryCalendar({
 										}
 									}}
 								>
-									<strong id="history-calendar-delete-title">
+									<legend id="history-calendar-delete-title">
 										삭제할까요?
-									</strong>
+									</legend>
 									<p id="history-calendar-delete-description">
 										{selectedEntry.date} 휴가 기록을 삭제합니다.
 									</p>
@@ -1024,7 +1022,7 @@ function HistoryCalendar({
 											취소
 										</button>
 									</div>
-								</div>
+								</fieldset>
 							)}
 						</>
 					) : (

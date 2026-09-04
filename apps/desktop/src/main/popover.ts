@@ -7,6 +7,7 @@ import {
 	type PopoverDisplayMode,
 	showPopoverWindow,
 } from "./popover-display";
+import { fitPopoverContent } from "./popover-size";
 
 /** 팝오버 고정 폭(5.6절) — 달력 한 주가 7칸 × 48px로 들어가는 최소 폭. */
 const POPOVER_WIDTH = 380;
@@ -216,16 +217,15 @@ function resizeToContent(height: number): void {
 	}
 	/** 페이지 확대 배율을 반영한 네이티브 창 크기 — CSS 측정값과 DIP의 단위를 맞춘다. */
 	const zoomFactor = popover.webContents.getZoomFactor();
-	/** 화면 작업 영역을 넘지 않게 자른 목표 높이. */
-	const maxHeight = displayFor(anchorBounds).workArea.height;
-	const next = Math.min(
-		Math.max(
-			Math.round(height * zoomFactor),
-			Math.round(MIN_HEIGHT * zoomFactor),
-		),
-		maxHeight,
-	);
-	popover.setContentSize(Math.round(POPOVER_WIDTH * zoomFactor), next);
+	/** 확대 배율과 작업 영역을 함께 반영한 네이티브 창 크기. */
+	const size = fitPopoverContent({
+		contentHeight: height,
+		zoomFactor,
+		baseWidth: POPOVER_WIDTH,
+		minHeight: MIN_HEIGHT,
+		workArea: displayFor(anchorBounds).workArea,
+	});
+	popover.setContentSize(size.width, size.height);
 	if (popover.isVisible()) {
 		positionPopover(popover);
 	}

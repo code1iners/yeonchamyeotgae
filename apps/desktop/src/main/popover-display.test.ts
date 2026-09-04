@@ -19,6 +19,7 @@ function createFakePopoverWindow(options: FakePopoverWindowOptions = {}) {
 		"showInactive" in options ? options.showInactive : vi.fn();
 	/** 표시 정책에 전달할 가짜 BrowserWindow. */
 	return {
+		setFocusable: vi.fn(),
 		show: vi.fn(),
 		showInactive,
 		isFocused: vi.fn(() => focused),
@@ -35,6 +36,7 @@ describe("팝오버 네이티브 표시 정책", () => {
 
 		expect(popover.show).toHaveBeenCalledOnce();
 		expect(popover.showInactive).not.toHaveBeenCalled();
+		expect(popover.setFocusable).toHaveBeenCalledWith(true);
 	});
 
 	test("비활성 모드는 showInactive만 사용하고 포커스를 갖지 않으면 성공한다", () => {
@@ -45,6 +47,7 @@ describe("팝오버 네이티브 표시 정책", () => {
 
 		expect(popover.showInactive).toHaveBeenCalledOnce();
 		expect(popover.show).not.toHaveBeenCalled();
+		expect(popover.setFocusable).toHaveBeenCalledWith(false);
 	});
 
 	test("지원하지 않는 플랫폼에서는 표시 없이 명확히 실패한다", () => {

@@ -9,6 +9,7 @@
 	--fg: #202522;
 	--fg-2: #66736b;
 	--accent: #1d6b52;
+	--accent-text: #1d6b52;
 	--accent-soft: rgba(29, 107, 82, 0.12);
 	--on-accent: #fff;
 	--danger: #b42318;
@@ -27,6 +28,7 @@
 		--fg: #edf2ee;
 		--fg-2: #a7b4ac;
 		--accent: #287c60;
+		--accent-text: #4fae88;
 		--accent-soft: rgba(40, 124, 96, 0.22);
 		--on-accent: #fff;
 		--danger: #ff8a80;
@@ -45,7 +47,8 @@
 
 html,
 body {
-	overflow: hidden;
+	overflow-x: hidden;
+	overflow-y: auto;
 }
 
 body {
@@ -222,7 +225,7 @@ button:focus-visible {
 	color: var(--fg-2);
 }
 .settings-status-saving {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 /* 입사일 변경 확인의 제목은 카드 장식 없이 짧은 섹션 머리로 둔다. */
@@ -361,7 +364,7 @@ button:focus-visible {
 	margin: 0;
 	padding: 2px 12px 0;
 	font-size: 11.5px;
-	color: var(--accent);
+	color: var(--accent-text);
 }
 
 /* 데이터 조작은 설정 안의 독립된 평면 영역으로 나누되 카드처럼 띄우지 않는다. */
@@ -440,7 +443,7 @@ button.mini:hover:not(:disabled) {
 }
 .data-feedback-success,
 .data-feedback-progress {
-	color: var(--accent);
+	color: var(--accent-text);
 }
 .data-feedback-neutral {
 	color: var(--fg-2);
@@ -506,7 +509,7 @@ button.mini:hover:not(:disabled) {
 	margin: 6px 0 0;
 	font-size: 11.5px;
 	line-height: 1.45;
-	color: var(--accent);
+	color: var(--accent-text);
 }
 .failure .cta,
 .failure .error {
@@ -575,7 +578,7 @@ button.mini:hover:not(:disabled) {
 	margin: 0;
 	padding: 4px 12px;
 	border-bottom: 1px solid var(--line);
-	color: var(--accent);
+	color: var(--accent-text);
 	font-size: 11.5px;
 	line-height: 1.45;
 }
@@ -711,7 +714,7 @@ button.danger:hover:not(:disabled) {
 	padding: 2px 12px 0;
 	font-size: 11.5px;
 	line-height: 1.4;
-	color: var(--accent);
+	color: var(--accent-text);
 }
 .history-empty {
 	padding: 8px 12px;
@@ -727,8 +730,10 @@ button.danger:hover:not(:disabled) {
 /* 리스트·달력의 삭제 확인은 대상 바로 아래에만 펼친다. */
 .hist-delete-confirm,
 .adj-delete-confirm {
+	min-inline-size: 0;
 	margin: 2px 12px 4px;
 	padding: 7px 8px;
+	border: 0;
 	border-top: 1px solid var(--line);
 	background: var(--fill);
 	font-size: 11.5px;
@@ -739,9 +744,10 @@ button.danger:hover:not(:disabled) {
 	outline: 2px solid var(--accent);
 	outline-offset: -1px;
 }
-.hist-delete-confirm strong,
-.adj-delete-confirm strong {
+.hist-delete-confirm legend,
+.adj-delete-confirm legend {
 	display: block;
+	padding: 0;
 	font-weight: 600;
 }
 .hist-delete-confirm p,
@@ -796,7 +802,7 @@ button.link {
 	padding: 0;
 	border: none;
 	background: none;
-	color: var(--accent);
+	color: var(--accent-text);
 	font-size: 11.5px;
 	text-decoration: underline;
 }
@@ -975,7 +981,7 @@ button.link:hover:not(:disabled) {
 }
 .entry-today {
 	flex: none;
-	color: var(--accent);
+	color: var(--accent-text);
 	font-size: 11.5px;
 	font-weight: 600;
 }
@@ -1000,6 +1006,7 @@ button.link:hover:not(:disabled) {
 	margin: 0;
 	border: 0;
 	padding: 4px 10px 0;
+	overflow-x: auto;
 }
 .cal-nav {
 	display: flex;
@@ -1007,6 +1014,7 @@ button.link:hover:not(:disabled) {
 	justify-content: center;
 	gap: 8px;
 	padding: 2px 0 4px;
+	min-width: 336px;
 }
 .cal-title {
 	font-weight: 600;
@@ -1016,9 +1024,15 @@ button.link:hover:not(:disabled) {
 
 /* 한 주 7칸 × 48px(5.6절) — 이 격자가 폭 380px의 근거다. */
 .cal-grid {
-	display: grid;
-	grid-template-columns: repeat(7, 48px);
-	justify-content: center;
+	border-collapse: collapse;
+	min-width: 336px;
+	width: 336px;
+	margin: 0 auto;
+}
+.cal-grid th,
+.cal-grid td {
+	width: 48px;
+	padding: 0;
 }
 .cal-dow {
 	font-size: 11px;
@@ -1026,6 +1040,7 @@ button.link:hover:not(:disabled) {
 	padding-bottom: 2px;
 }
 .cal-day {
+	width: 48px;
 	height: 30px;
 	border: none;
 	background: none;
@@ -1041,7 +1056,7 @@ button.link:hover:not(:disabled) {
 }
 .cal-day.cal-today {
 	font-weight: 700;
-	color: var(--accent);
+	color: var(--accent-text);
 }
 .cal-day.cal-selected {
 	background: var(--accent);
@@ -1268,7 +1283,7 @@ button.hist-year:hover:not(:disabled) {
 	border-radius: 4px;
 	font-size: 10.5px;
 	font-weight: 600;
-	color: var(--accent);
+	color: var(--accent-text);
 	background: var(--accent-soft);
 }
 
@@ -1381,4 +1396,31 @@ button.hist-year:hover:not(:disabled) {
 .hist-day-units button {
 	padding: 1px 2px;
 	font-size: 11.5px;
+}
+
+/* 400% 확대처럼 팝오버가 320 CSS px 안팎으로 좁아지면 헤더와 행동만 재배치한다. */
+@media (max-width: 340px) {
+	.head {
+		align-items: center;
+		flex-wrap: wrap;
+	}
+	.head-actions {
+		width: 100%;
+		justify-content: space-between;
+	}
+	.head-entry-shortcut {
+		display: none;
+	}
+	.cta {
+		flex-wrap: wrap;
+	}
+	.cta button {
+		flex: 1 1 120px;
+	}
+	.adjustments-scroll {
+		overflow-x: auto;
+	}
+	.adjustments-table {
+		min-width: 356px;
+	}
 }
