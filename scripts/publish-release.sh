@@ -331,8 +331,8 @@ if [ "$PREPARED_VERSION" -eq 0 ]; then
 	MAJOR_VERSION=$(node "$VERSION_HELPER" bump "$VERSION_BASE" major)
 	while :
 	do
-		printf '%s\n' "선택지: patch=${PATCH_VERSION} (기본), minor=${MINOR_VERSION}, major=${MAJOR_VERSION}, direct=직접 입력"
-		printf '%s' '버전 증가를 선택하세요 [patch]: '
+		printf '%s\n' "선택지: 1) patch=${PATCH_VERSION}, 2) minor=${MINOR_VERSION}, 3) major=${MAJOR_VERSION}, 4) 직접 입력"
+		printf '%s' '버전 증가를 선택하세요 [1]: '
 		if ! IFS= read -r VERSION_SELECTION; then
 			fail_release '버전 선택 입력을 읽지 못해 중단했습니다. 원격 변경은 없습니다.'
 		fi

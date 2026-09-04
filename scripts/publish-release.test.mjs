@@ -616,11 +616,12 @@ test("정상 기본 patch는 manifest 준비 커밋과 main push 뒤 정확한 C
 	});
 });
 
-test("minor·major·직접 입력은 선택한 안정 버전을 커밋한다", async () => {
+test("숫자 선택은 선택한 안정 버전을 커밋한다", async () => {
 	const cases = [
-		{ input: "minor\ny\n", version: "0.2.0" },
-		{ input: "major\ny\n", version: "1.0.0" },
-		{ input: "direct\n0.1.7\ny\n", version: "0.1.7" },
+		{ input: "1\ny\n", version: "0.1.4" },
+		{ input: "2\ny\n", version: "0.2.0" },
+		{ input: "3\ny\n", version: "1.0.0" },
+		{ input: "4\n0.1.7\ny\n", version: "0.1.7" },
 	];
 	for (const currentCase of cases) {
 		await withFixture(async (fixture) => {
@@ -630,6 +631,10 @@ test("minor·major·직접 입력은 선택한 안정 버전을 커밋한다", a
 			const manifest = JSON.parse(await readFile(fixture.manifestPath, "utf8"));
 			assert.equal(result.code, 0);
 			assert.equal(manifest.version, currentCase.version);
+			assert.match(
+				result.output,
+				/선택지: 1\) patch=0\.1\.4, 2\) minor=0\.2\.0, 3\) major=1\.0\.0, 4\) 직접 입력/,
+			);
 			assert.match(
 				result.output,
 				new RegExp(`버전: ${currentCase.version.replaceAll(".", "\\.")}`),
