@@ -5,6 +5,10 @@ const STABLE_VERSION_PATTERN =
 	/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 /** JSON manifest에서 version 항목 한 줄을 찾아 원문 형식을 보존하는 패턴. */
 const VERSION_LINE_PATTERN = /^(\s*"version"\s*:\s*")[^"]+(".*)$/gm;
+/** GitHub Release의 targetCommitish가 커밋 SHA인지 판별하는 패턴. */
+const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i;
+/** 전체 SHA가 아닌 hexadecimal targetCommitish를 구분하는 패턴. */
+const HEX_VALUE_PATTERN = /^[0-9a-f]+$/i;
 
 /** 정식 안정 버전을 BigInt 세 묶음으로 파싱한다. */
 function parseStableVersion(input) {
@@ -232,6 +236,89 @@ function printCiRun(run) {
 	);
 }
 
+/** 태그 push로 시작된 정확한 Release 워크플로 실행을 고른다. */
+function selectReleaseRun(runs, targetTag, targetSha) {
+	/** 대상 커밋·태그의 push로 시작된 Release 실행. */
+	const run = runs.find((item) => {
+		if (item?.headSha !== targetSha || item?.event !== "push") {
+			return false;
+		}
+
+		/** GitHub가 제공하는 실행의 브랜치 또는 태그 이름. */
+		const headBranch = String(item?.headBranch ?? "");
+		/** workflow 파일 필터가 보장하는 이름을 응답에서도 확인한다. */
+		const workflowName = String(item?.workflowName ?? "");
+		return (
+			headBranch === targetTag &&
+			(workflowName === "Release" || workflowName === "release.yml")
+		);
+	});
+	if (!run) {
+		return null;
+	}
+	return {
+		conclusion: run.conclusion ?? "pending",
+		event: run.event,
+		headSha: run.headSha,
+		id: String(run.databaseId ?? run.id ?? ""),
+		status: run.status ?? "",
+		url: run.url ?? "",
+	};
+}
+
+/** GitHub Release의 공개 상태·태그·커밋·DMG 자산을 검증한다. */
+function verifyRelease(release, expectedTag, expectedSha, expectedAsset) {
+	if (!release || typeof release !== "object" || Array.isArray(release)) {
+		throw new Error("GitHub Release 상세 응답이 객체가 아닙니다.");
+	}
+	if (release.tagName !== expectedTag) {
+		throw new Error(
+			`GitHub Release 태그가 다릅니다: 기대값 ${expectedTag}, 실제값 ${release.tagName ?? "없음"}`,
+		);
+	}
+	if (release.isDraft !== false || release.isPrerelease !== false) {
+		throw new Error(
+			"GitHub Release가 공개 안정 상태가 아닙니다(draft/prerelease).",
+		);
+	}
+
+	/** Release API가 커밋 SHA 또는 기준 브랜치로 반환하는 대상 값. */
+	const targetCommitish = String(release.targetCommitish ?? "");
+	if (!targetCommitish) {
+		throw new Error("GitHub Release 대상 커밋 정보가 없습니다.");
+	}
+	if (
+		FULL_SHA_PATTERN.test(targetCommitish) &&
+		targetCommitish.toLowerCase() !== expectedSha.toLowerCase()
+	) {
+		throw new Error(
+			`GitHub Release 대상 커밋이 다릅니다: 기대값 ${expectedSha}, 실제값 ${targetCommitish}`,
+		);
+	}
+	if (
+		HEX_VALUE_PATTERN.test(targetCommitish) &&
+		!FULL_SHA_PATTERN.test(targetCommitish)
+	) {
+		throw new Error(
+			`GitHub Release 대상 값이 전체 SHA가 아닙니다: ${targetCommitish}`,
+		);
+	}
+
+	/** Release에 올라온 예상 Apple Silicon DMG. */
+	const asset = Array.isArray(release.assets)
+		? release.assets.find((item) => item?.name === expectedAsset)
+		: undefined;
+	if (!asset) {
+		throw new Error(`예상한 Release 자산이 없습니다: ${expectedAsset}`);
+	}
+	/** 결과 요약에 사용할 공개 Release URL. */
+	const url = String(release.url ?? "");
+	if (!url) {
+		throw new Error("GitHub Release URL이 없습니다.");
+	}
+	console.log(`${url}\t${asset.name}`);
+}
+
 /** 명령행 인자를 검사한다. */
 function requireArguments(argumentsList, expectedCount, usage) {
 	if (argumentsList.length !== expectedCount) {
@@ -329,9 +416,39 @@ async function main() {
 			printCiRun(selectCiRun(runs, argumentsList[0]));
 			return;
 		}
+		case "select-release": {
+			requireArguments(
+				argumentsList,
+				2,
+				"select-release <tag-name> <commit-sha>",
+			);
+			/** GitHub Actions Release 실행 목록 원문. */
+			const runs = JSON.parse((await readStandardInput()).trim() || "[]");
+			if (!Array.isArray(runs)) {
+				throw new Error("GitHub Actions Release 실행 목록이 배열이 아닙니다.");
+			}
+			printCiRun(selectReleaseRun(runs, argumentsList[0], argumentsList[1]));
+			return;
+		}
+		case "verify-release": {
+			requireArguments(
+				argumentsList,
+				3,
+				"verify-release <tag-name> <commit-sha> <asset-name>",
+			);
+			/** GitHub Release 상세 응답 원문. */
+			const release = JSON.parse((await readStandardInput()).trim() || "null");
+			verifyRelease(
+				release,
+				argumentsList[0],
+				argumentsList[1],
+				argumentsList[2],
+			);
+			return;
+		}
 		default:
 			throw new Error(
-				"알 수 없는 명령입니다: read-manifest, write-manifest, validate, validate-candidate, bump, compare, max, max-tags, release-status, latest-release, select-ci",
+				"알 수 없는 명령입니다: read-manifest, write-manifest, validate, validate-candidate, bump, compare, max, max-tags, release-status, latest-release, select-ci, select-release, verify-release",
 			);
 	}
 }

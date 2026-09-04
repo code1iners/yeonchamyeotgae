@@ -135,6 +135,21 @@ async function readHeadState(fixture) {
 	return { local, remote };
 }
 
+/** bare 원격에 게시된 태그가 가리키는 커밋을 읽고 없으면 빈 문자열을 반환한다. */
+async function readRemoteTagCommit(fixture, tagName) {
+	try {
+		return await runGit(fixture.remotePath, [
+			"rev-parse",
+			`${tagName}^{commit}`,
+		]);
+	} catch (error) {
+		if (error?.code === 128) {
+			return "";
+		}
+		throw error;
+	}
+}
+
 /** 가짜 GitHub CLI가 반환할 Actions JSON을 쓰는 파일 경로. */
 async function writeRunMode(fixture, mode) {
 	await writeFile(fixture.runModePath, `${mode}\n`, "utf8");
@@ -184,12 +199,25 @@ async function createFixture(options = {}) {
 	const runModePath = path.join(repositoryPath, "run-mode");
 	/** Actions 목록 조회 횟수 파일. */
 	const runListCountPath = path.join(repositoryPath, "run-list-count");
+	/** Release Actions 목록 조회 횟수 파일. */
+	const releaseRunListCountPath = path.join(
+		repositoryPath,
+		"release-run-list-count",
+	);
+	/** 가짜 Release Actions 실행 상태 파일. */
+	const releaseRunModePath = path.join(repositoryPath, "release-run-mode");
+	/** 가짜 GitHub Release 상세 상태 파일. */
+	const releaseViewModePath = path.join(repositoryPath, "release-view-mode");
 	/** fixture에 넣을 현재 앱 버전. */
 	const manifestVersion = options.manifestVersion ?? BASELINE_VERSION;
 	/** fixture에 넣을 기존 공개 안정 Release 목록. */
 	const releases = options.releases ?? [BASELINE_RELEASE];
 	/** 가짜 외부 명령을 선택할 기본 Actions 모드. */
 	const runMode = options.runMode ?? "success";
+	/** 가짜 Release Actions 실행을 선택할 상태. */
+	const releaseRunMode = options.releaseRunMode ?? "success";
+	/** 가짜 GitHub Release 상세 응답을 선택할 상태. */
+	const releaseViewMode = options.releaseViewMode ?? "success";
 
 	await runGit(repositoryPath, ["init", "--quiet", "--initial-branch=main"]);
 	await runGit(repositoryPath, ["config", "user.email", "test@example.com"]);
@@ -199,7 +227,7 @@ async function createFixture(options = {}) {
 	await mkdir(binPath, { recursive: true });
 	await writeFile(
 		path.join(repositoryPath, ".gitignore"),
-		"bin/\n*.log\nrun-mode\nrun-list-count\nreleases.json\nremote.git/\n",
+		"bin/\n*.log\nrun-mode\nrun-list-count\nrelease-run-mode\nrelease-run-list-count\nrelease-view-mode\nreleases.json\nremote.git/\n",
 		"utf8",
 	);
 	await writeFile(
@@ -247,18 +275,41 @@ async function createFixture(options = {}) {
 			options.localTag,
 		]);
 	}
+	if (options.remoteTag) {
+		await runGit(repositoryPath, [
+			"tag",
+			"-a",
+			options.remoteTag,
+			"-m",
+			options.remoteTag,
+		]);
+		await runGit(repositoryPath, [
+			"push",
+			"--quiet",
+			"origin",
+			options.remoteTag,
+		]);
+	}
 
 	await writeFile(releasesPath, `${JSON.stringify(releases)}\n`, "utf8");
 	await writeFile(runModePath, `${runMode}\n`, "utf8");
 	await writeFile(runListCountPath, "0\n", "utf8");
+	await writeFile(releaseRunModePath, `${releaseRunMode}\n`, "utf8");
+	await writeFile(releaseViewModePath, `${releaseViewMode}\n`, "utf8");
+	await writeFile(releaseRunListCountPath, "0\n", "utf8");
 
 	/** 가짜 pnpm과 gh가 읽을 셸 변수 접두사. */
 	const dollar = "$";
 	/** push 때 실행되는 fixture용 pre-push 훅. */
 	const hookSource = [
 		"#!/usr/bin/env sh",
+		"tag_push=0",
+		"while read -r local_ref local_sha remote_ref remote_sha; do",
+		`  case "${dollar}{local_ref:-}" in refs/tags/*) tag_push=1 ;; esac`,
+		"done",
 		`printf '%s\\n' 'pre-push' >> "${dollar}PUBLISH_RELEASE_COMMAND_LOG"`,
-		`if [ "${dollar}{FAKE_PRE_PUSH_EXIT:-0}" -ne 0 ]; then exit "${dollar}FAKE_PRE_PUSH_EXIT"; fi`,
+		`if [ "${dollar}tag_push" -eq 1 ]; then exit "${dollar}{FAKE_TAG_PRE_PUSH_EXIT:-0}"; fi`,
+		`exit "${dollar}{FAKE_PRE_PUSH_EXIT:-0}"`,
 	].join("\n");
 	await writeFile(
 		path.join(repositoryPath, ".git", "hooks", "pre-push"),
@@ -267,18 +318,48 @@ async function createFixture(options = {}) {
 	);
 	await chmod(path.join(repositoryPath, ".git", "hooks", "pre-push"), 0o755);
 
-	/** 가짜 GitHub CLI. run list는 현재 fixture HEAD를 정확한 push 실행으로 만든다. */
+	/** 가짜 GitHub CLI. CI·Release 실행과 Release 상세 응답을 외부 명령으로 기록한다. */
 	const fakeGhSource = [
 		"#!/usr/bin/env sh",
 		`printf 'gh:%s\\n' "${dollar}*" >> "${dollar}PUBLISH_RELEASE_COMMAND_LOG"`,
 		`if [ "${dollar}1 ${dollar}2" = 'auth status' ]; then exit "${dollar}{FAKE_GH_AUTH_EXIT:-0}"; fi`,
 		`if [ "${dollar}1 ${dollar}2" = 'release list' ]; then cat "${dollar}FAKE_RELEASES_PATH"; exit 0; fi`,
 		`if [ "${dollar}1 ${dollar}2" = 'run list' ]; then`,
+		`  workflow='ci'`,
+		`  case "${dollar}*" in *release.yml*) workflow='release' ;; esac`,
+		`  if [ "${dollar}workflow" = 'release' ]; then`,
+		`    count=$(cat "${dollar}FAKE_RELEASE_RUN_LIST_COUNT_PATH")`,
+		`    count=$((count + 1))`,
+		`    printf '%s\\n' "${dollar}count" > "${dollar}FAKE_RELEASE_RUN_LIST_COUNT_PATH"`,
+		`    mode=$(cat "${dollar}FAKE_RELEASE_RUN_MODE_PATH")`,
+		`    head_sha=$(git rev-parse HEAD)`,
+		`    tag_name=''`,
+		`    previous=''`,
+		`    for arg in "${dollar}@"; do`,
+		`      if [ "${dollar}previous" = '--branch' ]; then tag_name="${dollar}arg"; fi`,
+		`      previous="${dollar}arg"`,
+		`    done`,
+		`    case "${dollar}mode" in`,
+		`      delayed) if [ "${dollar}count" -lt 2 ]; then printf '%s\\n' '[]'; exit 0; fi ;;`,
+		`      no-run) printf '%s\\n' '[]'; exit 0 ;;`,
+		`      pull-only) printf '[{"databaseId":302,"headSha":"%s","status":"completed","conclusion":"success","event":"pull_request","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/302"}]\\n' "${dollar}head_sha" "${dollar}tag_name"; exit 0 ;;`,
+		`      wrong-sha) printf '[{"databaseId":303,"headSha":"0000000000000000000000000000000000000000","status":"completed","conclusion":"success","event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/303"}]\\n' "${dollar}tag_name"; exit 0 ;;`,
+		`      wrong-tag) printf '[{"databaseId":304,"headSha":"%s","status":"completed","conclusion":"success","event":"push","headBranch":"v9.9.9","workflowName":"Release","url":"https://example.test/run/304"}]\\n' "${dollar}head_sha"; exit 0 ;;`,
+		`      failure) printf '[{"databaseId":305,"headSha":"%s","status":"completed","conclusion":"failure","event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/305"}]\\n' "${dollar}head_sha" "${dollar}tag_name"; exit 0 ;;`,
+		`      cancelled) printf '[{"databaseId":306,"headSha":"%s","status":"completed","conclusion":"cancelled","event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/306"}]\\n' "${dollar}head_sha" "${dollar}tag_name"; exit 0 ;;`,
+		`      skipped) printf '[{"databaseId":307,"headSha":"%s","status":"completed","conclusion":"skipped","event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/307"}]\\n' "${dollar}head_sha" "${dollar}tag_name"; exit 0 ;;`,
+		`      in-progress) printf '[{"databaseId":308,"headSha":"%s","status":"in_progress","conclusion":null,"event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/308"}]\\n' "${dollar}head_sha" "${dollar}tag_name"; exit 0 ;;`,
+		`      timeout) printf '[{"databaseId":309,"headSha":"%s","status":"in_progress","conclusion":null,"event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/309"}]\\n' "${dollar}head_sha" "${dollar}tag_name"; exit 0 ;;`,
+		`    esac`,
+		`    printf '[{"databaseId":301,"headSha":"%s","status":"completed","conclusion":"success","event":"push","headBranch":"%s","workflowName":"Release","url":"https://example.test/run/301"}]\\n' "${dollar}head_sha" "${dollar}tag_name"`,
+		"    exit 0",
+		"  fi",
 		`  count=$(cat "${dollar}FAKE_RUN_LIST_COUNT_PATH")`,
 		`  count=$((count + 1))`,
 		`  printf '%s\\n' "${dollar}count" > "${dollar}FAKE_RUN_LIST_COUNT_PATH"`,
 		`  mode=$(cat "${dollar}FAKE_RUN_MODE_PATH")`,
 		`  head_sha=$(git rev-parse HEAD)`,
+		`  if [ "${dollar}workflow" = 'ci' ] && [ "${dollar}{FAKE_REMOTE_TAG_ON_CI:-0}" -eq 1 ] && [ "${dollar}count" -eq 1 ]; then git --git-dir "${dollar}FAKE_REMOTE_PATH" update-ref "refs/tags/${dollar}FAKE_REMOTE_TAG_NAME" "${dollar}head_sha"; fi`,
 		`  case "${dollar}mode" in`,
 		`    delayed) if [ "${dollar}count" -lt 2 ]; then printf '%s\\n' '[]'; exit 0; fi ;;`,
 		`    no-run) printf '%s\\n' '[]'; exit 0 ;;`,
@@ -293,7 +374,37 @@ async function createFixture(options = {}) {
 		`  printf '[{"databaseId":101,"headSha":"%s","status":"completed","conclusion":"success","event":"push","url":"https://example.test/run/101"}]\\n' "${dollar}head_sha"`,
 		"  exit 0",
 		"fi",
-		`if [ "${dollar}1 ${dollar}2" = 'run watch' ]; then exit "${dollar}{FAKE_GH_WATCH_EXIT:-0}"; fi`,
+		`if [ "${dollar}1 ${dollar}2" = 'run watch' ]; then`,
+		`  case "${dollar}3" in 301|302|303|304|305|306|307|308|309) exit "${dollar}{FAKE_RELEASE_WATCH_EXIT:-0}" ;; esac`,
+		`  exit "${dollar}{FAKE_GH_WATCH_EXIT:-0}"`,
+		"fi",
+		`if [ "${dollar}1 ${dollar}2" = 'release view' ]; then`,
+		`  tag_name="${dollar}3"`,
+		`  version="${dollar}{tag_name#v}"`,
+		`  head_sha=$(git rev-parse --verify "${dollar}{tag_name}^{commit}" 2>/dev/null || git rev-parse HEAD)`,
+		`  mode=$(cat "${dollar}FAKE_RELEASE_VIEW_MODE_PATH")`,
+		`  release_tag="${dollar}tag_name"`,
+		`  target_commitish='main'`,
+		`  is_draft=false`,
+		`  is_prerelease=false`,
+		`  asset_name="yeonchamyeotgae-${dollar}version-arm64.dmg"`,
+		`  case "${dollar}mode" in`,
+		`    error) exit 1 ;;`,
+		`    wrong-sha) target_commitish='0000000000000000000000000000000000000000' ;;`,
+		`    short-sha) target_commitish='deadbeef' ;;`,
+		`    missing-target) target_commitish='' ;;`,
+		`    wrong-tag) release_tag='v9.9.9' ;;`,
+		`    draft) is_draft=true ;;`,
+		`    prerelease) is_prerelease=true ;;`,
+		`    missing-dmg) asset_name='' ;;`,
+		`  esac`,
+		`  if [ -n "${dollar}asset_name" ]; then`,
+		`    printf '{"tagName":"%s","isDraft":%s,"isPrerelease":%s,"targetCommitish":"%s","url":"https://example.test/releases/%s","assets":[{"name":"%s"}]}\\n' "${dollar}release_tag" "${dollar}is_draft" "${dollar}is_prerelease" "${dollar}target_commitish" "${dollar}tag_name" "${dollar}asset_name"`,
+		"  else",
+		`    printf '{"tagName":"%s","isDraft":%s,"isPrerelease":%s,"targetCommitish":"%s","url":"https://example.test/releases/%s","assets":[]}\\n' "${dollar}release_tag" "${dollar}is_draft" "${dollar}is_prerelease" "${dollar}target_commitish" "${dollar}tag_name"`,
+		"  fi",
+		"  exit 0",
+		"fi",
 		"exit 99",
 	].join("\n");
 	await writeFile(path.join(binPath, "gh"), `${fakeGhSource}\n`, "utf8");
@@ -350,10 +461,20 @@ async function createFixture(options = {}) {
 		...process.env,
 		FAKE_GH_AUTH_EXIT: String(options.ghAuthExit ?? 0),
 		FAKE_GH_WATCH_EXIT: String(options.ghWatchExit ?? 0),
+		FAKE_RELEASE_WATCH_EXIT: String(
+			options.releaseWatchExit ?? options.ghWatchExit ?? 0,
+		),
 		FAKE_GIT_FETCH_EXIT: String(options.fetchExit ?? 1),
 		FAKE_REAL_GIT: options.realGitPath ?? "",
 		FAKE_RELEASES_PATH: releasesPath,
 		FAKE_PRE_PUSH_EXIT: String(options.prePushExit ?? 0),
+		FAKE_TAG_PRE_PUSH_EXIT: String(options.tagPrePushExit ?? 0),
+		FAKE_RELEASE_RUN_LIST_COUNT_PATH: releaseRunListCountPath,
+		FAKE_RELEASE_RUN_MODE_PATH: releaseRunModePath,
+		FAKE_RELEASE_VIEW_MODE_PATH: releaseViewModePath,
+		FAKE_REMOTE_PATH: remotePath,
+		FAKE_REMOTE_TAG_NAME: String(options.remoteTagAfterFetch ?? ""),
+		FAKE_REMOTE_TAG_ON_CI: String(options.remoteTagAfterFetch ? 1 : 0),
 		FAKE_RUN_LIST_COUNT_PATH: runListCountPath,
 		FAKE_RUN_MODE_PATH: runModePath,
 		PATH: [binPath, NODE_BIN_DIRECTORY, inheritedPath]
@@ -361,6 +482,12 @@ async function createFixture(options = {}) {
 			.join(path.delimiter),
 		PUBLISH_RELEASE_CI_LOOKUP_ATTEMPTS: String(options.lookupAttempts ?? 3),
 		PUBLISH_RELEASE_CI_LOOKUP_DELAY_SECONDS: String(options.lookupDelay ?? 0),
+		PUBLISH_RELEASE_RELEASE_LOOKUP_ATTEMPTS: String(
+			options.releaseLookupAttempts ?? options.lookupAttempts ?? 3,
+		),
+		PUBLISH_RELEASE_RELEASE_LOOKUP_DELAY_SECONDS: String(
+			options.releaseLookupDelay ?? options.lookupDelay ?? 0,
+		),
 		PUBLISH_RELEASE_COMMAND_LOG: commandLogPath,
 	};
 
@@ -388,6 +515,13 @@ async function withFixture(callback, options = {}) {
 
 test("정상 기본 patch는 manifest 준비 커밋과 main push 뒤 정확한 CI 성공까지 확인한다", async () => {
 	await withFixture(async (fixture) => {
+		await runGit(fixture.repositoryPath, [
+			"tag",
+			"-a",
+			"maintenance-note",
+			"-m",
+			"maintenance-note",
+		]);
 		/** Enter로 기본 patch와 최종 승인을 선택하는 터미널 입력. */
 		const result = await runInteractive(fixture, "\ny\n");
 		/** 명령이 실제로 수정한 현재 manifest. */
@@ -403,17 +537,38 @@ test("정상 기본 patch는 manifest 준비 커밋과 main push 뒤 정확한 C
 		assert.match(result.output, /현재 앱 버전: 0\.1\.3/);
 		assert.match(result.output, /최신 공개 안정 릴리스: v0\.1\.3/);
 		assert.match(result.output, /원격: origin/);
+		assert.match(result.output, /릴리스 게시와 검증이 완료되었습니다/);
+		assert.match(result.output, /태그: v0\.1\.4/);
 		assert.match(
 			result.output,
-			/릴리스 후보 준비와 정확한 커밋의 CI 승인이 완료되었습니다/,
+			/Release URL: https:\/\/example\.test\/releases\/v0\.1\.4/,
 		);
-		assert.match(result.output, /후속 태그: v0\.1\.4 \(아직 생성하지 않음\)/);
-		assert.match(commandLog, /pre-push/);
-		assert.match(commandLog, /gh:run list/);
+		assert.match(
+			result.output,
+			/확인한 DMG: yeonchamyeotgae-0\.1\.4-arm64\.dmg/,
+		);
+		assert.equal((commandLog.match(/^pre-push$/gm) ?? []).length, 2);
+		assert.match(commandLog, /gh:run list --workflow ci\.yml/);
+		assert.match(commandLog, /gh:run list --workflow release\.yml/);
+		assert.match(commandLog, /gh:release view v0\.1\.4/);
 		assert.ok(
-			commandLog.indexOf("pre-push") < commandLog.indexOf("gh:run list"),
+			commandLog.indexOf("gh:run list --workflow ci.yml") <
+				commandLog.indexOf(
+					"pre-push\n",
+					commandLog.indexOf("gh:run list --workflow ci.yml"),
+				),
 		);
-		assert.doesNotMatch(commandLog, /--no-verify|--tags/);
+		assert.ok(
+			commandLog.indexOf(
+				"pre-push\n",
+				commandLog.indexOf("gh:run list --workflow ci.yml"),
+			) < commandLog.indexOf("gh:run list --workflow release.yml"),
+		);
+		assert.ok(
+			commandLog.indexOf("gh:run list --workflow release.yml") <
+				commandLog.indexOf("gh:release view v0.1.4"),
+		);
+		assert.doesNotMatch(commandLog, /--no-verify|--tags|--force/);
 		assert.equal(
 			await runGit(fixture.repositoryPath, ["log", "-1", "--format=%s"]),
 			"릴리스: v0.1.4 준비",
@@ -430,8 +585,26 @@ test("정상 기본 patch는 manifest 준비 커밋과 main push 뒤 정확한 C
 		);
 		assert.equal(
 			await runGit(fixture.repositoryPath, ["tag", "--list", "v0.1.4"]),
-			"",
+			"v0.1.4",
 		);
+		assert.equal(
+			await runGit(fixture.repositoryPath, ["cat-file", "-t", "v0.1.4"]),
+			"tag",
+		);
+		assert.equal(
+			await runGit(fixture.repositoryPath, ["rev-parse", "v0.1.4^{commit}"]),
+			heads.local,
+		);
+		assert.equal(
+			await runGit(fixture.repositoryPath, [
+				"for-each-ref",
+				"--format=%(contents:subject)",
+				"refs/tags/v0.1.4",
+			]),
+			"v0.1.4",
+		);
+		assert.equal(await readRemoteTagCommit(fixture, "v0.1.4"), heads.local);
+		assert.equal(await readRemoteTagCommit(fixture, "maintenance-note"), "");
 	});
 });
 
@@ -484,7 +657,7 @@ test("이미 origin/main에 있는 미게시 manifest는 커밋과 main push를 
 				/이미 준비된 미게시 버전 v0\.1\.4을 재사용합니다/,
 			);
 			assert.match(result.output, /main push: 생략/);
-			assert.doesNotMatch(commandLog, /pre-push/);
+			assert.equal((commandLog.match(/^pre-push$/gm) ?? []).length, 1);
 			assert.equal(
 				await runGit(fixture.repositoryPath, ["log", "-1", "--format=%s"]),
 				"fixture",
@@ -713,7 +886,7 @@ test("CI 검색 지연은 제한된 재시도로 흡수하고 정확한 push 실
 
 		assert.equal(result.code, 0);
 		assert.match(result.output, /아직 보이지 않습니다/);
-		assert.match(result.output, /CI 승인이 완료되었습니다/);
+		assert.match(result.output, /릴리스 게시와 검증이 완료되었습니다/);
 		assert.equal(lookupCount.trim(), "2");
 	});
 });
@@ -889,4 +1062,175 @@ test("dirty·비 main·behind·diverged 상태는 버전 변경 전에 중단한
 		const divergedResult = await runInteractive(fixture);
 		assert.match(divergedResult.output, /갈라져 있어 중단했습니다/);
 	});
+});
+
+test("초기 조회 뒤 원격에만 나타난 기존 태그는 덮어쓰지 않고 복구 대상으로 안내한다", async () => {
+	await withFixture(
+		async (fixture) => {
+			/** 초기 원격 조회 뒤 생긴 태그 때문에 중단한 결과. */
+			const result = await runInteractive(fixture, "\ny\n");
+			/** 원격에만 생긴 태그가 가리키는 커밋. */
+			const remoteTagCommit = await readRemoteTagCommit(fixture, "v0.1.4");
+			/** 실행 전후의 main 상태. */
+			const heads = await readHeadState(fixture);
+
+			assert.notEqual(result.code, 0);
+			assert.match(
+				result.output,
+				/원격 태그가 이미 있어 덮어쓰지 않고 중단했습니다/,
+			);
+			assert.equal(remoteTagCommit, heads.remote);
+			assert.equal(heads.local, heads.remote);
+			assert.equal(
+				await runGit(fixture.repositoryPath, ["tag", "--list", "v0.1.4"]),
+				"",
+			);
+			assert.doesNotMatch(
+				await readCommandLog(fixture),
+				/gh:run list --workflow release\.yml|gh:release view/,
+			);
+		},
+		{ remoteTagAfterFetch: "v0.1.4" },
+	);
+});
+
+test("태그 push가 실패해도 로컬 주석 태그를 보존하고 Release 단계로 진행하지 않는다", async () => {
+	await withFixture(
+		async (fixture) => {
+			/** 태그 push의 pre-push 실패를 시뮬레이션한 결과. */
+			const result = await runInteractive(fixture, "\ny\n");
+			/** 실패 시점의 local·remote main 상태. */
+			const heads = await readHeadState(fixture);
+			/** 실패 뒤에도 남아 있는 로컬 태그. */
+			const localTagTarget = await runGit(fixture.repositoryPath, [
+				"rev-parse",
+				"v0.1.4^{commit}",
+			]);
+			/** 태그 push 실패 뒤 외부 명령 순서. */
+			const commandLog = await readCommandLog(fixture);
+
+			assert.notEqual(result.code, 0);
+			assert.match(result.output, /로컬 주석 태그 v0\.1\.4는 보존했습니다/);
+			assert.match(result.output, /원격 태그: 없음/);
+			assert.equal(localTagTarget, heads.local);
+			assert.equal(
+				await runGit(fixture.repositoryPath, ["cat-file", "-t", "v0.1.4"]),
+				"tag",
+			);
+			assert.equal(await readRemoteTagCommit(fixture, "v0.1.4"), "");
+			assert.equal((commandLog.match(/^pre-push$/gm) ?? []).length, 2);
+			assert.doesNotMatch(
+				commandLog,
+				/gh:run list --workflow release\.yml|gh:release view/,
+			);
+			assert.doesNotMatch(commandLog, /--no-verify|--force|--delete/);
+		},
+		{ tagPrePushExit: 23 },
+	);
+});
+
+test("Release 워크플로 실패와 정확하지 않은 실행은 원격 태그를 보존한다", async () => {
+	/** Release 실행을 실패·불일치로 만드는 가짜 상태와 기대 메시지. */
+	const cases = [
+		{ mode: "failure", message: /Release 워크플로가 failure로 끝났습니다/ },
+		{ mode: "pull-only", message: /정확한 태그 v0\.1\.4와 .*Release 워크플로/ },
+		{ mode: "wrong-sha", message: /정확한 태그 v0\.1\.4와 .*Release 워크플로/ },
+		{ mode: "wrong-tag", message: /정확한 태그 v0\.1\.4와 .*Release 워크플로/ },
+	];
+	// 각 Release 실행 상태를 순서대로 검증한다.
+	/** 현재 Release 실행 실패 상태. */
+	for (const currentCase of cases) {
+		await withFixture(
+			async (fixture) => {
+				/** Release 워크플로 실패 또는 불일치 결과. */
+				const result = await runInteractive(fixture, "\ny\n", {
+					releaseRunMode: currentCase.mode,
+					releaseLookupAttempts: 1,
+				});
+				/** 태그 push 뒤 보존된 main과 원격 태그 상태. */
+				const heads = await readHeadState(fixture);
+				/** Release 실패 뒤 외부 명령 순서. */
+				const commandLog = await readCommandLog(fixture);
+
+				assert.notEqual(result.code, 0);
+				assert.match(result.output, currentCase.message);
+				assert.match(result.output, /원격 태그 .*보존/);
+				assert.equal(await readRemoteTagCommit(fixture, "v0.1.4"), heads.local);
+				assert.doesNotMatch(commandLog, /gh:release view/);
+				assert.doesNotMatch(commandLog, /--no-verify|--force|--delete/);
+			},
+			{ releaseRunMode: currentCase.mode, releaseLookupAttempts: 1 },
+		);
+	}
+});
+
+test("Release 실행 검색 지연과 진행 중 실행을 정확한 태그로 기다린다", async () => {
+	await withFixture(
+		async (fixture) => {
+			/** Release 실행이 늦게 나타난 정상 게시 결과. */
+			const result = await runInteractive(fixture, "\ny\n");
+			/** Release 실행 검색 횟수. */
+			const lookupCount = await readFile(
+				path.join(fixture.repositoryPath, "release-run-list-count"),
+				"utf8",
+			);
+
+			assert.equal(result.code, 0);
+			assert.match(result.output, /릴리스 게시와 검증이 완료되었습니다/);
+			assert.equal(lookupCount.trim(), "2");
+		},
+		{ releaseRunMode: "delayed", releaseLookupAttempts: 2 },
+	);
+
+	await withFixture(
+		async (fixture) => {
+			/** 완료 전 Release 실행을 watch한 정상 게시 결과. */
+			const result = await runInteractive(fixture, "\ny\n", {
+				releaseRunMode: "in-progress",
+			});
+			/** 진행 중 Release 실행을 기다린 외부 명령 로그. */
+			const commandLog = await readCommandLog(fixture);
+
+			assert.equal(result.code, 0);
+			assert.match(commandLog, /gh:run watch 308 --exit-status/);
+		},
+		{ releaseRunMode: "in-progress" },
+	);
+});
+
+test("공개 Release의 태그·SHA·상태·DMG가 맞지 않으면 원격 태그를 삭제하지 않는다", async () => {
+	/** Release 상세 응답을 일부러 실패시키는 가짜 상태 목록. */
+	const modes = [
+		"error",
+		"wrong-sha",
+		"short-sha",
+		"missing-target",
+		"wrong-tag",
+		"draft",
+		"prerelease",
+		"missing-dmg",
+	];
+	// 각 Release 상세 응답 상태를 순서대로 검증한다.
+	/** 현재 Release 상세 응답 상태. */
+	for (const releaseViewMode of modes) {
+		await withFixture(
+			async (fixture) => {
+				/** Release 상세 검증 실패 결과. */
+				const result = await runInteractive(fixture, "\ny\n", {
+					releaseViewMode,
+				});
+				/** Release 검증 실패 뒤에도 남아 있는 원격 태그. */
+				const heads = await readHeadState(fixture);
+				/** Release 상세 검증까지 진행한 외부 명령 로그. */
+				const commandLog = await readCommandLog(fixture);
+
+				assert.notEqual(result.code, 0);
+				assert.match(result.output, /GitHub Release 검증에 실패했습니다/);
+				assert.equal(await readRemoteTagCommit(fixture, "v0.1.4"), heads.local);
+				assert.match(commandLog, /gh:release view v0\.1\.4/);
+				assert.doesNotMatch(commandLog, /--no-verify|--force|--delete/);
+			},
+			{ releaseViewMode },
+		);
+	}
 });

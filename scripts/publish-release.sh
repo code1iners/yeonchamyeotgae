@@ -44,6 +44,8 @@ MANIFEST_PATH='apps/desktop/package.json'
 REMOTE_NAME='origin'
 CI_LOOKUP_ATTEMPTS="${PUBLISH_RELEASE_CI_LOOKUP_ATTEMPTS:-6}"
 CI_LOOKUP_DELAY_SECONDS="${PUBLISH_RELEASE_CI_LOOKUP_DELAY_SECONDS:-1}"
+RELEASE_LOOKUP_ATTEMPTS="${PUBLISH_RELEASE_RELEASE_LOOKUP_ATTEMPTS:-6}"
+RELEASE_LOOKUP_DELAY_SECONDS="${PUBLISH_RELEASE_RELEASE_LOOKUP_DELAY_SECONDS:-1}"
 
 # GitHub Release 목록에서 버전 하나의 사용 상태를 조회한다.
 release_status() {
@@ -58,6 +60,18 @@ compare_versions() {
 # 후보 버전이 현재 안정 계보보다 높은지 검증한다.
 validate_candidate() {
 	node "$VERSION_HELPER" validate-candidate "$1" "$USED_VERSION_FLOOR"
+}
+
+# 원격 태그의 직접 참조가 이미 있는지 확인한다. 실패한 조회는 상태 미확인으로 구분한다.
+remote_tag_refs() {
+	git ls-remote --refs "$REMOTE_NAME" "refs/tags/$TAG_NAME" 2>/dev/null
+}
+
+# 원격 annotated tag가 가리키는 실제 커밋을 읽어 태그 대상 SHA를 검증한다.
+remote_tag_commit() {
+	REMOTE_TAG_LINES=$(git ls-remote "$REMOTE_NAME" "refs/tags/${TAG_NAME}^{}" 2>/dev/null) ||
+		return 1
+	printf '%s\n' "$REMOTE_TAG_LINES" | awk 'NR == 1 { print $1; exit }'
 }
 
 # 실행 환경과 인증을 원격 변경 전에 확인한다.
@@ -390,7 +404,7 @@ if [ "$CI_HEAD_SHA" != "$RELEASE_SHA" ] || [ "$CI_EVENT" != 'push' ]; then
 	fail_release "정확한 커밋 ${RELEASE_SHA}의 push CI가 아니어서 중단했습니다. 태그는 만들지 않았습니다."
 fi
 if [ "$CI_CONCLUSION" = 'success' ]; then
-	CI_SUCCESS=1
+	:
 elif [ "$CI_STATUS" = 'completed' ]; then
 	fail_release "정확한 커밋 ${RELEASE_SHA}의 CI가 ${CI_CONCLUSION:-알 수 없는 결과}로 끝났습니다. main push는 보존했고 태그는 만들지 않았습니다. 실행을 재실행한 뒤 다시 확인하세요: ${CI_RUN_URL:-URL 없음}"
 else
@@ -398,19 +412,133 @@ else
 	if ! gh run watch "$CI_RUN_ID" --exit-status; then
 		fail_release "정확한 커밋 ${RELEASE_SHA}의 CI가 성공하지 못했습니다. main push는 보존했고 태그는 만들지 않았습니다. 실행을 재실행한 뒤 같은 명령으로 확인하세요: ${CI_RUN_URL:-URL 없음}"
 	fi
-	CI_SUCCESS=1
 fi
 
-# 이번 티켓의 경계는 CI 승인까지이며 태그는 생성하지 않는다.
-if [ "$CI_SUCCESS" -eq 1 ]; then
-	printf '%s\n' ''
-	printf '%s\n' '[publish-release] 릴리스 후보 준비와 정확한 커밋의 CI 승인이 완료되었습니다.'
-	printf '%s\n' "버전: ${CANDIDATE_VERSION}"
-	printf '%s\n' "커밋: ${RELEASE_SHA}"
-	if [ -n "$CI_RUN_URL" ]; then
-		printf '%s\n' "CI: 성공 (${CI_RUN_URL})"
-	else
-		printf '%s\n' 'CI: 성공'
-	fi
-	printf '%s\n' "후속 태그: v${CANDIDATE_VERSION} (아직 생성하지 않음)"
+# CI 성공 뒤 생성할 단일 릴리스 태그와 기대하는 macOS DMG 이름을 고정한다.
+TAG_NAME="v${CANDIDATE_VERSION}"
+EXPECTED_DMG_NAME="yeonchamyeotgae-${CANDIDATE_VERSION}-arm64.dmg"
+
+# CI 승인 사이에 생긴 로컬·원격 태그도 덮어쓰지 않고 기존 복구 대상으로 멈춘다.
+if git show-ref --verify --quiet "refs/tags/${TAG_NAME}"; then
+	fail_release "${TAG_NAME} 태그가 이미 있어 덮어쓰지 않고 중단했습니다. 기존 릴리스 복구 대상으로 확인하세요."
 fi
+if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
+	fail_release "${TAG_NAME} 원격 태그 상태를 확인하지 못해 중단했습니다. 로컬 태그는 아직 만들지 않았습니다."
+fi
+if [ -n "$REMOTE_TAG_INFO" ]; then
+	fail_release "${TAG_NAME} 원격 태그가 이미 있어 덮어쓰지 않고 중단했습니다. 기존 릴리스 복구 대상으로 확인하세요."
+fi
+
+# 릴리스 태그는 정확한 CI 승인 커밋을 가리키는 annotated tag로만 만든다.
+if ! git tag --annotate "$TAG_NAME" "$RELEASE_SHA" --message "$TAG_NAME"; then
+	fail_release "${TAG_NAME} 태그 생성에 실패했습니다. 이미 만들어진 로컬 태그가 있다면 삭제하지 않고 보존합니다."
+fi
+if ! TAG_TYPE=$(git cat-file -t "$TAG_NAME" 2>/dev/null); then
+	fail_release "${TAG_NAME} 태그 타입을 확인하지 못했습니다. 로컬 태그와 커밋을 삭제하지 않고 보존합니다."
+fi
+if [ "$TAG_TYPE" != 'tag' ]; then
+	fail_release "${TAG_NAME}이 주석 태그가 아니어서 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+fi
+if ! TAG_TARGET_SHA=$(git rev-parse --verify "${TAG_NAME}^{commit}" 2>/dev/null); then
+	fail_release "${TAG_NAME}의 대상 커밋을 확인하지 못했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+fi
+if [ "$TAG_TARGET_SHA" != "$RELEASE_SHA" ]; then
+	fail_release "${TAG_NAME}이 정확한 릴리스 커밋을 가리키지 않아 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+fi
+if ! TAG_MESSAGE=$(git for-each-ref --format='%(contents:subject)' "refs/tags/${TAG_NAME}" 2>/dev/null); then
+	fail_release "${TAG_NAME} 메시지를 확인하지 못했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+fi
+if [ "$TAG_MESSAGE" != "$TAG_NAME" ]; then
+	fail_release "${TAG_NAME} 메시지가 태그 이름과 달라 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+fi
+
+# 태그 하나만 일반 push해 기존 pre-push 검증을 두 번째로 실행한다.
+printf '%s\n' "[publish-release] ${TAG_NAME}을 push합니다. 기존 pre-push 검증이 다시 실행됩니다."
+if ! git push "$REMOTE_NAME" "$TAG_NAME"; then
+	if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
+		REMOTE_TAG_STATE='확인하지 못함'
+	elif [ -n "$REMOTE_TAG_INFO" ]; then
+		REMOTE_TAG_STATE='있음 (상태를 추가 확인해야 함)'
+	else
+		REMOTE_TAG_STATE='없음'
+	fi
+	fail_release "태그 push에 실패했습니다. 로컬 주석 태그 ${TAG_NAME}는 보존했습니다. 원격 태그: ${REMOTE_TAG_STATE}. 원인을 해결한 뒤 같은 태그만 다시 push하세요: git push ${REMOTE_NAME} ${TAG_NAME}"
+fi
+
+# 원격 annotated tag의 peeled commit도 확인해 GitHub Release가 참조할 SHA를 고정한다.
+if ! REMOTE_TAG_COMMIT=$(remote_tag_commit); then
+	fail_release "원격 ${TAG_NAME}의 대상 커밋을 확인하지 못했습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
+fi
+if [ "$REMOTE_TAG_COMMIT" != "$RELEASE_SHA" ]; then
+	fail_release "원격 ${TAG_NAME}이 기대한 전체 SHA를 가리키지 않습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
+fi
+
+# 태그 push가 시작한 정확한 Release workflow 실행을 제한된 재시도로 찾는다.
+RELEASE_RUN_INFO='none'
+RELEASE_ATTEMPT=1
+while [ "$RELEASE_ATTEMPT" -le "$RELEASE_LOOKUP_ATTEMPTS" ]
+do
+	if ! RELEASE_RUN_LIST_JSON=$(gh run list --workflow release.yml --branch "$TAG_NAME" --event push --commit "$RELEASE_SHA" --limit 20 --json databaseId,headSha,status,conclusion,event,headBranch,workflowName,url 2>/dev/null); then
+		fail_release "${TAG_NAME}의 Release 워크플로 실행을 검색하지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했고, GitHub Actions에서 해당 실행을 확인한 뒤 안전하게 재실행하세요."
+	fi
+	if ! RELEASE_RUN_INFO=$(printf '%s' "$RELEASE_RUN_LIST_JSON" | node "$VERSION_HELPER" select-release "$TAG_NAME" "$RELEASE_SHA"); then
+		fail_release "${TAG_NAME}의 Release 워크플로 응답을 해석하지 못했습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
+	fi
+	if [ "$RELEASE_RUN_INFO" != 'none' ]; then
+		break
+	fi
+	if [ "$RELEASE_ATTEMPT" -lt "$RELEASE_LOOKUP_ATTEMPTS" ]; then
+		printf '%s\n' "[publish-release] ${TAG_NAME}의 Release 워크플로가 아직 보이지 않습니다(${RELEASE_ATTEMPT}/${RELEASE_LOOKUP_ATTEMPTS}). 잠시 후 다시 검색합니다."
+		sleep "$RELEASE_LOOKUP_DELAY_SECONDS"
+	fi
+	RELEASE_ATTEMPT=$((RELEASE_ATTEMPT + 1))
+done
+if [ "$RELEASE_RUN_INFO" = 'none' ]; then
+	fail_release "정확한 태그 ${TAG_NAME}와 전체 SHA ${RELEASE_SHA}의 Release 워크플로를 제한된 재시도 안에 찾지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. GitHub Actions에서 정확한 실행을 확인·재실행한 뒤 Release를 검증하세요."
+fi
+
+# Release 실행 정보를 읽고 다른 커밋·이벤트의 성공을 대체 증거로 쓰지 않는다.
+IFS="$(printf '\t')" read -r RELEASE_RUN_ID RELEASE_RUN_STATUS RELEASE_RUN_CONCLUSION RELEASE_RUN_URL RELEASE_RUN_SHA RELEASE_RUN_EVENT <<EOF
+$RELEASE_RUN_INFO
+EOF
+if [ "$RELEASE_RUN_SHA" != "$RELEASE_SHA" ] || [ "$RELEASE_RUN_EVENT" != 'push' ]; then
+	fail_release "정확한 태그 ${TAG_NAME}의 Release 워크플로가 기대한 커밋·push 이벤트가 아니어서 중단했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다."
+fi
+if [ "$RELEASE_RUN_CONCLUSION" = 'success' ]; then
+	:
+elif [ "$RELEASE_RUN_STATUS" = 'completed' ]; then
+	fail_release "${TAG_NAME}의 Release 워크플로가 ${RELEASE_RUN_CONCLUSION:-알 수 없는 결과}로 끝났습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. 정확한 실행을 재실행하세요: gh run rerun ${RELEASE_RUN_ID}"
+else
+	printf '%s\n' "[publish-release] 정확한 ${TAG_NAME} Release 실행(${RELEASE_RUN_ID})을 기다립니다: ${RELEASE_RUN_URL:-URL 없음}"
+	if ! gh run watch "$RELEASE_RUN_ID" --exit-status; then
+		fail_release "${TAG_NAME}의 Release 워크플로가 성공하지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. 정확한 실행을 재실행하세요: gh run rerun ${RELEASE_RUN_ID}"
+	fi
+fi
+
+# Release 상세 상태와 자산을 읽어 공개 완료까지 확인한다.
+if ! RELEASE_VIEW_JSON=$(gh release view "$TAG_NAME" --json tagName,isDraft,isPrerelease,targetCommitish,url,assets 2>/dev/null); then
+	fail_release "GitHub Release 검증에 실패했습니다: ${TAG_NAME}의 상세 정보를 읽지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. 정확한 Release 실행을 재실행한 뒤 다시 확인하세요: gh run rerun ${RELEASE_RUN_ID}"
+fi
+if ! RELEASE_VERIFICATION=$(printf '%s' "$RELEASE_VIEW_JSON" | node "$VERSION_HELPER" verify-release "$TAG_NAME" "$RELEASE_SHA" "$EXPECTED_DMG_NAME" 2>&1); then
+	fail_release "GitHub Release 검증에 실패했습니다: ${RELEASE_VERIFICATION}. 원격 태그 ${TAG_NAME}는 보존했습니다. Release 실행을 재실행한 뒤 같은 태그의 공개 상태와 자산을 다시 확인하세요: gh run rerun ${RELEASE_RUN_ID}"
+fi
+IFS="$(printf '\t')" read -r RELEASE_URL RELEASE_ASSET <<EOF
+$RELEASE_VERIFICATION
+EOF
+
+# 상세 검증 도중 원격 태그가 이동하지 않았는지 최종적으로 다시 확인한다.
+if ! REMOTE_TAG_COMMIT=$(remote_tag_commit); then
+	fail_release "원격 ${TAG_NAME}의 최종 대상 커밋을 확인하지 못했습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
+fi
+if [ "$REMOTE_TAG_COMMIT" != "$RELEASE_SHA" ]; then
+	fail_release "원격 ${TAG_NAME}가 최종 확인 중 기대한 전체 SHA를 가리키지 않게 되었습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
+fi
+
+# Release 공개와 기대한 Apple Silicon DMG까지 확인한 뒤에만 전체 명령을 성공시킨다.
+printf '%s\n' ''
+printf '%s\n' '[publish-release] 릴리스 게시와 검증이 완료되었습니다.'
+printf '%s\n' "버전: ${CANDIDATE_VERSION}"
+printf '%s\n' "태그: ${TAG_NAME}"
+printf '%s\n' "전체 SHA: ${RELEASE_SHA}"
+printf '%s\n' "Release URL: ${RELEASE_URL}"
+printf '%s\n' "확인한 DMG: ${RELEASE_ASSET}"
