@@ -14,18 +14,18 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-/** Node child process API를 Promise로 사용할 함수. */
+/** 외부 명령 실패도 예외 대신 테스트 가능한 결과로 다루기 위한 Promise 래퍼. */
 const execFileAsync = promisify(execFile);
-/** 테스트할 릴리스 명령의 저장소 기준 경로. */
+/** fixture 저장소에서도 실제 작업 트리의 릴리스 명령을 실행하기 위한 절대 경로. */
 const SCRIPT_PATH = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
 	"publish-release.sh",
 );
-/** 테스트에서 직접 호출할 Node 보조 스크립트 경로. */
+/** PATH를 격리해도 현재 Node 런타임은 사용할 수 있도록 보존하는 디렉터리. */
 const NODE_BIN_DIRECTORY = path.dirname(process.execPath);
-/** 릴리스 기준으로 사용할 이전 공개 안정 버전. */
+/** 모든 버전 증가·중복 검증의 공통 출발점. */
 const BASELINE_VERSION = "0.1.3";
-/** GitHub Release 목록에 넣을 기준 공개 Release. */
+/** 새 후보를 선택하게 만드는 이미 게시된 안정 Release. */
 const BASELINE_RELEASE = {
 	isDraft: false,
 	isPrerelease: false,
@@ -225,6 +225,15 @@ async function createFixture(options = {}) {
 	await runGit(repositoryPath, ["init", "--bare", "--quiet", remotePath]);
 	await runGit(repositoryPath, ["remote", "add", "origin", remotePath]);
 	await mkdir(binPath, { recursive: true });
+	/** JavaScript 보간 없이 가짜 셸 변수식을 조립하기 위한 접두사. */
+	const dollar = "$";
+	/** 운영체제 경계를 호스트 환경과 무관하게 재현하는 uname 대역. */
+	const fakeUnameSource = [
+		"#!/usr/bin/env sh",
+		`printf '%s\\n' "${dollar}{FAKE_UNAME_SYSTEM:-Darwin}"`,
+	].join("\n");
+	await writeFile(path.join(binPath, "uname"), `${fakeUnameSource}\n`, "utf8");
+	await chmod(path.join(binPath, "uname"), 0o755);
 	await writeFile(
 		path.join(repositoryPath, ".gitignore"),
 		"bin/\n*.log\nrun-mode\nrun-list-count\nrelease-run-mode\nrelease-run-list-count\nrelease-view-mode\nreleases.json\nremote.git/\n",
@@ -298,8 +307,6 @@ async function createFixture(options = {}) {
 	await writeFile(releaseViewModePath, `${releaseViewMode}\n`, "utf8");
 	await writeFile(releaseRunListCountPath, "0\n", "utf8");
 
-	/** 가짜 pnpm과 gh가 읽을 셸 변수 접두사. */
-	const dollar = "$";
 	/** push 때 실행되는 fixture용 pre-push 훅. */
 	const hookSource = [
 		"#!/usr/bin/env sh",
@@ -469,6 +476,7 @@ async function createFixture(options = {}) {
 		FAKE_RELEASES_PATH: releasesPath,
 		FAKE_PRE_PUSH_EXIT: String(options.prePushExit ?? 0),
 		FAKE_TAG_PRE_PUSH_EXIT: String(options.tagPrePushExit ?? 0),
+		FAKE_UNAME_SYSTEM: String(options.operatingSystem ?? "Darwin"),
 		FAKE_RELEASE_RUN_LIST_COUNT_PATH: releaseRunListCountPath,
 		FAKE_RELEASE_RUN_MODE_PATH: releaseRunModePath,
 		FAKE_RELEASE_VIEW_MODE_PATH: releaseViewModePath,
@@ -939,6 +947,25 @@ test("GitHub 인증 실패는 manifest 버전 변경 전에 중단한다", async
 		assert.equal(manifest.version, BASELINE_VERSION);
 		assert.equal(heads.local, heads.remote);
 	});
+});
+
+test("macOS가 아니면 저장소와 원격을 변경하기 전에 중단한다", async () => {
+	await withFixture(
+		async (fixture) => {
+			/** 운영체제 검사에 거부된 릴리스 명령 결과. */
+			const result = await runInteractive(fixture);
+			/** 사전 조건 검사 전후가 같은지 확인할 manifest 원문. */
+			const manifest = await readFile(fixture.manifestPath, "utf8");
+			/** 원격 접근이 시작되지 않았음을 확인할 외부 명령 로그. */
+			const commandLog = await readCommandLog(fixture);
+
+			assert.notEqual(result.code, 0);
+			assert.match(result.output, /이 릴리스 명령은 macOS에서만 실행/);
+			assert.match(manifest, /"version": "0\.1\.3"/);
+			assert.equal(commandLog, "");
+		},
+		{ operatingSystem: "Linux" },
+	);
 });
 
 test("필수 GitHub CLI가 없으면 manifest 버전 변경 전에 중단한다", async () => {

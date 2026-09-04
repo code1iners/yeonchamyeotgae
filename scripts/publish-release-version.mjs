@@ -12,9 +12,9 @@ const HEX_VALUE_PATTERN = /^[0-9a-f]+$/i;
 
 /** 정식 안정 버전을 BigInt 세 묶음으로 파싱한다. */
 function parseStableVersion(input) {
-	/** 오류 메시지에 사용할 원문. */
+	/** null과 숫자 입력도 일관된 검증 오류로 처리하기 위한 문자열 표현. */
 	const value = String(input ?? "");
-	/** 정식 SemVer를 구성하는 숫자 묶음. */
+	/** 선행 0 없는 major·minor·patch를 분리한 결과. */
 	const match = value.match(STABLE_VERSION_PATTERN);
 	if (!match) {
 		throw new Error(

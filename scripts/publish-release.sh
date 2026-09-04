@@ -25,6 +25,15 @@ require_command git
 require_command node
 require_command pnpm
 require_command gh
+require_command uname
+
+# 지원하지 않는 운영체제에서는 manifest나 Git 상태를 건드리기 전에 중단한다.
+if ! OPERATING_SYSTEM=$(uname -s 2>/dev/null); then
+	fail_release '운영체제를 확인하지 못해 중단했습니다.'
+fi
+if [ "$OPERATING_SYSTEM" != 'Darwin' ]; then
+	fail_release "이 릴리스 명령은 macOS에서만 실행할 수 있습니다(현재: ${OPERATING_SYSTEM:-알 수 없음})."
+fi
 
 # 확인을 생략하는 --yes 등 비대화형 경로를 제공하지 않는다.
 if [ "$#" -ne 0 ]; then
@@ -72,6 +81,80 @@ remote_tag_commit() {
 	REMOTE_TAG_LINES=$(git ls-remote "$REMOTE_NAME" "refs/tags/${TAG_NAME}^{}" 2>/dev/null) ||
 		return 1
 	printf '%s\n' "$REMOTE_TAG_LINES" | awk 'NR == 1 { print $1; exit }'
+}
+
+# CI와 Release에 공통인 Actions 실행 검색 지연을 제한된 재시도로 흡수한다.
+find_workflow_run() {
+	RUN_KIND=$1
+	RUN_LABEL=$2
+	RUN_WORKFLOW=$3
+	RUN_BRANCH=$4
+	RUN_LOOKUP_ATTEMPTS=$5
+	RUN_LOOKUP_DELAY_SECONDS=$6
+	RUN_PRESERVED_STATE=$7
+	RUN_LOOKUP_FAILURE_GUIDE=$8
+
+	FOUND_RUN_INFO='none'
+	RUN_ATTEMPT=1
+	while [ "$RUN_ATTEMPT" -le "$RUN_LOOKUP_ATTEMPTS" ]
+	do
+		if ! RUN_LIST_JSON=$(gh run list \
+			--workflow "$RUN_WORKFLOW" \
+			--branch "$RUN_BRANCH" \
+			--event push \
+			--commit "$RELEASE_SHA" \
+			--limit 20 \
+			--json databaseId,headSha,status,conclusion,event,url,headBranch,workflowName \
+			2>/dev/null); then
+			fail_release "${RUN_LABEL} 실행을 검색하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
+		fi
+		case "$RUN_KIND" in
+			ci)
+				FOUND_RUN_INFO=$(printf '%s' "$RUN_LIST_JSON" | node "$VERSION_HELPER" select-ci "$RELEASE_SHA") ||
+					fail_release "${RUN_LABEL} 응답을 해석하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
+				;;
+			release)
+				FOUND_RUN_INFO=$(printf '%s' "$RUN_LIST_JSON" | node "$VERSION_HELPER" select-release "$TAG_NAME" "$RELEASE_SHA") ||
+					fail_release "${RUN_LABEL} 응답을 해석하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
+				;;
+		esac
+		if [ "$FOUND_RUN_INFO" != 'none' ]; then
+			return 0
+		fi
+		if [ "$RUN_ATTEMPT" -lt "$RUN_LOOKUP_ATTEMPTS" ]; then
+			printf '%s\n' "[publish-release] ${RUN_LABEL} 실행이 아직 보이지 않습니다(${RUN_ATTEMPT}/${RUN_LOOKUP_ATTEMPTS}). 잠시 후 다시 검색합니다."
+			sleep "$RUN_LOOKUP_DELAY_SECONDS"
+		fi
+		RUN_ATTEMPT=$((RUN_ATTEMPT + 1))
+	done
+	return 1
+}
+
+# 찾은 Actions 실행의 대상과 완료 결과를 한 경로에서 검증한다.
+wait_for_workflow_run() {
+	RUN_INFO=$1
+	RUN_SUBJECT=$2
+	RUN_PRESERVED_STATE=$3
+	RUN_RERUN_COMMAND=$4
+	RUN_WAIT_LABEL=$5
+
+	IFS="$(printf '\t')" read -r VERIFIED_RUN_ID RUN_STATUS RUN_CONCLUSION VERIFIED_RUN_URL RUN_SHA RUN_EVENT <<EOF
+$RUN_INFO
+EOF
+	RUN_RETRY_GUIDE="정확한 실행을 재실행하세요: ${RUN_RERUN_COMMAND} ${VERIFIED_RUN_ID}"
+	if [ "$RUN_SHA" != "$RELEASE_SHA" ] || [ "$RUN_EVENT" != 'push' ]; then
+		fail_release "${RUN_SUBJECT}가 기대한 커밋·push 이벤트가 아니어서 중단했습니다. ${RUN_PRESERVED_STATE}"
+	fi
+	if [ "$RUN_CONCLUSION" = 'success' ]; then
+		return 0
+	fi
+	if [ "$RUN_STATUS" = 'completed' ]; then
+		fail_release "${RUN_SUBJECT}가 ${RUN_CONCLUSION:-알 수 없는 결과}로 끝났습니다. ${RUN_PRESERVED_STATE} ${RUN_RETRY_GUIDE}"
+	fi
+	printf '%s\n' "[publish-release] ${RUN_WAIT_LABEL} 실행(${VERIFIED_RUN_ID})을 기다립니다: ${VERIFIED_RUN_URL:-URL 없음}"
+	if ! gh run watch "$VERIFIED_RUN_ID" --exit-status; then
+		fail_release "${RUN_SUBJECT}가 성공하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_RETRY_GUIDE}"
+	fi
 }
 
 # 실행 환경과 인증을 원격 변경 전에 확인한다.
@@ -372,47 +455,26 @@ else
 	printf '%s\n' '[publish-release] 대상 커밋이 이미 origin/main에 있어 main push를 생략합니다.'
 fi
 
-# push 이벤트가 GitHub에 나타날 때까지 제한된 횟수로 정확한 SHA의 CI 실행을 찾는다.
-CI_RUN_INFO='none'
-CI_ATTEMPT=1
-while [ "$CI_ATTEMPT" -le "$CI_LOOKUP_ATTEMPTS" ]
-do
-	if ! CI_RUN_LIST_JSON=$(gh run list --workflow ci.yml --branch main --event push --commit "$RELEASE_SHA" --limit 20 --json databaseId,headSha,status,conclusion,event,url 2>/dev/null); then
-		fail_release "정확한 커밋 ${RELEASE_SHA}의 CI 실행을 검색하지 못했습니다. main push는 보존했고 태그는 만들지 않았습니다."
-	fi
-	if ! CI_RUN_INFO=$(printf '%s' "$CI_RUN_LIST_JSON" | node "$VERSION_HELPER" select-ci "$RELEASE_SHA"); then
-		fail_release "GitHub Actions 실행 응답을 해석하지 못했습니다. main push는 보존했고 태그는 만들지 않았습니다."
-	fi
-	if [ "$CI_RUN_INFO" != 'none' ]; then
-		break
-	fi
-	if [ "$CI_ATTEMPT" -lt "$CI_LOOKUP_ATTEMPTS" ]; then
-		printf '%s\n' "[publish-release] CI 실행이 아직 보이지 않습니다(${CI_ATTEMPT}/${CI_LOOKUP_ATTEMPTS}). 잠시 후 다시 검색합니다."
-		sleep "$CI_LOOKUP_DELAY_SECONDS"
-	fi
-	CI_ATTEMPT=$((CI_ATTEMPT + 1))
-done
-if [ "$CI_RUN_INFO" = 'none' ]; then
+# push 이벤트가 GitHub에 나타날 때까지 정확한 SHA의 CI 실행을 찾는다.
+if ! find_workflow_run \
+	ci \
+	"정확한 커밋 ${RELEASE_SHA}의 CI" \
+	ci.yml \
+	main \
+	"$CI_LOOKUP_ATTEMPTS" \
+	"$CI_LOOKUP_DELAY_SECONDS" \
+	'main push는 보존했고 태그는 만들지 않았습니다.' \
+	'같은 명령으로 다시 검색하거나 GitHub Actions에서 실행을 확인하세요.'
+then
 	fail_release "정확한 커밋 ${RELEASE_SHA}의 push CI를 제한된 재시도 안에 찾지 못했습니다. main push는 보존했고 태그는 만들지 않았습니다. 같은 명령으로 다시 검색하거나 GitHub Actions에서 실행을 확인하세요."
 fi
-
-# 탭으로 분리한 실행 정보를 읽고, 완료 실패는 태그 단계로 진행하지 않는다.
-IFS="$(printf '\t')" read -r CI_RUN_ID CI_STATUS CI_CONCLUSION CI_RUN_URL CI_HEAD_SHA CI_EVENT <<EOF
-$CI_RUN_INFO
-EOF
-if [ "$CI_HEAD_SHA" != "$RELEASE_SHA" ] || [ "$CI_EVENT" != 'push' ]; then
-	fail_release "정확한 커밋 ${RELEASE_SHA}의 push CI가 아니어서 중단했습니다. 태그는 만들지 않았습니다."
-fi
-if [ "$CI_CONCLUSION" = 'success' ]; then
-	:
-elif [ "$CI_STATUS" = 'completed' ]; then
-	fail_release "정확한 커밋 ${RELEASE_SHA}의 CI가 ${CI_CONCLUSION:-알 수 없는 결과}로 끝났습니다. main push는 보존했고 태그는 만들지 않았습니다. 실행을 재실행한 뒤 다시 확인하세요: ${CI_RUN_URL:-URL 없음}"
-else
-	printf '%s\n' "[publish-release] 정확한 CI 실행(${CI_RUN_ID})을 기다립니다: ${CI_RUN_URL:-URL 없음}"
-	if ! gh run watch "$CI_RUN_ID" --exit-status; then
-		fail_release "정확한 커밋 ${RELEASE_SHA}의 CI가 성공하지 못했습니다. main push는 보존했고 태그는 만들지 않았습니다. 실행을 재실행한 뒤 같은 명령으로 확인하세요: ${CI_RUN_URL:-URL 없음}"
-	fi
-fi
+CI_RUN_INFO=$FOUND_RUN_INFO
+wait_for_workflow_run \
+	"$CI_RUN_INFO" \
+	"정확한 커밋 ${RELEASE_SHA}의 CI" \
+	'main push는 보존했고 태그는 만들지 않았습니다.' \
+	'gh run rerun' \
+	'정확한 CI'
 
 # CI 성공 뒤 생성할 단일 릴리스 태그와 기대하는 macOS DMG 이름을 고정한다.
 TAG_NAME="v${CANDIDATE_VERSION}"
@@ -473,47 +535,27 @@ if [ "$REMOTE_TAG_COMMIT" != "$RELEASE_SHA" ]; then
 	fail_release "원격 ${TAG_NAME}이 기대한 전체 SHA를 가리키지 않습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
 fi
 
-# 태그 push가 시작한 정확한 Release workflow 실행을 제한된 재시도로 찾는다.
-RELEASE_RUN_INFO='none'
-RELEASE_ATTEMPT=1
-while [ "$RELEASE_ATTEMPT" -le "$RELEASE_LOOKUP_ATTEMPTS" ]
-do
-	if ! RELEASE_RUN_LIST_JSON=$(gh run list --workflow release.yml --branch "$TAG_NAME" --event push --commit "$RELEASE_SHA" --limit 20 --json databaseId,headSha,status,conclusion,event,headBranch,workflowName,url 2>/dev/null); then
-		fail_release "${TAG_NAME}의 Release 워크플로 실행을 검색하지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했고, GitHub Actions에서 해당 실행을 확인한 뒤 안전하게 재실행하세요."
-	fi
-	if ! RELEASE_RUN_INFO=$(printf '%s' "$RELEASE_RUN_LIST_JSON" | node "$VERSION_HELPER" select-release "$TAG_NAME" "$RELEASE_SHA"); then
-		fail_release "${TAG_NAME}의 Release 워크플로 응답을 해석하지 못했습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
-	fi
-	if [ "$RELEASE_RUN_INFO" != 'none' ]; then
-		break
-	fi
-	if [ "$RELEASE_ATTEMPT" -lt "$RELEASE_LOOKUP_ATTEMPTS" ]; then
-		printf '%s\n' "[publish-release] ${TAG_NAME}의 Release 워크플로가 아직 보이지 않습니다(${RELEASE_ATTEMPT}/${RELEASE_LOOKUP_ATTEMPTS}). 잠시 후 다시 검색합니다."
-		sleep "$RELEASE_LOOKUP_DELAY_SECONDS"
-	fi
-	RELEASE_ATTEMPT=$((RELEASE_ATTEMPT + 1))
-done
-if [ "$RELEASE_RUN_INFO" = 'none' ]; then
+# 태그 push가 시작한 정확한 Release workflow 실행을 찾는다.
+if ! find_workflow_run \
+	release \
+	"${TAG_NAME}의 Release 워크플로" \
+	release.yml \
+	"$TAG_NAME" \
+	"$RELEASE_LOOKUP_ATTEMPTS" \
+	"$RELEASE_LOOKUP_DELAY_SECONDS" \
+	"원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다." \
+	'GitHub Actions에서 해당 실행을 확인한 뒤 안전하게 재실행하세요.'
+then
 	fail_release "정확한 태그 ${TAG_NAME}와 전체 SHA ${RELEASE_SHA}의 Release 워크플로를 제한된 재시도 안에 찾지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. GitHub Actions에서 정확한 실행을 확인·재실행한 뒤 Release를 검증하세요."
 fi
-
-# Release 실행 정보를 읽고 다른 커밋·이벤트의 성공을 대체 증거로 쓰지 않는다.
-IFS="$(printf '\t')" read -r RELEASE_RUN_ID RELEASE_RUN_STATUS RELEASE_RUN_CONCLUSION RELEASE_RUN_URL RELEASE_RUN_SHA RELEASE_RUN_EVENT <<EOF
-$RELEASE_RUN_INFO
-EOF
-if [ "$RELEASE_RUN_SHA" != "$RELEASE_SHA" ] || [ "$RELEASE_RUN_EVENT" != 'push' ]; then
-	fail_release "정확한 태그 ${TAG_NAME}의 Release 워크플로가 기대한 커밋·push 이벤트가 아니어서 중단했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다."
-fi
-if [ "$RELEASE_RUN_CONCLUSION" = 'success' ]; then
-	:
-elif [ "$RELEASE_RUN_STATUS" = 'completed' ]; then
-	fail_release "${TAG_NAME}의 Release 워크플로가 ${RELEASE_RUN_CONCLUSION:-알 수 없는 결과}로 끝났습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. 정확한 실행을 재실행하세요: gh run rerun ${RELEASE_RUN_ID}"
-else
-	printf '%s\n' "[publish-release] 정확한 ${TAG_NAME} Release 실행(${RELEASE_RUN_ID})을 기다립니다: ${RELEASE_RUN_URL:-URL 없음}"
-	if ! gh run watch "$RELEASE_RUN_ID" --exit-status; then
-		fail_release "${TAG_NAME}의 Release 워크플로가 성공하지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. 정확한 실행을 재실행하세요: gh run rerun ${RELEASE_RUN_ID}"
-	fi
-fi
+RELEASE_RUN_INFO=$FOUND_RUN_INFO
+wait_for_workflow_run \
+	"$RELEASE_RUN_INFO" \
+	"${TAG_NAME}의 Release 워크플로" \
+	"원격 태그 ${TAG_NAME}는 보존했습니다." \
+	'gh run rerun' \
+	"정확한 ${TAG_NAME} Release"
+RELEASE_RUN_ID=$VERIFIED_RUN_ID
 
 # Release 상세 상태와 자산을 읽어 공개 완료까지 확인한다.
 if ! RELEASE_VIEW_JSON=$(gh release view "$TAG_NAME" --json tagName,isDraft,isPrerelease,targetCommitish,url,assets 2>/dev/null); then
