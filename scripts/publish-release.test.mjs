@@ -376,6 +376,7 @@ async function createFixture(options = {}) {
 		`    cancelled) printf '[{"databaseId":104,"headSha":"%s","status":"completed","conclusion":"cancelled","event":"push","url":"https://example.test/run/104"}]\\n' "${dollar}head_sha"; exit 0 ;;`,
 		`    skipped) printf '[{"databaseId":106,"headSha":"%s","status":"completed","conclusion":"skipped","event":"push","url":"https://example.test/run/106"}]\\n' "${dollar}head_sha"; exit 0 ;;`,
 		`    in-progress) printf '[{"databaseId":105,"headSha":"%s","status":"in_progress","conclusion":null,"event":"push","url":"https://example.test/run/105"}]\\n' "${dollar}head_sha"; exit 0 ;;`,
+		`    empty-conclusion) printf '[{"databaseId":108,"headSha":"%s","status":"in_progress","conclusion":"","event":"push","url":"https://example.test/run/108"}]\\n' "${dollar}head_sha"; exit 0 ;;`,
 		`    timeout) printf '[{"databaseId":107,"headSha":"%s","status":"in_progress","conclusion":null,"event":"push","url":"https://example.test/run/107"}]\\n' "${dollar}head_sha"; exit 0 ;;`,
 		`  esac`,
 		`  printf '[{"databaseId":101,"headSha":"%s","status":"completed","conclusion":"success","event":"push","url":"https://example.test/run/101"}]\\n' "${dollar}head_sha"`,
@@ -934,6 +935,20 @@ test("진행 중인 정확한 CI는 run watch 성공까지 기다린다", async 
 		assert.equal(result.code, 0);
 		assert.match(result.output, /정확한 CI 실행\(105\)을 기다립니다/);
 		assert.match(commandLog, /gh:run watch 105 --exit-status/);
+	});
+});
+
+test("빈 conclusion인 진행 중 CI도 run watch 성공까지 기다린다", async () => {
+	await withFixture(async (fixture) => {
+		await writeRunMode(fixture, "empty-conclusion");
+		/** GitHub CLI가 진행 중 실행의 conclusion을 빈 문자열로 반환한 결과. */
+		const result = await runInteractive(fixture, "\ny\n");
+		/** 빈 conclusion 때문에 커밋·이벤트 검증이 밀리지 않고 watch되는지 확인한다. */
+		const commandLog = await readCommandLog(fixture);
+
+		assert.equal(result.code, 0);
+		assert.match(result.output, /정확한 CI 실행\(108\)을 기다립니다/);
+		assert.match(commandLog, /gh:run watch 108 --exit-status/);
 	});
 });
 

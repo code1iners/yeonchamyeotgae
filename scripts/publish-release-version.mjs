@@ -214,7 +214,7 @@ function selectCiRun(runs, targetSha) {
 		return null;
 	}
 	return {
-		conclusion: run.conclusion ?? "pending",
+		conclusion: run.conclusion || "pending",
 		event: run.event,
 		headSha: run.headSha,
 		id: String(run.databaseId ?? run.id ?? ""),
