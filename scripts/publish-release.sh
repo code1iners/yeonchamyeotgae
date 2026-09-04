@@ -40,7 +40,7 @@ if [ "$#" -ne 0 ]; then
 	fail_release '이 명령은 인자를 받지 않습니다. 확인 프롬프트가 있는 대화형 터미널에서 다시 실행하세요.'
 fi
 
-# 대화형 릴리스 후보 준비와 정확한 커밋의 CI 대기를 수행하는 저장소 루트.
+# 대화형 릴리스 후보 준비와 정확한 태그 Release 검증을 수행하는 저장소 루트.
 if ! REPOSITORY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null); then
 	fail_release 'Git 저장소 루트를 찾지 못해 중단했습니다.'
 fi
@@ -51,8 +51,6 @@ SCRIPT_DIRECTORY=$(CDPATH= cd "$(dirname "$0")" && pwd)
 VERSION_HELPER="$SCRIPT_DIRECTORY/publish-release-version.mjs"
 MANIFEST_PATH='apps/desktop/package.json'
 REMOTE_NAME='origin'
-CI_LOOKUP_ATTEMPTS="${PUBLISH_RELEASE_CI_LOOKUP_ATTEMPTS:-6}"
-CI_LOOKUP_DELAY_SECONDS="${PUBLISH_RELEASE_CI_LOOKUP_DELAY_SECONDS:-1}"
 RELEASE_LOOKUP_ATTEMPTS="${PUBLISH_RELEASE_RELEASE_LOOKUP_ATTEMPTS:-6}"
 RELEASE_LOOKUP_DELAY_SECONDS="${PUBLISH_RELEASE_RELEASE_LOOKUP_DELAY_SECONDS:-1}"
 
@@ -83,16 +81,14 @@ remote_tag_commit() {
 	printf '%s\n' "$REMOTE_TAG_LINES" | awk 'NR == 1 { print $1; exit }'
 }
 
-# CI와 Release에 공통인 Actions 실행 검색 지연을 제한된 재시도로 흡수한다.
-find_workflow_run() {
-	RUN_KIND=$1
-	RUN_LABEL=$2
-	RUN_WORKFLOW=$3
-	RUN_BRANCH=$4
-	RUN_LOOKUP_ATTEMPTS=$5
-	RUN_LOOKUP_DELAY_SECONDS=$6
-	RUN_PRESERVED_STATE=$7
-	RUN_LOOKUP_FAILURE_GUIDE=$8
+# 태그 push로 시작된 Release Actions 실행 검색 지연을 제한된 재시도로 흡수한다.
+find_release_workflow_run() {
+	RUN_LABEL=$1
+	RUN_WORKFLOW=$2
+	RUN_LOOKUP_ATTEMPTS=$3
+	RUN_LOOKUP_DELAY_SECONDS=$4
+	RUN_PRESERVED_STATE=$5
+	RUN_LOOKUP_FAILURE_GUIDE=$6
 
 	FOUND_RUN_INFO='none'
 	RUN_ATTEMPT=1
@@ -100,7 +96,6 @@ find_workflow_run() {
 	do
 		if ! RUN_LIST_JSON=$(gh run list \
 			--workflow "$RUN_WORKFLOW" \
-			--branch "$RUN_BRANCH" \
 			--event push \
 			--commit "$RELEASE_SHA" \
 			--limit 20 \
@@ -108,16 +103,8 @@ find_workflow_run() {
 			2>/dev/null); then
 			fail_release "${RUN_LABEL} 실행을 검색하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
 		fi
-		case "$RUN_KIND" in
-			ci)
-				FOUND_RUN_INFO=$(printf '%s' "$RUN_LIST_JSON" | node "$VERSION_HELPER" select-ci "$RELEASE_SHA") ||
-					fail_release "${RUN_LABEL} 응답을 해석하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
-				;;
-			release)
-				FOUND_RUN_INFO=$(printf '%s' "$RUN_LIST_JSON" | node "$VERSION_HELPER" select-release "$TAG_NAME" "$RELEASE_SHA") ||
-					fail_release "${RUN_LABEL} 응답을 해석하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
-				;;
-		esac
+		FOUND_RUN_INFO=$(printf '%s' "$RUN_LIST_JSON" | node "$VERSION_HELPER" select-release "$TAG_NAME" "$RELEASE_SHA") ||
+			fail_release "${RUN_LABEL} 응답을 해석하지 못했습니다. ${RUN_PRESERVED_STATE} ${RUN_LOOKUP_FAILURE_GUIDE}"
 		if [ "$FOUND_RUN_INFO" != 'none' ]; then
 			return 0
 		fi
@@ -407,20 +394,15 @@ if [ "$CANDIDATE_VERSION" != "$APP_VERSION" ]; then
 	fi
 fi
 
-# 태그는 다음 게시 단계에서 만들 수 있도록 같은 대상 커밋 SHA를 고정한다.
+# main은 변경하지 않고 태그가 게시할 대상 커밋 SHA를 고정한다.
 RELEASE_SHA=$(git rev-parse --verify HEAD 2>/dev/null) ||
 	fail_release '릴리스 대상 전체 커밋 SHA를 확인하지 못해 중단했습니다.'
 INCLUDED_COMMITS=$(git log --format='%H %s' --reverse "refs/remotes/${REMOTE_NAME}/main..${RELEASE_SHA}" 2>/dev/null || true)
 if [ -z "$INCLUDED_COMMITS" ]; then
 	INCLUDED_COMMITS='없음'
 fi
-if [ "$RELEASE_SHA" = "$REMOTE_MAIN" ]; then
-	MAIN_PUSH_SUMMARY='생략 (이미 origin/main과 같은 커밋)'
-	MAIN_PUSH_REQUIRED=0
-else
-	MAIN_PUSH_SUMMARY='필요'
-	MAIN_PUSH_REQUIRED=1
-fi
+# 릴리스 명령은 main을 변경하지 않고 대상 커밋의 태그만 게시한다.
+MAIN_PUSH_SUMMARY='생략 (tag-only; main은 변경하지 않음)'
 
 # 첫 원격 변경 전에 대상과 포함 범위를 요약하고 명시적 승인을 받는다.
 printf '%s\n' ''
@@ -431,7 +413,7 @@ printf '%s\n' "원격: ${REMOTE_NAME}"
 printf '%s\n' '포함할 로컬 커밋:'
 printf '%s\n' "$INCLUDED_COMMITS"
 printf '%s\n' "main push: ${MAIN_PUSH_SUMMARY}"
-printf '%s\n' "후속 태그: v${CANDIDATE_VERSION} (정확한 CI 성공 뒤 생성)"
+printf '%s\n' "후속 태그: v${CANDIDATE_VERSION} (태그 push 뒤 Release workflow에서 검증)"
 printf '%s' '이 내용으로 진행할까요? [y/N] '
 if ! IFS= read -r APPROVAL; then
 	fail_release '최종 확인 입력을 읽지 못해 원격 변경 없이 중단했습니다.'
@@ -445,42 +427,14 @@ case "$APPROVAL" in
 		;;
 esac
 
-# 일반 git push를 사용해 기존 pre-push 훅을 그대로 실행한다.
-if [ "$MAIN_PUSH_REQUIRED" -eq 1 ]; then
-	printf '%s\n' "[publish-release] origin/main에 ${RELEASE_SHA}를 push합니다. 기존 pre-push 검증이 실행됩니다."
-	if ! git push "$REMOTE_NAME" main; then
-		fail_release "main push에 실패했습니다. 로컬 준비 커밋 ${RELEASE_SHA}는 보존했고 태그는 만들지 않았습니다. 원인을 해결한 뒤 같은 명령을 다시 실행하세요."
-	fi
-else
-	printf '%s\n' '[publish-release] 대상 커밋이 이미 origin/main에 있어 main push를 생략합니다.'
-fi
+# main은 push하지 않는다. 태그 push가 원격 Release workflow와 검증을 시작한다.
+printf '%s\n' '[publish-release] main은 push하지 않고 대상 커밋의 태그만 게시합니다.'
 
-# push 이벤트가 GitHub에 나타날 때까지 정확한 SHA의 CI 실행을 찾는다.
-if ! find_workflow_run \
-	ci \
-	"정확한 커밋 ${RELEASE_SHA}의 CI" \
-	ci.yml \
-	main \
-	"$CI_LOOKUP_ATTEMPTS" \
-	"$CI_LOOKUP_DELAY_SECONDS" \
-	'main push는 보존했고 태그는 만들지 않았습니다.' \
-	'같은 명령으로 다시 검색하거나 GitHub Actions에서 실행을 확인하세요.'
-then
-	fail_release "정확한 커밋 ${RELEASE_SHA}의 push CI를 제한된 재시도 안에 찾지 못했습니다. main push는 보존했고 태그는 만들지 않았습니다. 같은 명령으로 다시 검색하거나 GitHub Actions에서 실행을 확인하세요."
-fi
-CI_RUN_INFO=$FOUND_RUN_INFO
-wait_for_workflow_run \
-	"$CI_RUN_INFO" \
-	"정확한 커밋 ${RELEASE_SHA}의 CI" \
-	'main push는 보존했고 태그는 만들지 않았습니다.' \
-	'gh run rerun' \
-	'정확한 CI'
-
-# CI 성공 뒤 생성할 단일 릴리스 태그와 기대하는 macOS DMG 이름을 고정한다.
+# 게시할 단일 릴리스 태그와 기대하는 macOS DMG 이름을 고정한다.
 TAG_NAME="v${CANDIDATE_VERSION}"
 EXPECTED_DMG_NAME="yeonchamyeotgae-${CANDIDATE_VERSION}-arm64.dmg"
 
-# CI 승인 사이에 생긴 로컬·원격 태그도 덮어쓰지 않고 기존 복구 대상으로 멈춘다.
+# 사용자 승인 사이에 생긴 로컬·원격 태그도 덮어쓰지 않고 기존 복구 대상으로 멈춘다.
 if git show-ref --verify --quiet "refs/tags/${TAG_NAME}"; then
 	fail_release "${TAG_NAME} 태그가 이미 있어 덮어쓰지 않고 중단했습니다. 기존 릴리스 복구 대상으로 확인하세요."
 fi
@@ -491,7 +445,7 @@ if [ -n "$REMOTE_TAG_INFO" ]; then
 	fail_release "${TAG_NAME} 원격 태그가 이미 있어 덮어쓰지 않고 중단했습니다. 기존 릴리스 복구 대상으로 확인하세요."
 fi
 
-# 릴리스 태그는 정확한 CI 승인 커밋을 가리키는 annotated tag로만 만든다.
+# 릴리스 태그는 준비한 정확한 커밋을 가리키는 annotated tag로만 만든다.
 if ! git tag --annotate "$TAG_NAME" "$RELEASE_SHA" --message "$TAG_NAME"; then
 	fail_release "${TAG_NAME} 태그 생성에 실패했습니다. 이미 만들어진 로컬 태그가 있다면 삭제하지 않고 보존합니다."
 fi
@@ -514,8 +468,8 @@ if [ "$TAG_MESSAGE" != "$TAG_NAME" ]; then
 	fail_release "${TAG_NAME} 메시지가 태그 이름과 달라 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
 fi
 
-# 태그 하나만 일반 push해 기존 pre-push 검증을 두 번째로 실행한다.
-printf '%s\n' "[publish-release] ${TAG_NAME}을 push합니다. 기존 pre-push 검증이 다시 실행됩니다."
+# 태그 하나만 일반 push해 기존 pre-push 검증과 원격 Release workflow를 시작한다.
+printf '%s\n' "[publish-release] ${TAG_NAME}을 push합니다. 기존 pre-push 검증이 실행됩니다."
 if ! git push "$REMOTE_NAME" "$TAG_NAME"; then
 	if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
 		REMOTE_TAG_STATE='확인하지 못함'
@@ -536,11 +490,9 @@ if [ "$REMOTE_TAG_COMMIT" != "$RELEASE_SHA" ]; then
 fi
 
 # 태그 push가 시작한 정확한 Release workflow 실행을 찾는다.
-if ! find_workflow_run \
-	release \
+if ! find_release_workflow_run \
 	"${TAG_NAME}의 Release 워크플로" \
 	release.yml \
-	"$TAG_NAME" \
 	"$RELEASE_LOOKUP_ATTEMPTS" \
 	"$RELEASE_LOOKUP_DELAY_SECONDS" \
 	"원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다." \

@@ -40,6 +40,48 @@ export type ProductFlow = {
 	userDataDirectory: string;
 };
 
+/** 작업 영역 제한에 따른 팝오버 세로 스크롤을 판정할 실제 측정값. */
+export type PopoverLayout = {
+	/** 렌더러 문서의 실제 내용 높이(CSS px). */
+	contentHeight: number;
+	/** Electron 페이지 확대 배율. */
+	zoomFactor: number;
+	/** 팝오버가 속한 디스플레이 작업 영역 높이(DIP). */
+	workAreaHeight: number;
+};
+
+/** 현재 내용이 작업 영역 제한으로 잘려 전체 팝오버 스크롤이 필요한지 판정한다. */
+export function isPopoverContentCapped(layout: PopoverLayout): boolean {
+	return (
+		Math.round(layout.contentHeight * layout.zoomFactor) > layout.workAreaHeight
+	);
+}
+
+/** 렌더러 내용과 네이티브 작업 영역의 세로 크기를 함께 읽는다. */
+export async function readPopoverLayout(
+	flow: ProductFlow,
+): Promise<PopoverLayout> {
+	/** 렌더러가 계산한 문서·뷰포트 높이. */
+	const contentHeight = await flow.page.evaluate(() =>
+		Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+	);
+	/** 팝오버가 실제로 사용하는 확대 배율과 디스플레이 작업 영역. */
+	const nativeLayout = await flow.app.evaluate(({ BrowserWindow, screen }) => {
+		/** 제품 셸이 만든 유일한 팝오버 창. */
+		const popover = BrowserWindow.getAllWindows()[0];
+		if (!popover) {
+			throw new Error("팝오버 창을 찾지 못했습니다");
+		}
+		/** 팝오버가 속한 디스플레이. */
+		const display = screen.getDisplayMatching(popover.getBounds());
+		return {
+			workAreaHeight: display.workArea.height,
+			zoomFactor: popover.webContents.getZoomFactor(),
+		};
+	});
+	return { contentHeight, ...nativeLayout };
+}
+
 /** 격리된 사용자 데이터로 실제 빌드 Electron 앱을 연다. */
 export async function launchProductFlow(
 	seed: LeaveData | string | null,

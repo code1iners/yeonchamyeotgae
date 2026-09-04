@@ -10,9 +10,11 @@ import {
 	expectInactivePopoverUnfocused,
 	expectKeyboardFocus,
 	expectVisible,
+	isPopoverContentCapped,
 	isPopoverVisible,
 	launchProductFlow,
 	type ProductFlow,
+	readPopoverLayout,
 	triggerPopoverBlur,
 	waitForPopoverHidden,
 	waitForStoredData,
@@ -557,7 +559,14 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(
 			flow.page.getByRole("tooltip").filter({ hasText: "근속에 따라" }),
 		);
-		await flow.page.getByRole("tab", { name: "이력" }).click();
+		/** focus 이동으로 설명을 먼저 닫아 tooltip overlay가 탭 클릭을 가리지 않게 한다. */
+		const historyTab = flow.page.getByRole("tab", { name: "이력" });
+		await historyTab.focus();
+		await flow.page
+			.getByRole("tooltip")
+			.filter({ hasText: "근속에 따라" })
+			.waitFor({ state: "hidden" });
+		await historyTab.click();
 		expect(await grantedHelp.count()).toBe(0);
 		expect(
 			await flow.page
@@ -1251,8 +1260,12 @@ describe.sequential("Electron 제품 흐름", () => {
 			bodyOverflowX: getComputedStyle(document.body).overflowX,
 			bodyOverflowY: getComputedStyle(document.body).overflowY,
 		}));
+		/** 작업 영역이 부족할 때 전체 팝오버 스크롤이 허용되는지 확인할 측정값. */
+		const popoverLayout = await readPopoverLayout(flow);
 		expect(layout.bodyWidth).toBeLessThanOrEqual(layout.width);
-		expect(layout.bodyHeight).toBeLessThanOrEqual(layout.height);
+		expect(layout.bodyHeight > layout.height).toBe(
+			isPopoverContentCapped(popoverLayout),
+		);
 		expect(layout.bodyOverflowX).toBe("hidden");
 		expect(layout.bodyOverflowY).toBe("auto");
 		for (const box of [balanceBox, entryBox, equationBox, grantHeaderBox]) {
@@ -1660,9 +1673,11 @@ describe.sequential("Electron 제품 흐름", () => {
 			pageScrollable:
 				document.documentElement.scrollHeight > window.innerHeight,
 		}));
+		/** 작은 작업 영역에서만 전체 팝오버 스크롤 폴백을 허용한다. */
+		const popoverLayout = await readPopoverLayout(flow);
 		expect(scrollState).toEqual({
 			regionScrollable: true,
-			pageScrollable: false,
+			pageScrollable: isPopoverContentCapped(popoverLayout),
 		});
 		await expectVisible(flow.page.getByRole("heading", { name: "연차몇개" }));
 		await expectVisible(flow.page.getByRole("tab", { name: "이력" }));
@@ -1683,9 +1698,11 @@ describe.sequential("Electron 제품 흐름", () => {
 			pageScrollable:
 				document.documentElement.scrollHeight > window.innerHeight,
 		}));
+		/** 작은 작업 영역에서만 전체 팝오버 스크롤 폴백을 허용한다. */
+		const popoverLayout = await readPopoverLayout(flow);
 		expect(scrollState).toEqual({
 			regionScrollable: true,
-			pageScrollable: false,
+			pageScrollable: isPopoverContentCapped(popoverLayout),
 		});
 		await expectVisible(flow.page.getByRole("heading", { name: "기본 설정" }));
 		await expectVisible(flow.page.getByRole("region", { name: "데이터" }));

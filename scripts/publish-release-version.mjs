@@ -204,27 +204,8 @@ function latestPublicRelease(releases) {
 	return latest;
 }
 
-/** CI 실행 목록에서 대상 SHA와 push 이벤트가 모두 일치하는 실행을 고른다. */
-function selectCiRun(runs, targetSha) {
-	/** 정확한 커밋의 push 실행. GitHub CLI는 최신순으로 반환한다. */
-	const run = runs.find(
-		(item) => item?.headSha === targetSha && item?.event === "push",
-	);
-	if (!run) {
-		return null;
-	}
-	return {
-		conclusion: run.conclusion || "pending",
-		event: run.event,
-		headSha: run.headSha,
-		id: String(run.databaseId ?? run.id ?? ""),
-		status: run.status ?? "",
-		url: run.url ?? "",
-	};
-}
-
-/** 탭 구분 출력으로 CI 실행 정보를 셸에 전달한다. */
-function printCiRun(run) {
+/** 탭 구분 출력으로 Actions 실행 정보를 셸에 전달한다. */
+function printWorkflowRun(run) {
 	if (!run || run.id === "") {
 		console.log("none");
 		return;
@@ -257,7 +238,7 @@ function selectReleaseRun(runs, targetTag, targetSha) {
 		return null;
 	}
 	return {
-		conclusion: run.conclusion ?? "pending",
+		conclusion: run.conclusion || "pending",
 		event: run.event,
 		headSha: run.headSha,
 		id: String(run.databaseId ?? run.id ?? ""),
@@ -406,16 +387,6 @@ async function main() {
 			);
 			return;
 		}
-		case "select-ci": {
-			requireArguments(argumentsList, 1, "select-ci <commit-sha>");
-			/** GitHub Actions 실행 목록 원문. */
-			const runs = JSON.parse((await readStandardInput()).trim() || "[]");
-			if (!Array.isArray(runs)) {
-				throw new Error("GitHub Actions 실행 목록이 배열이 아닙니다.");
-			}
-			printCiRun(selectCiRun(runs, argumentsList[0]));
-			return;
-		}
 		case "select-release": {
 			requireArguments(
 				argumentsList,
@@ -427,7 +398,9 @@ async function main() {
 			if (!Array.isArray(runs)) {
 				throw new Error("GitHub Actions Release 실행 목록이 배열이 아닙니다.");
 			}
-			printCiRun(selectReleaseRun(runs, argumentsList[0], argumentsList[1]));
+			printWorkflowRun(
+				selectReleaseRun(runs, argumentsList[0], argumentsList[1]),
+			);
 			return;
 		}
 		case "verify-release": {
@@ -448,7 +421,7 @@ async function main() {
 		}
 		default:
 			throw new Error(
-				"알 수 없는 명령입니다: read-manifest, write-manifest, validate, validate-candidate, bump, compare, max, max-tags, release-status, latest-release, select-ci, select-release, verify-release",
+				"알 수 없는 명령입니다: read-manifest, write-manifest, validate, validate-candidate, bump, compare, max, max-tags, release-status, select-release, verify-release",
 			);
 	}
 }
