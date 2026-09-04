@@ -284,8 +284,9 @@ export function DataSection() {
 					</h3>
 					<p id={IMPORT_CONFIRM_DESCRIPTION_ID}>지금 데이터가 대체됩니다.</p>
 					<p className="dim">
-						가져오기는 전체 교체입니다. 지금 휴가 기록과 조정은 남지 않으며,
-						교체 직전 상태는 <code>data.json.bak</code>에 백업됩니다.
+						교체 직전 상태를 자동 백업 파일에 보관합니다(
+						<code>data.json.bak</code>). 가져오기는 전체 교체이며, 지금 휴가
+						기록과 조정은 남지 않습니다.
 					</p>
 					<div className="cta">
 						<button

@@ -346,8 +346,10 @@ export function SettingsTab({
 								새 입사일 이전의 {describeDropped(pendingSplit)}이 있습니다.
 							</p>
 							<p className="dim">
-								지우면 삭제 직전 상태가 <code>data.json.bak</code>에 백업됩니다.
-								남겨두면 이 기록은 그대로 두고 계산에만 새 입사일을 적용합니다.
+								지우고 저장을 선택하면 교체 직전 상태를 자동 백업 파일에
+								보관합니다(
+								<code>data.json.bak</code>). 남겨두면 이 기록은 그대로 두고
+								계산에만 새 입사일을 적용합니다.
 							</p>
 							<div className="cta">
 								<button

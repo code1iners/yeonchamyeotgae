@@ -4,7 +4,7 @@ import { matchesAppShortcut, shortcutLabel } from "./shortcuts";
 /** 단축키 판정 테스트에서 재사용하는 정상 macOS 이벤트. */
 const MAC_EVENT = {
 	altKey: false,
-	code: "KeyE",
+	code: "KeyN",
 	ctrlKey: false,
 	metaKey: true,
 	repeat: false,
@@ -13,7 +13,7 @@ const MAC_EVENT = {
 
 describe("앱 단축키", () => {
 	test("macOS 표기와 metaKey 이벤트가 같은 단축키를 가리킨다", () => {
-		expect(shortcutLabel("open-entry", "MacIntel")).toBe("⌘⇧E");
+		expect(shortcutLabel("open-entry", "MacIntel")).toBe("⌘⇧N");
 		expect(matchesAppShortcut(MAC_EVENT, "open-entry", "MacIntel")).toBe(true);
 	});
 

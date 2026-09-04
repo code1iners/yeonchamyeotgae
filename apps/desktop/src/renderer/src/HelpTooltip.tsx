@@ -7,10 +7,12 @@ type Props = {
 	children: ReactNode;
 	/** 설명에 함께 보여줄 키보드 단축키. */
 	shortcut?: string;
+	/** 인접한 물음표가 어느 용어의 설명인지 시각적으로 구분하는 짧은 이름. */
+	context?: string;
 };
 
 /** 용어 설명을 여는 물음표 버튼. hover·click·focus 세 경로를 모두 지원한다. */
-export function HelpTooltip({ label, children, shortcut }: Props) {
+export function HelpTooltip({ label, children, shortcut, context }: Props) {
 	/** 고유 tooltip 식별자. React의 개발 모드 구분 문자는 DOM id에서 제거한다. */
 	const tooltipId = `help-tooltip-${useId().replace(/:/g, "")}`;
 	/** tooltip을 감싸는 경계. 바깥 누름·focus 이동을 판단할 때 쓴다. */
@@ -71,6 +73,11 @@ export function HelpTooltip({ label, children, shortcut }: Props) {
 				}
 			}}
 		>
+			{context && (
+				<span className="help-context" aria-hidden="true">
+					{context}
+				</span>
+			)}
 			<button
 				ref={triggerRef}
 				className="help-trigger"

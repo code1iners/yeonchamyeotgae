@@ -43,6 +43,11 @@
 	box-sizing: border-box;
 }
 
+html,
+body {
+	overflow: hidden;
+}
+
 body {
 	margin: 0;
 	font:
@@ -56,7 +61,6 @@ body {
 	-webkit-font-smoothing: antialiased;
 	user-select: none;
 	cursor: default;
-	overflow-x: hidden;
 }
 
 .popover-shell {
@@ -540,12 +544,40 @@ button.mini:hover:not(:disabled) {
 	padding-right: 0;
 }
 
-/* 헤더 도움말과 잔여를 한 줄에 둔다. */
+/* 헤더의 잔여·전역 등록·도움말을 한 줄에 둔다. */
 .head-actions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
+}
+.head-entry {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+.head-entry button {
+	flex: none;
+	white-space: nowrap;
+}
+.head-entry-shortcut {
+	color: var(--fg-2);
+	font-size: 10.5px;
+	line-height: 1.3;
+	white-space: nowrap;
+}
+.head-entry-shortcut kbd {
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+	font-size: 10px;
+}
+.app-status {
+	margin: 0;
+	padding: 4px 12px;
+	border-bottom: 1px solid var(--line);
+	color: var(--accent);
+	font-size: 11.5px;
+	line-height: 1.45;
 }
 
 /* 복사할 수 있는 원장 값은 body의 드래그 억제를 되돌린다. 버튼은 계속 선택되지 않는다. */
@@ -566,15 +598,25 @@ time,
 .help-tooltip {
 	position: relative;
 	display: inline-flex;
+	align-items: center;
+	gap: 2px;
 	vertical-align: middle;
 	margin-left: 4px;
+}
+.help-context {
+	color: var(--fg-2);
+	font-size: 10.5px;
+	line-height: 1.2;
+	white-space: nowrap;
 }
 .help-trigger {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 18px;
-	height: 18px;
+	width: 24px;
+	height: 24px;
+	min-width: 24px;
+	min-height: 24px;
 	padding: 0;
 	border-color: var(--line-strong);
 	border-radius: 50%;
@@ -805,6 +847,18 @@ button.link:hover:not(:disabled) {
 	border-top: 1px solid var(--line);
 }
 
+/* 잔여 바로 앞의 검산식 — 예정 총량 각주와 달리 현재 잔여에 반영된 항만 보여준다. */
+.summary-equation-row td {
+	padding: 4px 12px 1px;
+	color: var(--fg-2);
+	font-size: 11.5px;
+	line-height: 1.35;
+}
+.summary-equation {
+	display: block;
+	white-space: nowrap;
+}
+
 /* 표와 리스트 사이의 각주. 4줄에 담기지 않는 사실 하나가 여기 산다. */
 .footnote {
 	margin: 4px 0 0;
@@ -815,11 +869,32 @@ button.link:hover:not(:disabled) {
 
 /* 살아 있는 발생분 한 줄 — 출처 · 남은 양/총량 · 소멸일. */
 .summary-grants {
-	max-height: 240px;
+	overflow: hidden;
+}
+.grant-header,
+.grant {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 68px 100px;
+	column-gap: 8px;
+	min-width: 0;
+}
+.grant-header {
+	align-items: end;
+	padding: 2px 12px 3px;
+	color: var(--fg-2);
+	font-size: 10.5px;
+	font-weight: 600;
+	line-height: 1.25;
+}
+.grant-header > :nth-child(2),
+.grant-header > :nth-child(3) {
+	text-align: right;
+}
+.summary-grants-scroll {
+	max-height: 204px;
 	overflow-y: auto;
 }
 .grant {
-	display: flex;
 	align-items: baseline;
 	gap: 8px;
 	padding: 3px 12px;
@@ -830,9 +905,6 @@ button.link:hover:not(:disabled) {
 }
 /* 남은 양/총량 열 — 소수 자릿수가 바뀌어도 소멸일 열은 같은 자리에 선다. */
 .grant-amount {
-	margin-left: auto;
-	width: 68px;
-	flex: none;
 	text-align: right;
 	font-weight: 600;
 }
@@ -842,12 +914,23 @@ button.link:hover:not(:disabled) {
 	font-weight: 600;
 }
 
-/* 소멸일 열 — 날짜와 배지가 같은 자리에서 갈리므로 폭이 같다. */
-.grant-expiry,
-.grant .badge {
-	width: 84px;
-	flex: none;
+/* 소멸일 열 — 임박한 기간과 정확한 날짜를 같은 열에 쌓는다. */
+.grant-expiry {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	min-width: 0;
 	text-align: right;
+	line-height: 1.25;
+}
+.grant-expiry > [aria-hidden="true"] {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+}
+.grant-expiry-date {
+	font-size: 10.5px;
+	white-space: nowrap;
 }
 
 /* ── 휴가 등록면(04·05번) ─────────────────────────────────── */
@@ -1218,6 +1301,12 @@ button.hist-year:hover:not(:disabled) {
 	justify-content: flex-end;
 	gap: 2px;
 	padding-top: 4px;
+}
+.hist-edit-status {
+	margin: 4px 0 0;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--fg-2);
 }
 
 /* 소멸 섹션의 날짜 열 — 문구 오른쪽 끝에 흐리게 선다. */

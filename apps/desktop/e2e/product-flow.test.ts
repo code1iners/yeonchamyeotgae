@@ -513,15 +513,22 @@ describe.sequential("Electron 제품 흐름", () => {
 
 		await expectVisible(flow.page.getByRole("tab", { name: "요약" }));
 		await expectVisible(flow.page.getByText("잔여", { exact: true }).first());
-		await expectVisible(flow.page.getByText("발생", { exact: true }));
-		await expectVisible(flow.page.getByRole("button", { name: "휴가 등록" }));
+		await expectVisible(
+			flow.page.getByRole("rowheader", { name: "발생", exact: true }),
+		);
+		/** 모든 정상 탭에서 같은 위치에 남는 전역 등록 행동과 단축키 안내. */
+		const entryTrigger = flow.page.getByRole("button", { name: "휴가 등록" });
+		await expectVisible(entryTrigger);
+		await expectVisible(flow.page.getByText("단축키 ⌘⇧N", { exact: true }));
 
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 		await expectVisible(flow.page.getByRole("button", { name: "리스트" }));
+		await expectVisible(entryTrigger);
 
 		await flow.page.getByRole("tab", { name: "설정" }).click();
 		await expectVisible(flow.page.getByText("입사일", { exact: true }));
 		await expectVisible(flow.page.getByText("기준방식", { exact: true }));
+		await expectVisible(entryTrigger);
 
 		expect(await isPopoverVisible(flow.app)).toBe(true);
 		await triggerPopoverBlur(flow.app);
@@ -551,6 +558,30 @@ describe.sequential("Electron 제품 흐름", () => {
 				(element) => element === document.activeElement,
 			),
 		).toBe(true);
+
+		/** 전역 등록 단축키는 등록면을 열고, Escape 뒤 헤더 트리거로 돌아온다. */
+		const entryTrigger = flow.page.getByRole("button", { name: "휴가 등록" });
+		const entryShortcutResult = await flow.page.evaluate(() => {
+			const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+			const event = new KeyboardEvent("keydown", {
+				bubbles: true,
+				cancelable: true,
+				code: "KeyN",
+				ctrlKey: !mac,
+				metaKey: mac,
+				shiftKey: true,
+			});
+			window.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		expect(entryShortcutResult).toBe(true);
+		const shortcutEntrySheet = flow.page.getByRole("dialog", {
+			name: "휴가 등록",
+		});
+		await expectVisible(shortcutEntrySheet);
+		await flow.page.keyboard.press("Escape");
+		await shortcutEntrySheet.waitFor({ state: "detached" });
+		await expectKeyboardFocus(entryTrigger);
 
 		/** 요약 행의 발생 설명 버튼. focus만으로도 같은 용어의 도움말이 열린다. */
 		const grantedHelp = flow.page.getByRole("button", { name: "발생 도움말" });
@@ -702,9 +733,8 @@ describe.sequential("Electron 제품 흐름", () => {
 			),
 		);
 		await expectVisible(
-			flow.page.getByText(
-				"지우면 삭제 직전 상태가 data.json.bak에 백업됩니다. 남겨두면 이 기록은 그대로 두고 계산에만 새 입사일을 적용합니다.",
-				{ exact: true },
+			confirmRegion.getByText(
+				/지우고 저장을 선택하면 교체 직전 상태를 자동 백업 파일에.*data\.json\.bak.*남겨두면/,
 			),
 		);
 
@@ -960,6 +990,11 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(
 			confirmation.getByText("지금 데이터가 대체됩니다.", { exact: true }),
 		);
+		await expectVisible(
+			confirmation.getByText(
+				/교체 직전 상태를 자동 백업 파일에.*data\.json\.bak/,
+			),
+		);
 		expect(
 			await confirmation.evaluate(
 				(element) => element === document.activeElement,
@@ -1163,24 +1198,24 @@ describe.sequential("Electron 제품 흐름", () => {
 			.boundingBox();
 		/** 팝오버의 실제 뷰포트 높이. */
 		await flow.page.waitForFunction(
-			() => document.documentElement.scrollHeight === window.innerHeight,
+			() => document.body.scrollHeight === window.innerHeight,
 		);
 		/** 긴 요약이 맞춘 팝오버의 외부 높이와 문서 높이. */
 		const longSummaryLayout = await flow.page.evaluate(() => ({
 			height: window.innerHeight,
-			contentHeight: document.documentElement.scrollHeight,
+			contentHeight: document.body.scrollHeight,
 		}));
 		expect(longSummaryLayout.contentHeight).toBe(longSummaryLayout.height);
 		/** 긴 요약에서 핵심 행동의 실제 뷰포트 높이. */
 		const viewportHeight = longSummaryLayout.height;
 		/** 요약 목록과 팝오버 외부의 스크롤 경계. */
 		const grantRegion = flow.page.getByRole("region", {
-			name: "살아 있는 발생분",
+			name: "발생분 목록",
+			exact: true,
 		});
 		const scrollState = await grantRegion.evaluate((element) => ({
 			regionScrollable: element.scrollHeight > element.clientHeight,
-			pageScrollable:
-				document.documentElement.scrollHeight > window.innerHeight,
+			pageScrollable: document.body.scrollHeight > window.innerHeight,
 		}));
 		if (!balanceBox || !entryBox) {
 			throw new Error("요약의 핵심 요소 위치를 읽지 못했습니다");
@@ -1193,11 +1228,16 @@ describe.sequential("Electron 제품 흐름", () => {
 			pageScrollable: false,
 		});
 		await expectVisible(flow.page.getByRole("button", { name: "휴가 등록" }));
+		await expectVisible(flow.page.getByText("출처", { exact: true }));
+		await expectVisible(flow.page.getByText("남은 양/총량", { exact: true }));
+		await expectVisible(
+			flow.page.getByText("소멸일 또는 소멸까지", { exact: true }),
+		);
 
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 		await flow.page.waitForFunction(
 			(previousHeight) =>
-				document.documentElement.scrollHeight === window.innerHeight &&
+				document.body.scrollHeight === window.innerHeight &&
 				window.innerHeight !== previousHeight,
 			longSummaryLayout.height,
 		);
@@ -1205,6 +1245,55 @@ describe.sequential("Electron 제품 흐름", () => {
 		const historyHeight = await flow.page.evaluate(() => window.innerHeight);
 		expect(historyHeight).not.toBe(longSummaryLayout.height);
 	});
+
+	test("200% 확대에서도 요약의 핵심 행동과 발생분 머리를 유지한다", async () => {
+		flow = await launchProductFlow(SUMMARY_DATA);
+		await flow.app.evaluate(({ BrowserWindow }) => {
+			BrowserWindow.getAllWindows()[0]?.webContents.setZoomFactor(2);
+		});
+
+		/** 확대 후에도 사용자가 먼저 만나는 핵심 행동과 계산 근거. */
+		const balanceBox = await flow.page
+			.getByText("잔여", { exact: true })
+			.first()
+			.boundingBox();
+		const entryBox = await flow.page
+			.getByRole("button", { name: "휴가 등록" })
+			.boundingBox();
+		await expectVisible(
+			flow.page.getByText("발생 − 사용 − 예정 = 잔여", { exact: true }),
+		);
+		await expectVisible(
+			flow.page.getByText("소멸일 또는 소멸까지", { exact: true }),
+		);
+		const equationBox = await flow.page
+			.getByText("발생 − 사용 − 예정 = 잔여", { exact: true })
+			.boundingBox();
+		const grantHeaderBox = await flow.page
+			.getByText("소멸일 또는 소멸까지", { exact: true })
+			.boundingBox();
+		if (!balanceBox || !entryBox || !equationBox || !grantHeaderBox) {
+			throw new Error("200% 확대 뒤 요약의 핵심 요소 위치를 읽지 못했습니다");
+		}
+		const layout = await flow.page.evaluate(() => ({
+			width: window.innerWidth,
+			height: window.innerHeight,
+			bodyWidth: document.body.scrollWidth,
+			bodyHeight: document.body.scrollHeight,
+			bodyOverflowX: getComputedStyle(document.body).overflowX,
+			bodyOverflowY: getComputedStyle(document.body).overflowY,
+		}));
+		expect(layout.bodyWidth).toBeLessThanOrEqual(layout.width);
+		expect(layout.bodyHeight).toBeLessThanOrEqual(layout.height);
+		expect(layout.bodyOverflowX).toBe("hidden");
+		expect(layout.bodyOverflowY).toBe("hidden");
+		for (const box of [balanceBox, entryBox, equationBox, grantHeaderBox]) {
+			expect(box.x).toBeGreaterThanOrEqual(0);
+			expect(box.x + box.width).toBeLessThanOrEqual(layout.width);
+			expect(box.y).toBeGreaterThanOrEqual(0);
+			expect(box.y + box.height).toBeLessThanOrEqual(layout.height);
+		}
+	}, 60_000);
 
 	test("요약 원장이 고정된 수량 열과 상태 근거를 제공한다", async () => {
 		flow = await launchProductFlow(SUMMARY_DATA);
@@ -1224,14 +1313,27 @@ describe.sequential("Electron 제품 흐름", () => {
 		for (const [label, value] of expectedRows) {
 			/** 라벨과 수량이 한 행에 있는지 확인한다. */
 			const row = ledger
-				.getByRole("row")
-				.filter({ hasText: new RegExp(`^${label}`) });
+				.getByRole("rowheader", { name: label, exact: true })
+				.locator("xpath=..");
 			await expectVisible(row);
 			expect(await row.getByRole("cell").first().textContent()).toBe(value);
 		}
 
 		await expectVisible(
 			flow.page.getByText("등록 예정 총 1.25일 · 잔여 미반영 1.25일"),
+		);
+		await expectVisible(
+			flow.page.getByText("발생 − 사용 − 예정 = 잔여", { exact: true }),
+		);
+		await expectVisible(
+			flow.page.getByText(TEST_TODAY_DATE.add({ days: 30 }).toString(), {
+				exact: true,
+			}),
+		);
+		await expectVisible(
+			flow.page.getByText(TEST_TODAY_DATE.add({ days: 45 }).toString(), {
+				exact: true,
+			}),
 		);
 		await expectVisible(flow.page.getByTitle("소멸 임박, D-30"));
 		await expectVisible(flow.page.getByTitle("소멸 임박, D-45"));
@@ -1261,7 +1363,12 @@ describe.sequential("Electron 제품 흐름", () => {
 		const amountX = await Promise.all(
 			amountLabels.map(
 				async (label) =>
-					(await flow.page.getByText(label, { exact: true }).boundingBox())?.x,
+					(
+						await flow.page
+							.getByText(label, { exact: true })
+							.locator("xpath=..")
+							.boundingBox()
+					)?.x,
 			),
 		);
 		expect(amountX.every((x) => x === amountX[0])).toBe(true);
@@ -1497,11 +1604,11 @@ describe.sequential("Electron 제품 흐름", () => {
 		).toBe(0);
 	}, 60_000);
 
-	test("빈 이력에서 휴가 등록을 시작하고 닫힌 뒤 원래 CTA로 포커스를 돌린다", async () => {
+	test("빈 이력에서도 전역 휴가 등록을 시작하고 닫힌 뒤 헤더로 포커스를 돌린다", async () => {
 		flow = await launchProductFlow(QUICK_ENTRY_DATA);
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 
-		/** 기록이 없을 때도 다음 행동을 바로 시작할 CTA. */
+		/** 기록이 없어도 모든 정상 탭에서 유지되는 공통 헤더 CTA. */
 		const emptyEntryButton = flow.page.getByRole("button", {
 			name: "휴가 등록",
 		});
@@ -1693,6 +1800,33 @@ describe.sequential("Electron 제품 흐름", () => {
 		const fullDay = selectedDetails.getByRole("button", { name: "종일" });
 		await fullDay.focus();
 		await fullDay.press("Enter");
+		/** 단위 변경은 저장 전 초안으로 남고, 원래 데이터와 잔여는 그대로다. */
+		await expectVisible(
+			selectedDetails.getByText("저장 전 초안: 종일", { exact: true }),
+		);
+		await expectVisible(selectedDetails.getByRole("button", { name: "저장" }));
+		await expectVisible(selectedDetails.getByRole("button", { name: "취소" }));
+		await expectVisible(flow.page.getByText("9.5일", { exact: true }));
+		await expectVisible(
+			selectedDetails.getByRole("definition").filter({ hasText: "반차" }),
+		);
+		await selectedDetails.getByRole("button", { name: "취소" }).press("Enter");
+		await expectKeyboardFocus(
+			selectedDetails.getByRole("button", { name: "반차", exact: true }),
+		);
+		await expectVisible(
+			selectedDetails.getByRole("definition").filter({ hasText: "반차" }),
+		);
+
+		/** 다시 고른 단위를 명시적으로 저장하고 그때만 잔여를 갱신한다. */
+		await fullDay.focus();
+		await fullDay.press("Enter");
+		const saveCalendarDraft = selectedDetails.getByRole("button", {
+			name: "저장",
+			exact: true,
+		});
+		await saveCalendarDraft.focus();
+		await saveCalendarDraft.press("Enter");
 		await expectVisible(flow.page.getByText("9일", { exact: true }));
 		await expectVisible(
 			selectedDetails.getByRole("definition").filter({ hasText: "종일" }),
@@ -1766,14 +1900,24 @@ describe.sequential("Electron 제품 흐름", () => {
 		await captureDarkEntryScreenshot(flow.page);
 
 		await flow.page.getByRole("button", { name: "등록", exact: true }).click();
-		/** 저장 성공을 등록면에서 확인한 뒤 닫힘을 기다린다. */
-		await expectVisible(
-			flow.page.getByText("저장했습니다. 등록면을 닫습니다.", { exact: true }),
-		);
+		/** 커밋·상태 갱신 직후 닫히고 부모 화면에 완료 상태가 남는다. */
 		await sheet.waitFor({ state: "detached" });
+		await expectVisible(
+			flow.page
+				.getByRole("status")
+				.filter({ hasText: "휴가 기록을 등록했습니다." }),
+		);
+		await expectDocumentFocus(
+			flow.page.getByRole("button", { name: "휴가 등록" }),
+		);
 		await expectVisible(flow.page.getByText("9일", { exact: true }));
 
 		await flow.page.getByRole("tab", { name: "이력" }).click();
+		await expectVisible(
+			flow.page
+				.getByRole("status")
+				.filter({ hasText: "휴가 기록을 등록했습니다." }),
+		);
 		await expectVisible(flow.page.getByText(TEST_TODAY, { exact: true }));
 		await expectVisible(flow.page.getByText("종일", { exact: true }));
 	}, 60_000);
@@ -2049,6 +2193,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await submit.focus();
 		await submit.press("Enter");
 		await reopenedSheet.waitFor({ state: "detached" });
+		await expectKeyboardFocus(trigger);
 		await expectVisible(flow.page.getByText("9일", { exact: true }));
 	});
 
@@ -2311,9 +2456,14 @@ describe.sequential("Electron 제품 흐름", () => {
 		const excessRow = flow.page
 			.getByRole("table", { name: "잔여 계산" })
 			.getByRole("row")
-			.filter({ hasText: "초과" });
+			.filter({
+				has: flow.page.getByRole("rowheader", { name: "초과", exact: true }),
+			});
 		await expectVisible(excessRow);
 		expect(await excessRow.getByRole("cell").first().textContent()).toBe("3");
+		await expectVisible(
+			flow.page.getByText("발생 − 사용 − 예정 − 초과 = 잔여", { exact: true }),
+		);
 
 		await flow.page.getByRole("button", { name: "조정을 추가" }).click();
 		await expectVisible(flow.page.getByRole("tab", { name: "설정" }));
@@ -2821,6 +2971,23 @@ async function expectVisible(
 ): Promise<void> {
 	await locator.waitFor({ state: "visible", timeout: 1_000 });
 	expect(await locator.isVisible()).toBe(true);
+}
+
+/** 상태 전환 뒤 지정한 요소가 실제 문서 포커스를 갖는지 확인한다. */
+async function expectDocumentFocus(
+	locator: ReturnType<Page["locator"]>,
+): Promise<void> {
+	/** 렌더러 효과와 상태 전환이 정착할 때까지 확인할 횟수. */
+	const maxAttempts = 20;
+	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+		if (
+			await locator.evaluate((element) => element === document.activeElement)
+		) {
+			return;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	throw new Error("문서 포커스를 확인하지 못했습니다");
 }
 
 /** 탭 키로 도달한 조작의 실제 포커스와 브라우저의 표시 상태를 함께 확인한다. */

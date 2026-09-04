@@ -18,6 +18,8 @@ type Props = {
 	today: string;
 	/** 시트를 닫는다 — 등록을 마쳤거나 그만뒀거나 같은 문이다. */
 	onClose: () => void;
+	/** 커밋과 셸 상태 갱신이 끝난 뒤 부모 정상 화면으로 완료를 알린다. */
+	onComplete: () => void;
 };
 
 /** 하루와 기간 중 현재 등록 범위. 하루가 기본값인 흔한 흐름이다. */
@@ -33,7 +35,12 @@ const ENTRY_DATE_DESCRIPTION_ID = "entry-date-description";
  * `[휴가 등록]`을 여는 조작과 `[등록]`을 누르는 조작만으로 저장된다. 다른 날짜와
  * 기간은 같은 화면에서 필요한 입력만 펼친다.
  */
-export function LeaveEntrySheet({ entries, today, onClose }: Props) {
+export function LeaveEntrySheet({
+	entries,
+	today,
+	onClose,
+	onComplete,
+}: Props) {
 	/** 등록 범위. 하루가 기본이라 오늘 기록의 입력 비용이 가장 짧다. */
 	const [mode, setMode] = useState<EntryMode>("day");
 	/** 하루 등록 또는 기간 등록의 시작일. 오늘이 기본값이다. */
@@ -50,28 +57,13 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 	const startDateRef = useRef<HTMLInputElement>(null);
 	/** 셸에 변경을 커밋하는 통로 — 진행 중 잠금과 실패 문구가 함께 온다. */
 	const { commit, saving, error } = useCommit();
-	/** 저장 성공 문구를 보여 주고 등록면을 닫을지 여부. */
-	const [completed, setCompleted] = useState(false);
-	/** 저장 중이거나 성공 상태라서 입력을 잠가야 하는가. */
-	const busy = saving || completed;
+	/** 저장 중에만 입력을 잠근다. 성공하면 부모가 즉시 화면을 전환한다. */
+	const busy = saving;
 
 	useEffect(function focusEntryDateEffect() {
 		// 등록면을 열자마자 기본 날짜를 확인하고 키보드 입력을 시작할 수 있게 한다.
 		startDateRef.current?.focus();
 	}, []);
-
-	useEffect(
-		function closeCompletedEntryEffect() {
-			if (!completed) {
-				return;
-			}
-
-			/** 성공 상태를 확인할 수 있도록 잠시 기다린 뒤 등록면을 닫는다. */
-			const closeTimer = window.setTimeout(onClose, 400);
-			return () => window.clearTimeout(closeTimer);
-		},
-		[completed, onClose],
-	);
 
 	/** 이미 휴가 기록이 있는 날짜들. 하루 등록은 여기서 중복을 막는다. */
 	const taken = new Set(entries.map((entry) => entry.date));
@@ -129,7 +121,7 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 			note: note.trim(),
 		}));
 		if (await commit({ entries: [...entries, ...added] })) {
-			setCompleted(true);
+			onComplete();
 		}
 	};
 
@@ -273,7 +265,7 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 				>
 					{missingEndDate ? "종료일을 입력하세요." : dateDescription}
 				</p>
-				{error && !completed && (
+				{error && (
 					<p className="error" role="alert" aria-live="assertive">
 						{error}
 					</p>
@@ -283,19 +275,13 @@ export function LeaveEntrySheet({ entries, today, onClose }: Props) {
 						저장 중입니다…
 					</p>
 				)}
-				{completed && (
-					<p className="entry-status" role="status" aria-live="polite">
-						저장했습니다. 등록면을 닫습니다.
-					</p>
-				)}
-
 				<div className="cta">
 					<button
 						type="submit"
 						className="primary"
 						disabled={busy || dates.length === 0 || reversedRange}
 					>
-						{saving ? "저장 중…" : completed ? "저장됨" : "등록"}
+						{saving ? "저장 중…" : "등록"}
 					</button>
 					<button type="button" disabled={busy} onClick={onClose}>
 						취소

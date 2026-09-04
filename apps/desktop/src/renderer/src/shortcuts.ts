@@ -7,7 +7,7 @@ export type AppShortcut =
 
 /** 단축키별 실제 물리 키 코드. Shift 조합에서도 숫자 키를 안정적으로 읽는다. */
 const SHORTCUT_CODES: Record<AppShortcut, string> = {
-	"open-entry": "KeyE",
+	"open-entry": "KeyN",
 	"summary-tab": "Digit1",
 	"history-tab": "Digit2",
 	"settings-tab": "Digit3",
@@ -26,7 +26,7 @@ export function shortcutModifierLabel(platform: string): string {
 /** 도움말에 표시할 단축키 문자열. 실제 이벤트 판정과 같은 플랫폼 분기를 쓴다. */
 export function shortcutLabel(shortcut: AppShortcut, platform: string): string {
 	const suffix: Record<AppShortcut, string> = {
-		"open-entry": "E",
+		"open-entry": "N",
 		"summary-tab": "1",
 		"history-tab": "2",
 		"settings-tab": "3",

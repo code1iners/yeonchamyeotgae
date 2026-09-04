@@ -321,7 +321,9 @@ export function AdjustmentsSection({
 		>
 			<h2 id={ADJUSTMENTS_TITLE_ID} className="sec-title">
 				조정
-				<HelpTooltip label="조정 도움말">{TERM_HELP.조정}</HelpTooltip>
+				<HelpTooltip label="조정 도움말" context="조정">
+					{TERM_HELP.조정}
+				</HelpTooltip>
 			</h2>
 			<p className="row dim">
 				이월·사규 추가분·포상 휴가를 여기에 넣습니다. 월차와 연차는 계산이

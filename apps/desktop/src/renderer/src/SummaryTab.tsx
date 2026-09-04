@@ -1,5 +1,5 @@
 import type { Adjustment, Balance } from "@yeoncha/core";
-import type { RefObject } from "react";
+import { Fragment } from "react";
 import { HelpTooltip } from "./HelpTooltip";
 import { type LedgerHelpTerm, TERM_HELP } from "./help-content";
 import {
@@ -15,12 +15,8 @@ type Props = {
 	today: string;
 	/** 조정 원본. 발생분 행의 이름을 계산 결과와 연결한다. */
 	adjustments: Adjustment[];
-	/** 등록면이 닫힌 뒤 포커스를 돌려줄 휴가 등록 버튼. */
-	entryTriggerRef: RefObject<HTMLButtonElement | null>;
 	/** `조정을 추가` 링크 — 설정 탭으로 넘어가며 조정 폼이 열린 채로 도착한다(5.1절). */
 	onAddAdjustment: () => void;
-	/** `[휴가 등록]` — 팝오버를 덮는 등록 시트가 열린다(5.2절). */
-	onAddEntry: () => void;
 };
 
 /**
@@ -62,9 +58,7 @@ export function SummaryTab({
 	balance,
 	today,
 	adjustments,
-	entryTriggerRef,
 	onAddAdjustment,
-	onAddEntry,
 }: Props) {
 	/** 조회일에 살아 있는 발생분. 소멸 임박 순으로 정렬되어 온다(3.4절). */
 	const grants = summaryGrants({ balance, adjustments, today });
@@ -102,25 +96,39 @@ export function SummaryTab({
 				<tbody>
 					{LINES.filter((line) => line.key !== "excess" || hasExcess).map(
 						({ key, label, note }) => (
-							<tr
-								className={`summary-row ${key === "balance" ? "summary-row-total" : ""}`}
-								key={key}
-							>
-								<th className="sum-label" scope="row">
-									{label}
-								</th>
-								<td className="sum-number num selectable">
-									<b>{balance[key]}</b>
-								</td>
-								<td className="sum-note dim">
-									<span className="sum-note-content">{note}</span>
-									{lineHelpTerms(key).map((term) => (
-										<HelpTooltip key={term} label={`${term} 도움말`}>
-											{TERM_HELP[term]}
-										</HelpTooltip>
-									))}
-								</td>
-							</tr>
+							<Fragment key={key}>
+								{key === "balance" && (
+									<tr className="summary-equation-row">
+										<td colSpan={3}>
+											<span className="summary-equation">
+												{summaryEquation(hasExcess)}
+											</span>
+										</td>
+									</tr>
+								)}
+								<tr
+									className={`summary-row ${key === "balance" ? "summary-row-total" : ""}`}
+								>
+									<th className="sum-label" scope="row">
+										{label}
+									</th>
+									<td className="sum-number num selectable">
+										<b>{balance[key]}</b>
+									</td>
+									<td className="sum-note dim">
+										<span className="sum-note-content">{note}</span>
+										{lineHelpTerms(key).map((term) => (
+											<HelpTooltip
+												key={term}
+												label={`${term} 도움말`}
+												context={term}
+											>
+												{TERM_HELP[term]}
+											</HelpTooltip>
+										))}
+									</td>
+								</tr>
+							</Fragment>
 						),
 					)}
 				</tbody>
@@ -135,52 +143,66 @@ export function SummaryTab({
 			{/* 발생분이 많아져도 목록만 줄이고, 기록 시작 행동은 최초 뷰포트에 남긴다. */}
 			<section className="summary-grants" aria-label="살아 있는 발생분">
 				<div className="sec-title">살아 있는 발생분</div>
-				{grants.length === 0 ? (
-					<div className="row dim">지금 살아 있는 발생분이 없습니다.</div>
-				) : (
-					grants.map((grant, index) => {
-						/** 행에서 읽을 출처 이름. 긴 메모는 CSS로 줄이고 전체는 title에 남긴다. */
-						const sourceLabel = summaryGrantLabel(grant, {
-							duplicateBlankDate: duplicateBlankAdjustmentDates.has(
-								grant.grantDate,
-							),
-						});
-						return (
-							<div className="grant" key={keyOf(grant, index)}>
-								<span className="grant-source selectable" title={sourceLabel}>
-									{sourceLabel}
-								</span>
-								<b className="num grant-amount selectable">
-									{grant.remaining}/{grant.days}
-								</b>
-								{/* 60일 이내면 날짜 대신 D-day다 — 날짜는 남은 시간을 계산하게 시킨다. */}
-								{grant.expiringSoon ? (
+				<div className="grant-header">
+					<span>출처</span>
+					<span>남은 양/총량</span>
+					<span>소멸일 또는 소멸까지</span>
+				</div>
+				<section className="summary-grants-scroll" aria-label="발생분 목록">
+					{grants.length === 0 ? (
+						<div className="row dim">지금 살아 있는 발생분이 없습니다.</div>
+					) : (
+						grants.map((grant, index) => {
+							/** 행에서 읽을 출처 이름. 긴 메모는 CSS로 줄이고 전체는 title에 남긴다. */
+							const sourceLabel = summaryGrantLabel(grant, {
+								duplicateBlankDate: duplicateBlankAdjustmentDates.has(
+									grant.grantDate,
+								),
+							});
+							return (
+								<div className="grant" key={keyOf(grant, index)}>
+									<span className="grant-source selectable" title={sourceLabel}>
+										{sourceLabel}
+									</span>
+									<b className="num grant-amount selectable">
+										<span aria-hidden="true">
+											{grant.remaining}/{grant.days}
+										</span>
+										<span className="sr-only">
+											남은 양 {grant.remaining}일 / 총량 {grant.days}일
+										</span>
+									</b>
+									{/* D-day와 정확한 소멸일을 함께 보여줘 계산 기준을 추측하지 않게 한다. */}
 									<span
-										className="badge num warn"
-										title={`소멸 임박, D-${grant.daysUntilExpiry}`}
+										className="grant-expiry dim num selectable"
+										title={
+											grant.expiringSoon
+												? `소멸 임박, D-${grant.daysUntilExpiry}`
+												: `소멸일 ${grant.expiryDate}`
+										}
 									>
-										D-{grant.daysUntilExpiry}
+										<span aria-hidden="true">
+											{grant.expiringSoon && (
+												<span className="badge num warn">
+													D-{grant.daysUntilExpiry}
+												</span>
+											)}
+											<span className="grant-expiry-date">
+												{grant.expiryDate}
+											</span>
+										</span>
+										<span className="sr-only">
+											{grant.expiringSoon
+												? `소멸까지 ${grant.daysUntilExpiry}일, 소멸일 ${grant.expiryDate}`
+												: `소멸일 ${grant.expiryDate}`}
+										</span>
 									</span>
-								) : (
-									<span className="grant-expiry dim num selectable">
-										{grant.expiryDate}
-									</span>
-								)}
-							</div>
-						);
-					})
-				)}
+								</div>
+							);
+						})
+					)}
+				</section>
 			</section>
-			<div className="cta">
-				<button
-					ref={entryTriggerRef}
-					type="button"
-					className="primary"
-					onClick={onAddEntry}
-				>
-					휴가 등록
-				</button>
-			</div>
 		</div>
 	);
 }
@@ -194,6 +216,13 @@ function plannedSummaryOf(balance: Balance): string {
 		balance.plannedOnFutureGrants +
 		"일"
 	);
+}
+
+/** 잔여 계산의 모든 항을 사용자가 바로 검산할 수 있는 한 줄로 만든다. */
+function summaryEquation(hasExcess: boolean): string {
+	return hasExcess
+		? "발생 − 사용 − 예정 − 초과 = 잔여"
+		: "발생 − 사용 − 예정 = 잔여";
 }
 
 /** 요약 행에서 용어 설명을 열 물음표의 순서. */

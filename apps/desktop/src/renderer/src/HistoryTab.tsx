@@ -6,7 +6,6 @@ import type {
 	LeaveEntry,
 } from "@yeoncha/core";
 import { expiryLosses, groupHistory } from "@yeoncha/core";
-import type { RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { CalendarGrid } from "./CalendarGrid";
 import { syncOpenYears } from "./history-state";
@@ -22,10 +21,6 @@ type Props = {
 	adjustments: Adjustment[];
 	/** 조회일. 사용·예정의 경계이자 달력의 오늘 표시다. */
 	today: string;
-	/** 이력 빈 상태에서 등록면을 연 뒤 포커스를 돌려줄 버튼. */
-	entryTriggerRef: RefObject<HTMLButtonElement | null>;
-	/** 이력 빈 상태의 휴가 등록 CTA. */
-	onAddEntry: () => void;
 };
 
 /**
@@ -35,14 +30,7 @@ type Props = {
  * 예정은 상태 변경이 아니라 삭제다. 수정·삭제 커밋이 끝나면 셸이 상태를 다시 밀어주므로
  * 트레이 숫자와 요약 탭은 여기서 손대지 않아도 함께 갱신된다.
  */
-export function HistoryTab({
-	entries,
-	balance,
-	adjustments,
-	today,
-	entryTriggerRef,
-	onAddEntry,
-}: Props) {
+export function HistoryTab({ entries, balance, adjustments, today }: Props) {
 	/** 지금 보는 뷰. */
 	const [view, setView] = useState<"list" | "calendar">("list");
 
@@ -77,21 +65,13 @@ export function HistoryTab({
 				</fieldset>
 			</div>
 			{view === "list" ? (
-				<HistoryList
-					entries={entries}
-					groups={groups}
-					losses={losses}
-					entryTriggerRef={entryTriggerRef}
-					onAddEntry={onAddEntry}
-				/>
+				<HistoryList entries={entries} groups={groups} losses={losses} />
 			) : (
 				<HistoryCalendar
 					entries={entries}
 					groups={groups}
 					losses={losses}
 					today={today}
-					entryTriggerRef={entryTriggerRef}
-					onAddEntry={onAddEntry}
 				/>
 			)}
 		</div>
@@ -109,9 +89,7 @@ function HistoryList({
 	entries,
 	groups,
 	losses,
-	entryTriggerRef,
-	onAddEntry,
-}: Pick<Props, "entries" | "entryTriggerRef" | "onAddEntry"> & {
+}: Pick<Props, "entries"> & {
 	/** 예정 / 연차 연도별 사용 그룹. */
 	groups: HistorySections;
 	/** 소멸 섹션에 올릴 줄들. */
@@ -424,6 +402,9 @@ function HistoryList({
 								))}
 							</fieldset>
 						</div>
+						<p className="history-edit-status" role="status" aria-live="polite">
+							저장 전 초안: {draft.date} · {unitLabel(draft.days)}
+						</p>
 						{issue && (
 							<p className="error" role="alert" aria-live="assertive">
 								{issue}
@@ -437,7 +418,7 @@ function HistoryList({
 						<div className="hist-edit-cta">
 							<button
 								type="button"
-								className="mini"
+								className="primary"
 								disabled={saving}
 								onClick={handleSaveEdit}
 							>
@@ -561,14 +542,6 @@ function HistoryList({
 			{groups.planned.length === 0 && groups.years.length === 0 && (
 				<div className="history-empty">
 					<p className="row dim">휴가 기록이 없습니다.</p>
-					<button
-						ref={entryTriggerRef}
-						type="button"
-						className="primary"
-						onClick={onAddEntry}
-					>
-						휴가 등록
-					</button>
 				</div>
 			)}
 			{groups.planned.length > 0 && (
@@ -626,9 +599,7 @@ function HistoryCalendar({
 	groups,
 	losses,
 	today,
-	entryTriggerRef,
-	onAddEntry,
-}: Pick<Props, "entries" | "today" | "entryTriggerRef" | "onAddEntry"> & {
+}: Pick<Props, "entries" | "today"> & {
 	/** 예정 / 사용 판정의 출처 — 녹색 점과 회색 점이 리스트의 섹션과 같은 경계를 쓴다. */
 	groups: HistorySections;
 	/** 빨간 밑줄을 붙일 소멸 줄들. */
@@ -650,6 +621,18 @@ function HistoryCalendar({
 	const deleteConfirmationRef = useRef<HTMLDivElement>(null);
 	/** 삭제 확인을 취소한 뒤 돌아갈 삭제 버튼. */
 	const deleteButtonRef = useRef<HTMLButtonElement>(null);
+	/** 선택한 기록에서 바꾼 단위의 저장 전 초안. */
+	const [calendarDraft, setCalendarDraft] = useState<{
+		id: string;
+		days: number;
+	} | null>(null);
+	/** 단위 변경 뒤 같은 편집 위치로 포커스를 돌려줄 버튼들. */
+	const calendarUnitButtonRefs = useRef(new Map<number, HTMLButtonElement>());
+	/** 달력 초안 저장·취소 뒤 포커스를 복귀할 기록과 단위. */
+	const calendarDraftFocusReturnRef = useRef<{
+		id: string;
+		days: number;
+	} | null>(null);
 
 	/** 날짜 → 그날의 휴가 기록. 하루 1건이라 값이 하나다. */
 	const entryByDate = new Map(entries.map((entry) => [entry.date, entry]));
@@ -668,6 +651,18 @@ function HistoryCalendar({
 	const selectedPlanned = selectedEntry
 		? plannedDates.has(selectedEntry.date)
 		: false;
+
+	/** 현재 달력 단위 버튼을 DOM과 연결해 저장·취소 뒤 같은 위치를 찾는다. */
+	const registerCalendarUnitButton = (
+		days: number,
+		element: HTMLButtonElement | null,
+	) => {
+		if (element) {
+			calendarUnitButtonRefs.current.set(days, element);
+		} else {
+			calendarUnitButtonRefs.current.delete(days);
+		}
+	};
 
 	useEffect(
 		function restoreCalendarDetailsFocusEffect() {
@@ -690,26 +685,83 @@ function HistoryCalendar({
 		[deleteTargetId],
 	);
 
-	/** 단위 변경 핸들러 — 누르는 즉시 커밋한다. 폼이 아니라 그날 기록의 손잡이다. */
-	const handleChangeDays = async (entry: LeaveEntry, days: number) => {
+	useEffect(
+		function manageCalendarDraftFocusEffect() {
+			if (calendarDraft && selectedEntry?.id !== calendarDraft.id) {
+				// 외부 상태 갱신으로 선택 기록이 바뀌면 오래된 초안을 버린다.
+				setCalendarDraft(null);
+				return;
+			}
+			if (calendarDraft) {
+				return;
+			}
+
+			/** 저장·취소 뒤 돌아갈 기록의 단위 버튼. */
+			const focusTarget = calendarDraftFocusReturnRef.current;
+			if (!focusTarget || selectedEntry?.id !== focusTarget.id) {
+				return;
+			}
+			calendarDraftFocusReturnRef.current = null;
+			calendarUnitButtonRefs.current.get(focusTarget.days)?.focus();
+		},
+		[calendarDraft, selectedEntry?.id],
+	);
+
+	/** 단위 버튼은 초안만 바꾸고, 사용자가 명시적으로 저장할 때 커밋한다. */
+	const handleChangeDays = (entry: LeaveEntry, days: number) => {
 		if (saving || deleteTargetId !== null) {
 			return;
 		}
 		clearError();
+		setSuccessStatus(null);
+		setCalendarDraft(days === entry.days ? null : { id: entry.id, days });
+	};
+
+	/** 달력 단위 초안을 저장하고 셸 상태 갱신 뒤 선택한 단위로 포커스를 돌린다. */
+	const handleSaveCalendarDraft = async () => {
+		const draftToSave = calendarDraft;
+		if (
+			!draftToSave ||
+			!selectedEntry ||
+			selectedEntry.id !== draftToSave.id ||
+			saving ||
+			deleteTargetId !== null
+		) {
+			return;
+		}
+		clearError();
+		calendarDraftFocusReturnRef.current = draftToSave;
 		if (
 			await commit({
 				entries: entries.map((item) =>
-					item.id === entry.id ? { ...item, days } : item,
+					item.id === draftToSave.id
+						? { ...item, days: draftToSave.days }
+						: item,
 				),
 			})
 		) {
+			setCalendarDraft(null);
 			setSuccessStatus("휴가 기록을 수정했습니다.");
 		}
 	};
 
+	/** 달력 단위 초안을 버리고 저장 전의 원래 단위 버튼으로 포커스를 돌린다. */
+	const handleCancelCalendarDraft = () => {
+		if (!calendarDraft || !selectedEntry) {
+			return;
+		}
+		calendarDraftFocusReturnRef.current = {
+			id: selectedEntry.id,
+			days: selectedEntry.days,
+		};
+		setCalendarDraft(null);
+		clearError();
+		setSuccessStatus(null);
+	};
+
 	/** 삭제 버튼을 누르면 상세 안에서 확인 단계를 연다. */
 	const handleDelete = (entry: LeaveEntry) => {
-		if (saving) {
+		if (saving || calendarDraft) {
 			return;
 		}
 		clearError();
@@ -747,6 +799,8 @@ function HistoryCalendar({
 	/** 날짜 선택 핸들러 — 이전 날짜의 저장 실패 문구를 새 날짜로 가져가지 않는다. */
 	const handlePickDate = (date: string) => {
 		clearError();
+		calendarDraftFocusReturnRef.current = null;
+		setCalendarDraft(null);
 		setDeleteTargetId(null);
 		setSelected(date);
 	};
@@ -807,14 +861,6 @@ function HistoryCalendar({
 			{entries.length === 0 && (
 				<div className="history-empty">
 					<p className="row dim">휴가 기록이 없습니다.</p>
-					<button
-						ref={entryTriggerRef}
-						type="button"
-						className="primary"
-						onClick={onAddEntry}
-					>
-						휴가 등록
-					</button>
 				</div>
 			)}
 			{selected && (
@@ -846,6 +892,16 @@ function HistoryCalendar({
 					))}
 					{selectedEntry ? (
 						<>
+							{calendarDraft && calendarDraft.id === selectedEntry.id && (
+								<p
+									id="history-calendar-draft-status"
+									className="history-edit-status"
+									role="status"
+									aria-live="polite"
+								>
+									저장 전 초안: {unitLabel(calendarDraft.days)}
+								</p>
+							)}
 							<dl className="hist-day-record">
 								<div>
 									<dt>날짜</dt>
@@ -865,14 +921,25 @@ function HistoryCalendar({
 								</div>
 							</dl>
 							<div className="hist-day-actions">
-								<fieldset className="hist-day-unit-fieldset">
+								<fieldset
+									className="hist-day-unit-fieldset"
+									aria-describedby={
+										calendarDraft ? "history-calendar-draft-status" : undefined
+									}
+								>
 									<legend>단위 변경</legend>
 									<div className="seg hist-day-units">
 										{UNITS.map((unit) => (
 											<button
 												type="button"
 												key={unit.days}
-												aria-pressed={selectedEntry.days === unit.days}
+												ref={(element) =>
+													registerCalendarUnitButton(unit.days, element)
+												}
+												aria-pressed={
+													(calendarDraft?.days ?? selectedEntry.days) ===
+													unit.days
+												}
 												disabled={saving || deleteTargetId !== null}
 												onClick={() =>
 													handleChangeDays(selectedEntry, unit.days)
@@ -883,15 +950,36 @@ function HistoryCalendar({
 										))}
 									</div>
 								</fieldset>
-								<button
-									type="button"
-									className="mini"
-									disabled={saving || deleteTargetId !== null}
-									ref={deleteButtonRef}
-									onClick={() => handleDelete(selectedEntry)}
-								>
-									삭제
-								</button>
+								{calendarDraft ? (
+									<div className="hist-edit-cta">
+										<button
+											type="button"
+											className="primary"
+											disabled={saving}
+											onClick={handleSaveCalendarDraft}
+										>
+											저장
+										</button>
+										<button
+											type="button"
+											className="mini"
+											disabled={saving}
+											onClick={handleCancelCalendarDraft}
+										>
+											취소
+										</button>
+									</div>
+								) : (
+									<button
+										type="button"
+										className="mini"
+										disabled={saving || deleteTargetId !== null}
+										ref={deleteButtonRef}
+										onClick={() => handleDelete(selectedEntry)}
+									>
+										삭제
+									</button>
+								)}
 							</div>
 							{deleteTargetId === selectedEntry.id && (
 								<div

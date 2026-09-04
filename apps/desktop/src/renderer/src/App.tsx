@@ -33,9 +33,6 @@ const TABS = [
 /** 탭 식별자. */
 type TabKey = (typeof TABS)[number]["key"];
 
-/** 휴가 등록면을 닫은 뒤 포커스를 되돌릴 탭. */
-type EntryFocusTarget = "summary" | "history";
-
 /** 탭과 연결된 버튼의 고유 식별자. */
 function tabId(key: TabKey): string {
 	return `tab-${key}`;
@@ -79,14 +76,14 @@ export function App() {
 	});
 	/** 휴가 등록 시트가 열려 있는가. 열리면 팝오버 전체를 덮는다 — 모드 전환이다(5.2절). */
 	const [entryOpen, setEntryOpen] = useState(false);
-	/** 등록면을 닫은 뒤 다시 포커스할 요약의 휴가 등록 버튼. */
+	/** 모든 정상 탭에서 공유하는 전역 휴가 등록 버튼. */
 	const entryTriggerRef = useRef<HTMLButtonElement>(null);
-	/** 이력 빈 상태에서 등록면을 연 뒤 다시 포커스할 등록 버튼. */
-	const historyEntryTriggerRef = useRef<HTMLButtonElement>(null);
 	/** 등록면이 사용자 조작으로 열렸는지 기억해 닫힘 뒤 포커스를 복귀시킨다. */
 	const restoreEntryFocusRef = useRef(false);
-	/** 등록면을 열기 전의 탭을 기억해 닫힌 뒤 같은 맥락으로 돌아간다. */
-	const entryFocusTargetRef = useRef<EntryFocusTarget>("summary");
+	/** 등록 성공 뒤 정상 화면에 남겨 둘 상태 문구. */
+	const [entryCompletionStatus, setEntryCompletionStatus] = useState<
+		string | null
+	>(null);
 
 	useEffect(function reportContentHeightEffect() {
 		const root = rootRef.current;
@@ -182,11 +179,8 @@ export function App() {
 				return;
 			}
 
-			/** 등록면이 닫힌 뒤 다시 포커스할 현재 DOM 버튼. */
-			const trigger =
-				entryFocusTargetRef.current === "history"
-					? historyEntryTriggerRef.current
-					: entryTriggerRef.current;
+			/** 등록면이 닫힌 뒤 다시 포커스할 현재 DOM 전역 버튼. */
+			const trigger = entryTriggerRef.current;
 			if (!trigger) {
 				return;
 			}
@@ -196,19 +190,36 @@ export function App() {
 		[entryOpen],
 	);
 
-	/** 요약·이력의 등록 행동에서 전체 등록면으로 이동한다. */
-	const handleOpenEntry = useCallback(
-		(target: EntryFocusTarget = "summary") => {
-			entryFocusTargetRef.current = target;
-			restoreEntryFocusRef.current = true;
-			setEntryOpen(true);
-		},
-		[],
-	);
+	/** 전역 등록 행동에서 전체 등록면으로 이동한다. */
+	const handleOpenEntry = useCallback(() => {
+		setEntryCompletionStatus(null);
+		restoreEntryFocusRef.current = true;
+		setEntryOpen(true);
+	}, []);
 	/** 등록면을 닫고, 닫힘 효과가 원래 트리거를 찾게 한다. */
 	const handleCloseEntry = () => {
 		setEntryOpen(false);
 	};
+	/** 커밋과 셸 상태 갱신이 끝난 등록면을 즉시 닫고 완료 상태를 남긴다. */
+	const handleEntryComplete = useCallback(() => {
+		setEntryCompletionStatus("휴가 기록을 등록했습니다.");
+		setEntryOpen(false);
+	}, []);
+
+	useEffect(
+		function clearEntryCompletionStatusEffect() {
+			if (!entryCompletionStatus) {
+				return;
+			}
+
+			/** 완료 문구가 다음 작업을 영구적으로 밀어내지 않도록 충분히 오래 유지한다. */
+			const clearTimer = window.setTimeout(() => {
+				setEntryCompletionStatus(null);
+			}, 8000);
+			return () => window.clearTimeout(clearTimer);
+		},
+		[entryCompletionStatus],
+	);
 
 	useEffect(
 		function registerAppShortcutEffect() {
@@ -225,7 +236,7 @@ export function App() {
 					typeof navigator === "undefined" ? "" : navigator.platform;
 				if (matchesAppShortcut(event, "open-entry", platform)) {
 					event.preventDefault();
-					handleOpenEntry("summary");
+					handleOpenEntry();
 					return;
 				}
 
@@ -282,6 +293,7 @@ export function App() {
 					entries={state.entries}
 					today={state.today}
 					onClose={handleCloseEntry}
+					onComplete={handleEntryComplete}
 				/>
 			) : (
 				state && (
@@ -299,6 +311,26 @@ export function App() {
 										>
 											{formatBalance(state.balance)}
 										</strong>
+									</div>
+								)}
+								{!onboarding && state.balance && (
+									<div className="head-entry">
+										<button
+											ref={entryTriggerRef}
+											type="button"
+											className="primary"
+											aria-describedby="head-entry-shortcut"
+											onClick={handleOpenEntry}
+										>
+											휴가 등록
+										</button>
+										<span
+											id="head-entry-shortcut"
+											className="head-entry-shortcut"
+										>
+											단축키{" "}
+											<kbd>{shortcutLabel("open-entry", shortcutPlatform)}</kbd>
+										</span>
 									</div>
 								)}
 								<HelpTooltip label="단축키 도움말">
@@ -322,6 +354,16 @@ export function App() {
 								</HelpTooltip>
 							</div>
 						</header>
+						{entryCompletionStatus && (
+							<p
+								className="app-status"
+								role="status"
+								aria-live="polite"
+								aria-atomic="true"
+							>
+								{entryCompletionStatus}
+							</p>
+						)}
 						<div className="tabs" role="tablist" aria-label="연차 화면">
 							{TABS.map(({ key, label }) => (
 								<button
@@ -355,11 +397,9 @@ export function App() {
 									balance={state.balance}
 									today={state.today}
 									adjustments={state.adjustments}
-									entryTriggerRef={entryTriggerRef}
 									onAddAdjustment={() =>
 										setSelected({ tab: "settings", openAdjustment: true })
 									}
-									onAddEntry={handleOpenEntry}
 								/>
 							)}
 						</div>
@@ -376,8 +416,6 @@ export function App() {
 									balance={state.balance}
 									adjustments={state.adjustments}
 									today={state.today}
-									entryTriggerRef={historyEntryTriggerRef}
-									onAddEntry={() => handleOpenEntry("history")}
 								/>
 							)}
 						</div>
