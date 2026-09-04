@@ -1,5 +1,5 @@
-# 커밋마다 macOS·Windows 양쪽에서 검증만 돈다. 패키징(electron-builder)은
-# release.yml의 몫이다 — 여기서 부르면 Electron 배포본을 매 커밋 내려받는다(스펙 8.1절).
+# 커밋마다 지원 대상인 macOS에서 검증만 돈다. 패키징(electron-builder)은
+# release.yml의 몫이다 — 여기서 부르면 Electron 배포본을 매 커밋 내려받는다.
 name: CI
 
 on:
@@ -10,13 +10,7 @@ on:
 
 jobs:
   verify:
-    strategy:
-      # Windows 검증이 이 워크플로의 존재 이유다 — macOS가 먼저 실패해 Windows 잡이
-      # 취소되면 정확히 보고 싶었던 것을 못 본다(스펙 8.1절).
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       # fetch-depth는 기본값 — CI는 turbo 캐시에 기대지 않으므로 조정할 이유가 없다(스펙 9절 1번).
       - uses: actions/checkout@v7

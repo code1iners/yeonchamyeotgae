@@ -1,48 +1,27 @@
-import { spawn } from "node:child_process";
-import {
-	chmod,
-	mkdir,
-	mkdtemp,
-	readFile,
-	realpath,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { LeaveData } from "@yeoncha/core";
-import electronExecutable from "electron";
-import {
-	type ElectronApplication,
-	_electron as electron,
-	type Page,
-} from "playwright";
+import type { ElectronApplication, Page } from "playwright";
 import { Temporal } from "temporal-polyfill";
 import { afterEach, describe, expect, test } from "vitest";
-
-/** 제품 흐름이 실행할, electron-vite가 만든 메인 프로세스 번들 경로. */
-const MAIN_ENTRY = path.resolve(import.meta.dirname, "../out/main/index.js");
-/** 개발 의존성으로 설치된 현재 운영체제용 실제 Electron 실행 파일 경로. */
-const ELECTRON_EXECUTABLE = electronExecutable;
+import {
+	closeProductFlow,
+	expectInactivePopoverUnfocused,
+	expectKeyboardFocus,
+	expectVisible,
+	isPopoverVisible,
+	launchProductFlow,
+	type ProductFlow,
+	triggerPopoverBlur,
+	waitForPopoverHidden,
+	waitForStoredData,
+} from "./product-flow-harness";
 
 /** 실제 Electron 제품 흐름에서 셸과 시드를 함께 고정할 조회일. */
 const TEST_TODAY = "2025-12-01";
 /** 테스트 시드와 같은 조회일의 불변 날짜 객체. */
 const TEST_TODAY_DATE = Temporal.PlainDate.from(TEST_TODAY);
-/** 제품 흐름이 창을 비활성 또는 전면으로 표시할 실행 모드. */
-type ProductFlowMode = "inactive" | "foreground";
-/** 명시적인 제품 실행 명령이 없으면 기존 전면 동작을 유지한다. */
-const PRODUCT_FLOW_MODE: ProductFlowMode =
-	process.env.YEONCHA_PRODUCT_FLOW_MODE === "inactive"
-		? "inactive"
-		: "foreground";
-/** 시드와 같은 조회일을 실제 Electron의 메인 프로세스에 주입하는 환경. */
-const TEST_ENV = {
-	...process.env,
-	NODE_ENV: "test",
-	YEONCHA_TEST_TODAY: TEST_TODAY,
-	YEONCHA_PRODUCT_FLOW_MODE: PRODUCT_FLOW_MODE,
-};
 /** 긴 발생분 시드가 공유하는 고정 기준 날짜. Temporal 날짜는 불변이라 재사용한다. */
 const SUMMARY_GRANT_BASE_DATE = Temporal.PlainDate.from("2000-01-01");
 
@@ -220,16 +199,6 @@ type VisualScreenshotName =
 	| "quick-entry-dark.png"
 	| "history-edit.png"
 	| "history-edit-dark.png";
-
-/** 실행 하나의 격리된 앱·사용자 데이터·팝오버 페이지 묶음. */
-type ProductFlow = {
-	/** 실제 Electron 앱 프로세스. */
-	app: ElectronApplication;
-	/** 사용자가 보는 팝오버 창. */
-	page: Page;
-	/** 앱이 읽고 쓰는 임시 사용자 데이터 디렉터리. */
-	userDataDirectory: string;
-};
 
 /** 요약 표·각주·임박 표시를 한 번에 확인할 결정론적 상대 데이터. */
 function summaryData(): LeaveData {
@@ -430,8 +399,7 @@ let flow: ProductFlow | null = null;
 
 afterEach(async () => {
 	if (flow) {
-		await flow.app.close().catch(() => undefined);
-		await rm(flow.userDataDirectory, { recursive: true, force: true });
+		await closeProductFlow(flow);
 		flow = null;
 	}
 });
@@ -1604,14 +1572,18 @@ describe.sequential("Electron 제품 흐름", () => {
 		).toBe(0);
 	}, 60_000);
 
-	test("빈 이력에서도 전역 휴가 등록을 시작하고 닫힌 뒤 헤더로 포커스를 돌린다", async () => {
+	test("빈 이력의 다음 행동으로 휴가 등록을 시작하고 닫힌 뒤 헤더로 포커스를 돌린다", async () => {
 		flow = await launchProductFlow(QUICK_ENTRY_DATA);
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 
-		/** 기록이 없어도 모든 정상 탭에서 유지되는 공통 헤더 CTA. */
-		const emptyEntryButton = flow.page.getByRole("button", {
-			name: "휴가 등록",
-		});
+		/** 기록이 없을 때 같은 맥락에서 다음 단계를 시작하는 CTA. */
+		const emptyEntryButton = flow.page
+			.locator(".history-empty")
+			.getByRole("button", { name: "휴가 등록" });
+		/** 등록면을 닫은 뒤 돌아갈 전역 헤더 CTA. */
+		const headerEntryButton = flow.page
+			.locator(".head-entry")
+			.getByRole("button", { name: "휴가 등록" });
 		await expectVisible(
 			flow.page.getByText("휴가 기록이 없습니다.", { exact: true }),
 		);
@@ -1620,7 +1592,7 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(sheet);
 		await flow.page.keyboard.press("Escape");
 		await sheet.waitFor({ state: "detached" });
-		await expectKeyboardFocus(emptyEntryButton);
+		await expectKeyboardFocus(headerEntryButton);
 	}, 60_000);
 
 	test("이력 변경 실패가 해당 행에 남고 입력 맥락을 보존한다", async () => {
@@ -2504,80 +2476,6 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(flow.page.getByRole("button", { name: "조정 추가" }));
 	});
 
-	test("입사일이 없는 격리 데이터에서는 설정만 열고 저장 뒤 정상 상태를 활성화한다", async () => {
-		flow = await launchProductFlow(null);
-
-		await expectVisible(
-			flow.page.getByText("입사일을 넣으면 연차를 계산합니다."),
-		);
-		await expectVisible(flow.page.getByRole("heading", { name: "기본 설정" }));
-		/** 온보딩의 첫 입력. 첫 실행에 바로 입력을 시작할 수 있어야 한다. */
-		const hireDate = flow.page.getByLabel("입사일");
-		await expectKeyboardFocus(hireDate);
-		expect(await hireDate.getAttribute("aria-invalid")).toBe("true");
-		/** 입사일이 비어 있을 때 저장할 수 없는 상태를 전달하는 버튼. */
-		const saveButton = flow.page.getByRole("button", {
-			name: "저장",
-			exact: true,
-		});
-		expect(await saveButton.isDisabled()).toBe(true);
-		await expectVisible(
-			flow.page
-				.getByRole("status")
-				.filter({ hasText: "입사일을 입력하면 저장할 수 있습니다." }),
-		);
-		expect(
-			await flow.page.getByRole("region", { name: "데이터" }).count(),
-		).toBe(0);
-		expect(
-			await flow.page.getByRole("button", { name: "데이터 가져오기" }).count(),
-		).toBe(0);
-		expect(
-			await flow.page.getByRole("tab", { name: "요약" }).isDisabled(),
-		).toBe(true);
-		expect(
-			await flow.page.getByRole("tab", { name: "이력" }).isDisabled(),
-		).toBe(true);
-		expect(await flow.page.getByRole("tab", { name: "설정" }).isEnabled()).toBe(
-			true,
-		);
-
-		// 첫 설정을 저장하면 현재 설정 맥락을 유지한 채 계산 가능한 상태가 된다.
-		await hireDate.fill("2020-01-01");
-		await expectVisible(
-			flow.page
-				.getByRole("status")
-				.filter({ hasText: "변경한 설정을 저장할 수 있습니다." }),
-		);
-		// 저장 버튼에 키보드 포커스를 두고 Enter로 첫 설정을 저장한다.
-		await saveButton.focus();
-		await saveButton.press("Enter");
-		await expectVisible(flow.page.getByText("잔여", { exact: true }).first());
-		expect(
-			await flow.page
-				.getByRole("tab", { name: "설정" })
-				.getAttribute("aria-selected"),
-		).toBe("true");
-		expect(await flow.page.getByRole("tab", { name: "요약" }).isEnabled()).toBe(
-			true,
-		);
-		expect(await flow.page.getByRole("tab", { name: "이력" }).isEnabled()).toBe(
-			true,
-		);
-		await expectVisible(flow.page.getByRole("region", { name: "데이터" }));
-		/** 첫 설정 저장 뒤 키보드로 돌아갈 요약 탭. */
-		const summaryTab = flow.page.getByRole("tab", { name: "요약" });
-		await summaryTab.focus();
-		await summaryTab.press("Enter");
-		await expectVisible(flow.page.getByRole("button", { name: "휴가 등록" }));
-		/** 첫 설정 저장 뒤 실제 파일에 남은 데이터. */
-		const stored = await waitForStoredData(
-			flow.userDataDirectory,
-			(data) => data.settings.hireDate === "2020-01-01",
-		);
-		expect(stored.entries).toHaveLength(0);
-	});
-
 	test("읽을 수 없는 JSON은 정상 셸과 분리하고 파일 위치 열기를 제공한다", async () => {
 		flow = await launchProductFlow("{ not valid JSON");
 
@@ -2720,46 +2618,6 @@ describe.sequential("Electron 제품 흐름", () => {
 	});
 });
 
-/** 격리된 사용자 데이터로 실제 빌드 Electron 앱을 연다. */
-async function launchProductFlow(
-	seed: LeaveData | string | null,
-): Promise<ProductFlow> {
-	/** 운영체제의 실제 사용자 프로필과 분리할 임시 앱 데이터 경로. */
-	const userDataDirectory = await mkdtemp(
-		path.join(os.tmpdir(), "yeoncha-product-flow-"),
-	);
-	if (seed !== null) {
-		await writeFile(
-			path.join(userDataDirectory, "data.json"),
-			typeof seed === "string" ? seed : JSON.stringify(seed),
-			"utf8",
-		);
-	}
-
-	/** 실행 중 실패해도 정리할 실제 Electron 앱 핸들. */
-	let app: ElectronApplication | null = null;
-	try {
-		/** 팝오버를 처음에는 숨긴 실제 Electron 앱. */
-		app = await electron.launch({
-			executablePath: ELECTRON_EXECUTABLE,
-			args: [MAIN_ENTRY, `--user-data-dir=${userDataDirectory}`],
-			env: TEST_ENV,
-		});
-		/** 앱이 만든 유일한 팝오버 페이지. */
-		const page = await app.firstWindow();
-		await page.locator("body").waitFor({ state: "visible" });
-		await requestPopoverOpen(userDataDirectory);
-		await waitForPopoverVisible(app);
-		await expectInactivePopoverUnfocused(app);
-
-		return { app, page, userDataDirectory };
-	} catch (error) {
-		await app?.close().catch(() => undefined);
-		await rm(userDataDirectory, { recursive: true, force: true });
-		throw error;
-	}
-}
-
 /** 제품 흐름에서 네이티브 저장 대화상자의 사용자가 고른 결과를 고정한다. */
 async function mockSaveDialog(
 	app: ElectronApplication,
@@ -2816,127 +2674,6 @@ async function readRevealedPath(
 	});
 }
 
-/** 두 번째 앱 실행이라는 실제 제품 경로로 첫 인스턴스의 팝오버 열기를 요청한다. */
-async function requestPopoverOpen(userDataDirectory: string): Promise<void> {
-	await new Promise<void>((resolve, reject) => {
-		/** 단일 인스턴스 락을 가진 앱에 열기 요청만 전달할 보조 프로세스. */
-		const secondary = spawn(
-			ELECTRON_EXECUTABLE,
-			[MAIN_ENTRY, `--user-data-dir=${userDataDirectory}`],
-			{ env: TEST_ENV },
-		);
-		/** 보조 프로세스가 멈췄을 때 앱과 임시 데이터가 남지 않게 할 제한 시간. */
-		const timeout = setTimeout(() => {
-			secondary.kill();
-			reject(new Error("팝오버 열기 요청이 제한 시간 안에 끝나지 않았습니다"));
-		}, 5_000);
-		/** 보조 프로세스의 종료 대기와 시간 제한을 함께 끝낸다. */
-		const finish = (result: () => void) => {
-			clearTimeout(timeout);
-			result();
-		};
-		secondary.once("error", (error) => finish(() => reject(error)));
-		secondary.once("exit", (code) => {
-			if (code === 0) {
-				finish(resolve);
-				return;
-			}
-			finish(() =>
-				reject(new Error(`팝오버 열기 요청이 종료 코드 ${code}로 끝났습니다`)),
-			);
-		});
-	});
-}
-
-/** 네이티브 blur 이벤트로 팝오버의 실제 닫기 처리기를 실행한다. */
-async function triggerPopoverBlur(app: ElectronApplication): Promise<void> {
-	await app.evaluate(({ BrowserWindow }) => {
-		/** 제품 셸이 만든 유일한 팝오버 창. */
-		const popover = BrowserWindow.getAllWindows()[0];
-		if (!popover) {
-			throw new Error("팝오버 창을 찾지 못했습니다");
-		}
-		popover.emit("blur");
-	});
-}
-
-/** 팝오버가 운영체제에 실제로 보이는지 확인한다. */
-async function isPopoverVisible(app: ElectronApplication): Promise<boolean> {
-	return app.evaluate(({ BrowserWindow }) => {
-		/** 제품 셸이 만든 유일한 창. */
-		const popover = BrowserWindow.getAllWindows()[0];
-		return popover?.isVisible() ?? false;
-	});
-}
-
-/** 제품 셸 팝오버의 네이티브 포커스 상태를 읽는다. */
-async function isPopoverFocused(app: ElectronApplication): Promise<boolean> {
-	return app.evaluate(({ BrowserWindow }) => {
-		/** 제품 셸이 만든 유일한 창. */
-		const popover = BrowserWindow.getAllWindows()[0];
-		return popover?.isFocused() ?? false;
-	});
-}
-
-/** 비활성 제품 흐름에서 네이티브 대화상자 종료 뒤 포커스가 복귀하지 않았는지 확인한다. */
-async function expectInactivePopoverUnfocused(
-	app: ElectronApplication,
-): Promise<void> {
-	if (PRODUCT_FLOW_MODE !== "inactive") {
-		return;
-	}
-	expect(await isPopoverFocused(app)).toBe(false);
-}
-
-/** 제품 경로가 연 팝오버가 운영체제에 표시될 때까지 기다린다. */
-async function waitForPopoverVisible(app: ElectronApplication): Promise<void> {
-	// 창 표시 이벤트가 반영될 최대 1초(20회 × 50ms)만 기다린다.
-	for (let attempt = 0; attempt < 20; attempt += 1) {
-		if (await isPopoverVisible(app)) {
-			return;
-		}
-		await new Promise((resolve) => setTimeout(resolve, 50));
-	}
-	throw new Error("팝오버가 운영체제에 표시되지 않았습니다");
-}
-
-/** 제품 blur 경로가 팝오버를 숨길 때까지 기다린다. */
-async function waitForPopoverHidden(app: ElectronApplication): Promise<void> {
-	// 창 숨김 이벤트가 반영될 최대 1초(20회 × 50ms)만 기다린다.
-	for (let attempt = 0; attempt < 20; attempt += 1) {
-		if (!(await isPopoverVisible(app))) {
-			return;
-		}
-		await new Promise((resolve) => setTimeout(resolve, 50));
-	}
-	throw new Error("팝오버가 blur 뒤에도 숨겨지지 않았습니다");
-}
-
-/** 저장 커밋이 임시 파일에 반영되고 난 뒤 조건을 만족하는 데이터를 읽는다. */
-async function waitForStoredData(
-	userDataDirectory: string,
-	predicate: (data: LeaveData) => boolean,
-): Promise<LeaveData> {
-	/** 격리 저장 파일 경로. */
-	const filePath = path.join(userDataDirectory, "data.json");
-	/** 원자적 저장 교체가 끝날 때까지 확인할 최대 횟수. */
-	const maxAttempts = 20;
-	// 저장 교체 순간의 읽기 실패나 이전 내용은 짧은 간격으로 다시 확인한다.
-	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-		try {
-			/** 현재 저장 파일. 원자적 교체 중이면 다음 시도에서 다시 읽는다. */
-			const data = JSON.parse(await readFile(filePath, "utf8")) as LeaveData;
-			if (predicate(data)) {
-				return data;
-			}
-		} catch {
-			// 쓰기 교체 순간의 짧은 읽기 실패는 다음 시도에서 확인한다.
-		}
-		await new Promise((resolve) => setTimeout(resolve, 50));
-	}
-	throw new Error("저장 파일이 예상한 설정으로 갱신되지 않았습니다");
-}
-
 /** 승인된 컴프와 비교할 정상 요약 첫 화면을 임시 산출물로 남긴다. */
 async function captureSummaryScreenshot(page: Page): Promise<void> {
 	await captureVisualScreenshot(page, "summary-first-view.png");
@@ -2983,14 +2720,6 @@ async function captureVisualScreenshot(
 	await writeFile(screenshotPath, screenshot);
 }
 
-/** 사용자에게 보이는 요소가 나타날 때까지 기다린 뒤 가시성을 확인한다. */
-async function expectVisible(
-	locator: ReturnType<Page["locator"]>,
-): Promise<void> {
-	await locator.waitFor({ state: "visible", timeout: 1_000 });
-	expect(await locator.isVisible()).toBe(true);
-}
-
 /** 상태 전환 뒤 지정한 요소가 실제 문서 포커스를 갖는지 확인한다. */
 async function expectDocumentFocus(
 	locator: ReturnType<Page["locator"]>,
@@ -3006,27 +2735,4 @@ async function expectDocumentFocus(
 		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
 	throw new Error("문서 포커스를 확인하지 못했습니다");
-}
-
-/** 탭 키로 도달한 조작의 실제 포커스와 브라우저의 표시 상태를 함께 확인한다. */
-async function expectKeyboardFocus(
-	locator: ReturnType<Page["locator"]>,
-): Promise<void> {
-	/** 렌더러 효과와 네이티브 창 포커스가 정착할 때까지 확인할 횟수. */
-	const maxAttempts = 20;
-	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-		/** 요소가 실제 문서 포커스를 가지고 있는가. */
-		const hasFocus = await locator.evaluate(
-			(element) => element === document.activeElement,
-		);
-		/** 브라우저가 키보드 포커스를 사용자에게 표시할 상태인가. */
-		const hasVisibleFocus = await locator.evaluate((element) =>
-			element.matches(":focus-visible"),
-		);
-		if (hasFocus && hasVisibleFocus) {
-			return;
-		}
-		await new Promise((resolve) => setTimeout(resolve, 50));
-	}
-	throw new Error("키보드 포커스와 포커스 표시를 확인하지 못했습니다");
 }

@@ -12,8 +12,8 @@ const REPOSITORY_ROOT = path.resolve(
 const WORKFLOW_FILES = ["ci.yml", "release.yml"];
 /** CI와 릴리스가 공유해야 하는 전체 자동 검증 명령. */
 const PRODUCT_VERIFY_COMMAND = "pnpm verify:product";
-/** 두 워크플로가 공유해야 하는 운영체제 매트릭스. */
-const PLATFORM_MATRIX = "os: [macos-latest, windows-latest]";
+/** 지원하는 원격 검증 운영체제. */
+const SUPPORTED_RUNNER = "runs-on: macos-latest";
 
 /** 워크플로 파일을 읽고 기본 텍스트 형식 계약을 확인한다. */
 function readWorkflow(fileName) {
@@ -39,15 +39,12 @@ function requireText(source, fileName, text) {
 	assert(source.includes(text), `${fileName}에 필수 계약이 없습니다: ${text}`);
 }
 
-/** 두 운영체제 잡을 계속 독립 실행하는 공통 계약을 확인한다. */
-function assertPlatformMatrix(source, fileName) {
-	requireText(source, fileName, PLATFORM_MATRIX);
-	/** 운영체제 실패 격리를 보장하는 fail-fast 선언 횟수. */
-	const failFastDeclarations = source.match(/^\s+fail-fast: false\s*$/gm) ?? [];
-	assert.equal(
-		failFastDeclarations.length,
-		1,
-		`${fileName}에는 fail-fast: false가 정확히 한 번 있어야 합니다.`,
+/** 워크플로가 지원 대상인 macOS만 제품 검증에 사용하는지 확인한다. */
+function assertSupportedRunner(source, fileName) {
+	requireText(source, fileName, SUPPORTED_RUNNER);
+	assert(
+		!source.includes("windows-latest"),
+		`${fileName}에 지원하지 않는 Windows 잡이 남아 있습니다.`,
 	);
 }
 
@@ -113,7 +110,7 @@ function assertWorkflowSource(workflowSource) {
 	/** 현재 검사할 워크플로 이름과 원문. */
 	const [fileName, source] = workflowSource;
 	// 공통 계약을 먼저 확인하고 파일별 후속 단계 계약을 확인한다.
-	assertPlatformMatrix(source, fileName);
+	assertSupportedRunner(source, fileName);
 	assertProductVerificationCall(source, fileName);
 	if (fileName === "ci.yml") {
 		assertCiWorkflow(source, fileName);

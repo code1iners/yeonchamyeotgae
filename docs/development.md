@@ -32,8 +32,8 @@ CI (Continuous Integration: 커밋마다 자동으로 검사하는 통합 검증
 검증의 경계는 위 스펙을 참조합니다.
 
 지원하는 데스크톱 빌드와 제품 흐름 검증 환경은 macOS입니다. Windows 빌드·릴리스는 지원하지
-않으며, 기존 Windows 자동화는 [ADR-0003](adr/0003-macos-only-desktop-build.md)에 기록한 잔여
-설정입니다.
+않으며, CI와 릴리스 워크플로도 macOS에서만 실행합니다. 지원 범위는
+[ADR-0003](adr/0003-macos-only-desktop-build.md)에 기록했습니다.
 
 훅 자체의 청결성·실행 순서·실패 경로를 실제 push 없이 확인하려면 다음 명령을 실행합니다.
 

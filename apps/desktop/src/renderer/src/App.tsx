@@ -333,25 +333,33 @@ export function App() {
 										</span>
 									</div>
 								)}
-								<HelpTooltip label="단축키 도움말">
-									<span className="help-content-title">단축키</span>
-									<span>
-										휴가 등록{" "}
-										<kbd>{shortcutLabel("open-entry", shortcutPlatform)}</kbd>
-									</span>
-									<span>
-										요약{" "}
-										<kbd>{shortcutLabel("summary-tab", shortcutPlatform)}</kbd>
-									</span>
-									<span>
-										이력{" "}
-										<kbd>{shortcutLabel("history-tab", shortcutPlatform)}</kbd>
-									</span>
-									<span>
-										설정{" "}
-										<kbd>{shortcutLabel("settings-tab", shortcutPlatform)}</kbd>
-									</span>
-								</HelpTooltip>
+								{!onboarding && (
+									<HelpTooltip label="단축키 도움말">
+										<span className="help-content-title">단축키</span>
+										<span>
+											휴가 등록{" "}
+											<kbd>{shortcutLabel("open-entry", shortcutPlatform)}</kbd>
+										</span>
+										<span>
+											요약{" "}
+											<kbd>
+												{shortcutLabel("summary-tab", shortcutPlatform)}
+											</kbd>
+										</span>
+										<span>
+											이력{" "}
+											<kbd>
+												{shortcutLabel("history-tab", shortcutPlatform)}
+											</kbd>
+										</span>
+										<span>
+											설정{" "}
+											<kbd>
+												{shortcutLabel("settings-tab", shortcutPlatform)}
+											</kbd>
+										</span>
+									</HelpTooltip>
+								)}
 							</div>
 						</header>
 						{entryCompletionStatus && (
@@ -416,6 +424,7 @@ export function App() {
 									balance={state.balance}
 									adjustments={state.adjustments}
 									today={state.today}
+									onOpenEntry={handleOpenEntry}
 								/>
 							)}
 						</div>
@@ -448,8 +457,7 @@ export function App() {
  * 헤더에 표시할 잔여 문구. 온보딩에서는 잔여 영역 자체를 렌더링하지 않으며,
  * 이 함수가 호출되는 계산 가능 상태에서는 정확한 소수 값을 그대로 보여준다.
  *
- * **반올림도 절사도 하지 않는다**(5.1절). Windows에서는 이 화면이 정확한 잔여를
- * 볼 수 있는 유일한 곳이다.
+ * **반올림도 절사도 하지 않는다**(5.1절).
  */
 function formatBalance(balance: Balance | null): string {
 	return balance ? `${balance.balance}일` : "—";

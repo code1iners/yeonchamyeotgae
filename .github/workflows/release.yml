@@ -1,11 +1,10 @@
-# v* 태그 푸시에서 양 OS 바이너리를 패키징해 하나의 GitHub Release로 올린다.
+# v* 태그 푸시에서 지원 대상인 macOS 바이너리를 패키징해 GitHub Release로 올린다.
 #
 # 릴리스를 쓰는 잡은 release 하나다 — electron-builder 내장 publish로 되돌리면 깨진다(스펙 8.2절).
 # electron-publish의 getOrCreateRelease()는 draft가 없으면 createRelease()를 부르는데,
 # createRelease()에는 422 already_exists 재시도가 없다(422 처리는 에셋 업로드 경로에만 있다).
-# macOS 잡과 Windows 잡은 거의 동시에 시작하므로 둘 다 "draft 없음"을 보고 둘 다 생성을
-# 시도할 수 있고, 한쪽이 그냥 실패한다 — 실패가 확률적이라 더 나쁘다. 쓰는 잡이 하나면
-# 이 경쟁 조건은 존재하지 않는다. 방어가 아니라 제거다.
+# 빌드 잡은 읽기만 하고 release 잡 하나만 릴리스를 생성한다. 쓰는 잡이 하나면
+# 생성 경쟁 조건은 존재하지 않는다.
 #
 # 코드 서명을 나중에 켤 때의 4단계(스펙 8.4절):
 #   1. electron-builder.yml에서 mac.identity: null을 지운다. ← 가장 중요하다. 지우지 않으면
@@ -29,19 +28,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      # 한쪽이 깨져도 다른 쪽은 끝까지 돌린다 — 재태깅 전에 고칠 것이
-      # 몇 개인지 한 번에 보기 위해서다(ci.yml과 같은 이유).
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-        # 릴리스 자산은 dmg·exe 정확히 둘이다 — blockmap 등 부산물은 올리지 않는다(스펙 8.3절).
-        include:
-          - os: macos-latest
-            asset: '*.dmg'
-          - os: windows-latest
-            asset: '*.exe'
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
       # version 입력은 적지 않는다 — 루트 package.json의 packageManager 핀과 병존하면
@@ -67,8 +54,8 @@ jobs:
       # 아티팩트에 걸려 죽는 것을 풀어 재실행을 멱등하게 만든다.
       - uses: actions/upload-artifact@v7
         with:
-          name: dist-${{ matrix.os }}
-          path: apps/desktop/release/${{ matrix.asset }}
+          name: dist-macos
+          path: apps/desktop/release/*.dmg
           if-no-files-found: error
           overwrite: true
 

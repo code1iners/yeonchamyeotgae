@@ -11,6 +11,7 @@ import { CalendarGrid } from "./CalendarGrid";
 import { syncOpenYears } from "./history-state";
 import { UNITS, unitLabel } from "./units";
 import { useCommit } from "./use-commit";
+import { useEntryRemoval } from "./use-entry-removal";
 
 type Props = {
 	/** 휴가 기록 전부. 두 뷰와 커밋할 배열이 여기서 나온다. */
@@ -21,6 +22,8 @@ type Props = {
 	adjustments: Adjustment[];
 	/** 조회일. 사용·예정의 경계이자 달력의 오늘 표시다. */
 	today: string;
+	/** 빈 이력에서 전역 휴가 등록 흐름을 시작한다. */
+	onOpenEntry: () => void;
 };
 
 /**
@@ -30,7 +33,13 @@ type Props = {
  * 예정은 상태 변경이 아니라 삭제다. 수정·삭제 커밋이 끝나면 셸이 상태를 다시 밀어주므로
  * 트레이 숫자와 요약 탭은 여기서 손대지 않아도 함께 갱신된다.
  */
-export function HistoryTab({ entries, balance, adjustments, today }: Props) {
+export function HistoryTab({
+	entries,
+	balance,
+	adjustments,
+	today,
+	onOpenEntry,
+}: Props) {
 	/** 지금 보는 뷰. */
 	const [view, setView] = useState<"list" | "calendar">("list");
 
@@ -65,13 +74,19 @@ export function HistoryTab({ entries, balance, adjustments, today }: Props) {
 				</fieldset>
 			</div>
 			{view === "list" ? (
-				<HistoryList entries={entries} groups={groups} losses={losses} />
+				<HistoryList
+					entries={entries}
+					groups={groups}
+					losses={losses}
+					onOpenEntry={onOpenEntry}
+				/>
 			) : (
 				<HistoryCalendar
 					entries={entries}
 					groups={groups}
 					losses={losses}
 					today={today}
+					onOpenEntry={onOpenEntry}
 				/>
 			)}
 		</div>
@@ -89,7 +104,8 @@ function HistoryList({
 	entries,
 	groups,
 	losses,
-}: Pick<Props, "entries"> & {
+	onOpenEntry,
+}: Pick<Props, "entries" | "onOpenEntry"> & {
 	/** 예정 / 연차 연도별 사용 그룹. */
 	groups: HistorySections;
 	/** 소멸 섹션에 올릴 줄들. */
@@ -107,10 +123,6 @@ function HistoryList({
 	} | null>(null);
 	/** 초안 검증에 걸린 문구. */
 	const [issue, setIssue] = useState<string | null>(null);
-	/** 삭제 실패를 붙일 기록의 식별자. 오류를 리스트 위로 떼지 않고 해당 행에 둔다. */
-	const [deleteErrorId, setDeleteErrorId] = useState<string | null>(null);
-	/** 삭제 확인을 열어 둔 기록의 식별자. 확인 전에는 저장하지 않는다. */
-	const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 	/** 마지막 성공 행동을 보조 기술에 알리는 문구. */
 	const [successStatus, setSuccessStatus] = useState<string | null>(null);
 	/** 인라인 수정이 열릴 때 먼저 포커스할 날짜 입력. */
@@ -138,10 +150,19 @@ function HistoryList({
 	 * 행의 삭제 실패가 열려 있는 수정 폼 안에 뜬다.
 	 */
 	const edit = useCommit();
-	/** 삭제의 커밋 통로. 실패 문구는 해당 행 아래에 뜬다. */
-	const remove = useCommit();
+	/** 두 보기와 같은 삭제 저장 흐름. 성공 뒤 리스트 포커스만 여기서 정한다. */
+	const removal = useEntryRemoval({
+		entries,
+		disabled: edit.saving,
+		onSuccess: (id) => {
+			deleteFocusReturnIdRef.current = id;
+			setSuccessStatus("휴가 기록을 삭제했습니다.");
+		},
+	});
 	/** 어느 쪽이든 커밋이 오가는 중인가 — 그동안 모든 손잡이를 잠근다. */
-	const saving = edit.saving || remove.saving;
+	const saving = edit.saving || removal.saving;
+	/** 삭제 확인을 열어 둔 기록의 식별자. */
+	const deleteTargetId = removal.targetId;
 
 	useEffect(
 		function syncHistoryCurrentYearEffect() {
@@ -263,10 +284,8 @@ function HistoryList({
 		setDraft({ id: entry.id, date: entry.date, days: entry.days });
 		setIssue(null);
 		setSuccessStatus(null);
-		setDeleteTargetId(null);
+		removal.dismiss();
 		edit.clearError();
-		setDeleteErrorId(null);
-		remove.clearError();
 	};
 
 	/** 수정 닫기 핸들러. */
@@ -319,37 +338,21 @@ function HistoryList({
 			return;
 		}
 		setSuccessStatus(null);
-		remove.clearError();
-		setDeleteErrorId(id);
-		setDeleteTargetId(id);
+		removal.open(id);
 	};
 
 	/** 확인한 기록만 삭제하고, 실패하면 확인 영역과 행을 그대로 남긴다. */
 	const handleConfirmDelete = async (id: string) => {
-		if (saving || deleteTargetId !== id) {
-			return;
-		}
-		/** 삭제 커밋 결과. 실패하면 현재 행을 유지한다. */
-		const committed = await remove.commit({
-			entries: entries.filter((entry) => entry.id !== id),
-		});
-		if (committed) {
-			setDeleteErrorId(null);
-			setDeleteTargetId(null);
-			deleteFocusReturnIdRef.current = id;
-			setSuccessStatus("휴가 기록을 삭제했습니다.");
-		}
+		await removal.confirm(id);
 	};
 
 	/** 삭제를 취소하고 같은 행의 삭제 버튼으로 포커스를 되돌린다. */
 	const handleCancelDelete = (id: string) => {
-		if (remove.saving) {
+		if (removal.saving) {
 			return;
 		}
-		setDeleteTargetId(null);
-		setDeleteErrorId(null);
 		deleteFocusReturnIdRef.current = id;
-		remove.clearError();
+		removal.cancel();
 	};
 
 	/** 행 하나 — 수정 중이면 그 자리가 폼이 된다. */
@@ -359,7 +362,7 @@ function HistoryList({
 		/** 행의 접근 가능한 이름 — 날짜만으로 예정과 사용을 혼동하지 않게 한다. */
 		const rowLabel = `${entry.date} ${planned ? "예정" : "사용"} 휴가 기록`;
 		/** 이 행에서 표시할 삭제 실패 문구. */
-		const rowDeleteError = deleteErrorId === entry.id ? remove.error : null;
+		const rowDeleteError = deleteTargetId === entry.id ? removal.error : null;
 		/** 이 행의 삭제 확인 제목·설명 식별자. */
 		const deleteTitleId = `history-delete-title-${entry.id}`;
 		const deleteDescriptionId = `history-delete-description-${entry.id}`;
@@ -541,6 +544,9 @@ function HistoryList({
 			{groups.planned.length === 0 && groups.years.length === 0 && (
 				<div className="history-empty">
 					<p className="row dim">휴가 기록이 없습니다.</p>
+					<button type="button" onClick={onOpenEntry}>
+						휴가 등록
+					</button>
 				</div>
 			)}
 			{groups.planned.length > 0 && (
@@ -598,7 +604,8 @@ function HistoryCalendar({
 	groups,
 	losses,
 	today,
-}: Pick<Props, "entries" | "today"> & {
+	onOpenEntry,
+}: Pick<Props, "entries" | "today" | "onOpenEntry"> & {
 	/** 예정 / 사용 판정의 출처 — 녹색 점과 회색 점이 리스트의 섹션과 같은 경계를 쓴다. */
 	groups: HistorySections;
 	/** 빨간 밑줄을 붙일 소멸 줄들. */
@@ -606,14 +613,12 @@ function HistoryCalendar({
 }) {
 	/** 눌러서 펼쳐둔 날짜. 처음에는 아무 날도 아니다. */
 	const [selected, setSelected] = useState<string | null>(null);
-	/** 셸에 변경을 커밋하는 통로. */
-	const { commit, saving, error, clearError } = useCommit();
+	/** 단위 수정 전용 커밋 통로. */
+	const edit = useCommit();
 	/** 기록 삭제 뒤 상세 영역으로 포커스를 옮길 대상. */
 	const detailsRef = useRef<HTMLElement>(null);
 	/** 삭제 성공 뒤 상세 영역에 포커스를 요청했는가. */
 	const restoreDetailsFocusRef = useRef(false);
-	/** 삭제 확인을 열어 둔 기록의 식별자. */
-	const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 	/** 마지막 성공 행동을 보조 기술에 알리는 문구. */
 	const [successStatus, setSuccessStatus] = useState<string | null>(null);
 	/** 삭제 확인 영역에 포커스를 둘 대상. */
@@ -632,6 +637,19 @@ function HistoryCalendar({
 		id: string;
 		days: number;
 	} | null>(null);
+	/** 두 보기와 같은 삭제 저장 흐름. 성공 뒤 달력 상세 포커스만 여기서 정한다. */
+	const removal = useEntryRemoval({
+		entries,
+		disabled: edit.saving || calendarDraft !== null,
+		onSuccess: () => {
+			restoreDetailsFocusRef.current = true;
+			setSuccessStatus("휴가 기록을 삭제했습니다.");
+		},
+	});
+	/** 수정이나 삭제가 저장 중이면 달력의 모든 조작을 잠근다. */
+	const saving = edit.saving || removal.saving;
+	/** 삭제 확인을 열어 둔 기록의 식별자. */
+	const deleteTargetId = removal.targetId;
 
 	/** 날짜 → 그날의 휴가 기록. 하루 1건이라 값이 하나다. */
 	const entryByDate = new Map(entries.map((entry) => [entry.date, entry]));
@@ -711,7 +729,7 @@ function HistoryCalendar({
 		if (saving || deleteTargetId !== null) {
 			return;
 		}
-		clearError();
+		edit.clearError();
 		setSuccessStatus(null);
 		setCalendarDraft(days === entry.days ? null : { id: entry.id, days });
 	};
@@ -728,10 +746,10 @@ function HistoryCalendar({
 		) {
 			return;
 		}
-		clearError();
+		edit.clearError();
 		calendarDraftFocusReturnRef.current = draftToSave;
 		if (
-			await commit({
+			await edit.commit({
 				entries: entries.map((item) =>
 					item.id === draftToSave.id
 						? { ...item, days: draftToSave.days }
@@ -754,7 +772,7 @@ function HistoryCalendar({
 			days: selectedEntry.days,
 		};
 		setCalendarDraft(null);
-		clearError();
+		edit.clearError();
 		setSuccessStatus(null);
 	};
 
@@ -763,24 +781,15 @@ function HistoryCalendar({
 		if (saving || calendarDraft) {
 			return;
 		}
-		clearError();
+		edit.clearError();
 		setSuccessStatus(null);
-		setDeleteTargetId(entry.id);
+		removal.open(entry.id);
 	};
 
 	/** 확인한 기록만 삭제하고, 실패하면 상세와 확인 영역을 유지한다. */
 	const handleConfirmDelete = async (entry: LeaveEntry) => {
-		if (saving || deleteTargetId !== entry.id) {
-			return;
-		}
 		restoreDetailsFocusRef.current = true;
-		const committed = await commit({
-			entries: entries.filter((item) => item.id !== entry.id),
-		});
-		if (committed) {
-			setDeleteTargetId(null);
-			setSuccessStatus("휴가 기록을 삭제했습니다.");
-		} else {
+		if (!(await removal.confirm(entry.id))) {
 			restoreDetailsFocusRef.current = false;
 		}
 	};
@@ -790,17 +799,16 @@ function HistoryCalendar({
 		if (saving) {
 			return;
 		}
-		setDeleteTargetId(null);
-		clearError();
+		removal.cancel();
 		deleteButtonRef.current?.focus();
 	};
 
 	/** 날짜 선택 핸들러 — 이전 날짜의 저장 실패 문구를 새 날짜로 가져가지 않는다. */
 	const handlePickDate = (date: string) => {
-		clearError();
+		edit.clearError();
 		calendarDraftFocusReturnRef.current = null;
 		setCalendarDraft(null);
-		setDeleteTargetId(null);
+		removal.dismiss();
 		setSelected(date);
 	};
 
@@ -860,6 +868,9 @@ function HistoryCalendar({
 			{entries.length === 0 && (
 				<div className="history-empty">
 					<p className="row dim">휴가 기록이 없습니다.</p>
+					<button type="button" onClick={onOpenEntry}>
+						휴가 등록
+					</button>
 				</div>
 			)}
 			{selected && (
@@ -1000,9 +1011,9 @@ function HistoryCalendar({
 									<p id="history-calendar-delete-description">
 										{selectedEntry.date} 휴가 기록을 삭제합니다.
 									</p>
-									{error && (
+									{removal.error && (
 										<p className="error" role="alert" aria-live="assertive">
-											{error}
+											{removal.error}
 										</p>
 									)}
 									<div className="hist-delete-actions">
@@ -1030,9 +1041,9 @@ function HistoryCalendar({
 							<div className="row dim">이 날에는 기록이 없습니다.</div>
 						)
 					)}
-					{error && !deleteTargetId && (
+					{edit.error && !deleteTargetId && (
 						<p className="error" role="alert" aria-live="assertive">
-							{error}
+							{edit.error}
 						</p>
 					)}
 				</section>
