@@ -288,6 +288,21 @@ async function createFixture(options = {}) {
 			options.remoteTag,
 		]);
 	}
+	if (options.postTagCommit) {
+		/** 이미 게시한 태그보다 앞선 현재 main을 재현하는 후속 커밋. */
+		await writeFile(
+			path.join(repositoryPath, "after-tag.txt"),
+			"after tag\n",
+			"utf8",
+		);
+		await runGit(repositoryPath, ["add", "after-tag.txt"]);
+		await runGit(repositoryPath, [
+			"commit",
+			"--quiet",
+			"-m",
+			"태그 이후 main 커밋",
+		]);
+	}
 
 	await writeFile(releasesPath, `${JSON.stringify(releases)}\n`, "utf8");
 	await writeFile(releaseRunModePath, `${releaseRunMode}\n`, "utf8");
@@ -323,8 +338,8 @@ async function createFixture(options = {}) {
 		`  count=$((count + 1))`,
 		`  printf '%s\\n' "${dollar}count" > "${dollar}FAKE_RELEASE_RUN_LIST_COUNT_PATH"`,
 		`  mode=$(cat "${dollar}FAKE_RELEASE_RUN_MODE_PATH")`,
-		`  head_sha=$(git rev-parse HEAD)`,
 		`  tag_name=$(git tag --list 'v*' | tail -n 1)`,
+		`  head_sha=$(git rev-parse --verify "${dollar}{tag_name}^{commit}" 2>/dev/null || git rev-parse HEAD)`,
 		`  case "${dollar}mode" in`,
 		`    delayed) if [ "${dollar}count" -lt 2 ]; then printf '%s\\n' '[]'; exit 0; fi ;;`,
 		`    no-run) printf '%s\\n' '[]'; exit 0 ;;`,
@@ -775,16 +790,74 @@ test("이미 존재하는 후보 태그는 덮어쓰지 않고 중단한다", as
 	);
 });
 
-test("태그만 있고 공개 안정 Release가 없는 현재 버전은 복구 대상으로 중단한다", async () => {
+test("현재 커밋의 기존 태그는 덮어쓰지 않고 실패한 Release 복구 경로로 보낸다", async () => {
 	await withFixture(
 		async (fixture) => {
-			/** 현재 manifest 버전의 미완료 태그 상태. */
-			const result = await runInteractive(fixture);
+			/** 현재 커밋에 이미 게시된 태그와 실패한 Release 실행을 복구하는 결과. */
+			const result = await runInteractive(fixture, "y\n");
+			/** 현재 main보다 앞선 기존 태그의 고정 대상 커밋. */
+			const tagCommit = await runGit(fixture.repositoryPath, [
+				"rev-parse",
+				"v0.1.4^{commit}",
+			]);
+			/** 실패 뒤에도 유지되는 local·remote main 상태. */
+			const heads = await readHeadState(fixture);
+			/** 기존 원격 태그를 재사용했는지 확인할 명령 로그. */
+			const commandLog = await readCommandLog(fixture);
+
 			assert.notEqual(result.code, 0);
-			assert.match(result.output, /기존 릴리스 복구 대상으로 중단했습니다/);
-			assert.match(result.output, /v0\.1\.4 태그가 공개 안정 Release 없이/);
+			assert.match(result.output, /Release 워크플로가 failure로 끝났습니다/);
+			assert.match(result.output, /gh run rerun 305/);
+			assert.match(
+				result.output,
+				new RegExp(`대상 전체 커밋 SHA: ${tagCommit}`),
+			);
+			assert.equal(await readRemoteTagCommit(fixture, "v0.1.4"), tagCommit);
+			assert.notEqual(heads.local, heads.remote);
+			assert.notEqual(heads.local, tagCommit);
+			assert.doesNotMatch(commandLog, /^pre-push$/m);
+			assert.doesNotMatch(commandLog, /--no-verify|--force|--delete/);
 		},
-		{ manifestVersion: "0.1.4", localTag: "v0.1.4" },
+		{
+			manifestVersion: "0.1.4",
+			remoteTag: "v0.1.4",
+			postTagCommit: true,
+			releaseRunMode: "failure",
+		},
+	);
+});
+
+test("현재 main보다 앞선 기존 태그의 성공 Release도 태그 커밋으로 검증한다", async () => {
+	await withFixture(
+		async (fixture) => {
+			/** 이미 게시된 태그의 성공 Release를 재사용하는 결과. */
+			const result = await runInteractive(fixture, "y\n");
+			/** Release 검증에 사용해야 하는 기존 태그의 대상 커밋. */
+			const tagCommit = await runGit(fixture.repositoryPath, [
+				"rev-parse",
+				"v0.1.4^{commit}",
+			]);
+			/** 기존 태그 재사용 뒤의 local·remote main 상태. */
+			const heads = await readHeadState(fixture);
+			/** 태그 재 push 여부와 Release 검증 순서를 확인할 명령 로그. */
+			const commandLog = await readCommandLog(fixture);
+
+			assert.equal(result.code, 0);
+			assert.match(result.output, /릴리스 게시와 검증이 완료되었습니다/);
+			assert.match(
+				result.output,
+				new RegExp(`대상 전체 커밋 SHA: ${tagCommit}`),
+			);
+			assert.equal(await readRemoteTagCommit(fixture, "v0.1.4"), tagCommit);
+			assert.notEqual(heads.local, heads.remote);
+			assert.doesNotMatch(commandLog, /^pre-push$/m);
+			assert.doesNotMatch(commandLog, /--no-verify|--force|--delete/);
+		},
+		{
+			manifestVersion: "0.1.4",
+			remoteTag: "v0.1.4",
+			postTagCommit: true,
+		},
 	);
 });
 

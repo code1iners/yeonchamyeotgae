@@ -81,6 +81,28 @@ remote_tag_commit() {
 	printf '%s\n' "$REMOTE_TAG_LINES" | awk 'NR == 1 { print $1; exit }'
 }
 
+# 기존 또는 새로 만든 로컬 릴리스 태그가 주석 태그와 정확한 대상 커밋을 갖는지 확인한다.
+validate_local_release_tag() {
+	if ! TAG_TYPE=$(git cat-file -t "$TAG_NAME" 2>/dev/null); then
+		fail_release "${TAG_NAME} 태그 타입을 확인하지 못했습니다. 로컬 태그와 커밋을 삭제하지 않고 보존합니다."
+	fi
+	if [ "$TAG_TYPE" != 'tag' ]; then
+		fail_release "${TAG_NAME}이 주석 태그가 아니어서 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+	fi
+	if ! TAG_TARGET_SHA=$(git rev-parse --verify "${TAG_NAME}^{commit}" 2>/dev/null); then
+		fail_release "${TAG_NAME}의 대상 커밋을 확인하지 못했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+	fi
+	if [ "$TAG_TARGET_SHA" != "$RELEASE_SHA" ]; then
+		fail_release "${TAG_NAME}이 정확한 릴리스 커밋을 가리키지 않아 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+	fi
+	if ! TAG_MESSAGE=$(git for-each-ref --format='%(contents:subject)' "refs/tags/${TAG_NAME}" 2>/dev/null); then
+		fail_release "${TAG_NAME} 메시지를 확인하지 못했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+	fi
+	if [ "$TAG_MESSAGE" != "$TAG_NAME" ]; then
+		fail_release "${TAG_NAME} 메시지가 태그 이름과 달라 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
+	fi
+}
+
 # 태그 push로 시작된 Release Actions 실행 검색 지연을 제한된 재시도로 흡수한다.
 find_release_workflow_run() {
 	RUN_LABEL=$1
@@ -218,6 +240,40 @@ if ! TAG_VERSION_MAX=$(printf '%s\n' "$TAG_NAMES" | node "$VERSION_HELPER" max-t
 	fail_release '릴리스 태그 버전을 해석하지 못해 중단했습니다.'
 fi
 
+# 권위 있는 데스크톱 manifest에서 현재 앱 버전을 읽고 안정 버전인지 확인한다.
+if ! APP_VERSION=$(node "$VERSION_HELPER" read-manifest "$MANIFEST_PATH" 2>/dev/null); then
+	fail_release "${MANIFEST_PATH}의 version을 읽지 못해 중단했습니다."
+fi
+if ! APP_VERSION_VALIDATION=$(node "$VERSION_HELPER" validate "$APP_VERSION" 2>&1); then
+	fail_release "현재 앱 버전이 유효하지 않아 중단했습니다: $APP_VERSION_VALIDATION"
+fi
+
+# 현재 버전 태그의 로컬·원격 대상 커밋을 먼저 확인해 안전한 복구와 충돌을 구분한다.
+CURRENT_TAG_NAME="v${APP_VERSION}"
+CURRENT_HAS_TAG=0
+CURRENT_TAG_TARGET_SHA=''
+CURRENT_REMOTE_TAG_TARGET_SHA=''
+CURRENT_TAG_IS_RECOVERABLE=0
+CURRENT_TAG_TARGET_CONFLICT=0
+if git show-ref --verify --quiet "refs/tags/${CURRENT_TAG_NAME}"; then
+	CURRENT_HAS_TAG=1
+	CURRENT_TAG_TARGET_SHA=$(git rev-parse --verify "${CURRENT_TAG_NAME}^{commit}" 2>/dev/null || true)
+fi
+if CURRENT_REMOTE_TAG_LINES=$(git ls-remote "$REMOTE_NAME" "refs/tags/${CURRENT_TAG_NAME}^{}" 2>/dev/null); then
+	CURRENT_REMOTE_TAG_TARGET_SHA=$(printf '%s\n' "$CURRENT_REMOTE_TAG_LINES" | awk 'NR == 1 { print $1; exit }')
+fi
+if [ -n "$CURRENT_TAG_TARGET_SHA" ] && [ -n "$CURRENT_REMOTE_TAG_TARGET_SHA" ]; then
+	if [ "$CURRENT_TAG_TARGET_SHA" = "$CURRENT_REMOTE_TAG_TARGET_SHA" ]; then
+		CURRENT_TAG_IS_RECOVERABLE=1
+	else
+		CURRENT_TAG_TARGET_CONFLICT=1
+	fi
+elif [ -n "$CURRENT_TAG_TARGET_SHA" ] && [ "$CURRENT_TAG_TARGET_SHA" = "$LOCAL_HEAD" ]; then
+	CURRENT_TAG_IS_RECOVERABLE=1
+elif [ -z "$CURRENT_TAG_TARGET_SHA" ] && [ -n "$CURRENT_REMOTE_TAG_TARGET_SHA" ]; then
+	CURRENT_TAG_IS_RECOVERABLE=1
+fi
+
 # 어떤 안정 태그라도 Release가 없거나 공개 안정 상태가 아니면 새 버전으로 건너뛰지 않는다.
 for TAG_NAME in $TAG_NAMES
 do
@@ -228,6 +284,11 @@ do
 		public-stable*)
 			;;
 		missing|not-public)
+			if [ "$TAG_RELEASE_STATUS" = 'missing' ] &&
+				[ "$TAG_NAME" = "$CURRENT_TAG_NAME" ] &&
+				[ "$CURRENT_TAG_IS_RECOVERABLE" -eq 1 ]; then
+				continue
+			fi
 			fail_release "v${TAG_VERSION} 태그가 공개 안정 Release 없이 남아 있어 기존 릴리스 복구 대상으로 중단했습니다. 태그를 덮어쓰지 않았습니다."
 			;;
 		*)
@@ -235,14 +296,6 @@ do
 			;;
 	esac
 done
-
-# 권위 있는 데스크톱 manifest에서 현재 앱 버전을 읽고 안정 버전인지 확인한다.
-if ! APP_VERSION=$(node "$VERSION_HELPER" read-manifest "$MANIFEST_PATH" 2>/dev/null); then
-	fail_release "${MANIFEST_PATH}의 version을 읽지 못해 중단했습니다."
-fi
-if ! APP_VERSION_VALIDATION=$(node "$VERSION_HELPER" validate "$APP_VERSION" 2>&1); then
-	fail_release "현재 앱 버전이 유효하지 않아 중단했습니다: $APP_VERSION_VALIDATION"
-fi
 
 # 최신 공개 안정 Release와 안정 태그 중 더 높은 버전을 기존 계보의 하한으로 삼는다.
 case "$LATEST_RELEASE_INFO" in
@@ -260,13 +313,11 @@ if ! USED_VERSION_FLOOR=$(node "$VERSION_HELPER" max "$LATEST_PUBLIC_VERSION" "$
 	fail_release '기존 안정 버전의 하한을 계산하지 못해 중단했습니다.'
 fi
 
-# 현재 버전의 Release·태그 상태를 확인해 태그만 남은 복구 대상을 덮어쓰지 않는다.
+# 현재 버전의 Release·태그 상태를 확인해 같은 커밋의 태그 복구는 이어가고 충돌은 막는다.
 CURRENT_RELEASE_STATUS=$(release_status "$APP_VERSION") ||
 	fail_release '현재 버전의 GitHub Release 상태를 확인하지 못해 중단했습니다.'
-CURRENT_HAS_TAG=0
-if git show-ref --verify --quiet "refs/tags/v${APP_VERSION}"; then
-	CURRENT_HAS_TAG=1
-fi
+CURRENT_TAG_RECOVERY=0
+CURRENT_TAG_RECOVERY_SHA=''
 case "$CURRENT_RELEASE_STATUS" in
 	public-stable*)
 		;;
@@ -274,8 +325,17 @@ case "$CURRENT_RELEASE_STATUS" in
 		fail_release "v${APP_VERSION} 태그에 공개 안정 Release가 없어 기존 릴리스 복구 대상으로 중단했습니다. 원격 태그를 삭제하거나 덮어쓰지 않았습니다."
 		;;
 	missing)
-		if [ "$CURRENT_HAS_TAG" -eq 1 ]; then
-			fail_release "v${APP_VERSION} 태그가 있지만 공개 안정 Release가 없어 기존 릴리스 복구 대상으로 중단했습니다. 태그를 덮어쓰지 않았습니다."
+		if [ "$CURRENT_TAG_TARGET_CONFLICT" -eq 1 ]; then
+			fail_release "v${APP_VERSION}의 로컬·원격 태그 대상 커밋이 달라 기존 릴리스 복구를 중단했습니다. 태그를 덮어쓰지 않았습니다."
+		elif [ "$CURRENT_TAG_IS_RECOVERABLE" -eq 1 ]; then
+			CURRENT_TAG_RECOVERY=1
+			if [ -n "$CURRENT_TAG_TARGET_SHA" ]; then
+				CURRENT_TAG_RECOVERY_SHA="$CURRENT_TAG_TARGET_SHA"
+			else
+				CURRENT_TAG_RECOVERY_SHA="$CURRENT_REMOTE_TAG_TARGET_SHA"
+			fi
+		elif [ "$CURRENT_HAS_TAG" -eq 1 ]; then
+			fail_release "v${APP_VERSION} 태그가 현재 릴리스 대상과 일치하지 않아 기존 릴리스 복구를 중단했습니다. 태그를 덮어쓰지 않았습니다."
 		fi
 		;;
 	*)
@@ -295,8 +355,11 @@ printf '%s\n' "기존 안정 버전 하한: $USED_VERSION_FLOOR"
 
 # 이미 커밋된 미게시 버전이면 새 버전 선택과 중복 커밋을 생략한다.
 PREPARED_VERSION=0
-if [ "$CURRENT_RELEASE_STATUS" = 'missing' ] && [ "$CURRENT_HAS_TAG" -eq 0 ]; then
-	if [ "$USED_VERSION_FLOOR" = 'none' ]; then
+if [ "$CURRENT_RELEASE_STATUS" = 'missing' ] &&
+	{ [ "$CURRENT_HAS_TAG" -eq 0 ] || [ "$CURRENT_TAG_RECOVERY" -eq 1 ]; }; then
+	if [ "$CURRENT_TAG_RECOVERY" -eq 1 ]; then
+		CURRENT_IS_NEWER=1
+	elif [ "$USED_VERSION_FLOOR" = 'none' ]; then
 		CURRENT_IS_NEWER=1
 	else
 		CURRENT_IS_NEWER=$(compare_versions "$APP_VERSION" "$USED_VERSION_FLOOR")
@@ -304,7 +367,11 @@ if [ "$CURRENT_RELEASE_STATUS" = 'missing' ] && [ "$CURRENT_HAS_TAG" -eq 0 ]; th
 	if [ "$CURRENT_IS_NEWER" -gt 0 ]; then
 		PREPARED_VERSION=1
 		CANDIDATE_VERSION="$APP_VERSION"
-		printf '%s\n' "이미 준비된 미게시 버전 v${CANDIDATE_VERSION}을 재사용합니다."
+		if [ "$CURRENT_TAG_RECOVERY" -eq 1 ]; then
+			printf '%s\n' "이미 준비된 미게시 버전 v${CANDIDATE_VERSION}과 일치하는 기존 태그를 재사용합니다."
+		else
+			printf '%s\n' "이미 준비된 미게시 버전 v${CANDIDATE_VERSION}을 재사용합니다."
+		fi
 	fi
 fi
 
@@ -371,7 +438,11 @@ if [ "$PREPARED_VERSION" -eq 0 ]; then
 	done
 else
 	# 이미 준비된 버전도 동일한 후보 검증을 거쳐 잘못된 상태를 방지한다.
-	if ! CANDIDATE_VALIDATION=$(validate_candidate "$CANDIDATE_VERSION" 2>&1); then
+	if [ "$CURRENT_TAG_RECOVERY" -eq 1 ]; then
+		if ! CANDIDATE_VALIDATION=$(node "$VERSION_HELPER" validate-candidate "$CANDIDATE_VERSION" "$LATEST_PUBLIC_VERSION" 2>&1); then
+			fail_release "이미 준비된 버전이 최신 공개 안정 계보보다 높지 않아 중단했습니다: $CANDIDATE_VALIDATION"
+		fi
+	elif ! CANDIDATE_VALIDATION=$(validate_candidate "$CANDIDATE_VERSION" 2>&1); then
 		fail_release "이미 준비된 버전이 현재 안정 계보보다 높지 않아 중단했습니다: $CANDIDATE_VALIDATION"
 	fi
 fi
@@ -395,8 +466,12 @@ if [ "$CANDIDATE_VERSION" != "$APP_VERSION" ]; then
 fi
 
 # main은 변경하지 않고 태그가 게시할 대상 커밋 SHA를 고정한다.
-RELEASE_SHA=$(git rev-parse --verify HEAD 2>/dev/null) ||
-	fail_release '릴리스 대상 전체 커밋 SHA를 확인하지 못해 중단했습니다.'
+if [ "$CURRENT_TAG_RECOVERY" -eq 1 ]; then
+	RELEASE_SHA="$CURRENT_TAG_RECOVERY_SHA"
+else
+	RELEASE_SHA=$(git rev-parse --verify HEAD 2>/dev/null) ||
+		fail_release '릴리스 대상 전체 커밋 SHA를 확인하지 못해 중단했습니다.'
+fi
 INCLUDED_COMMITS=$(git log --format='%H %s' --reverse "refs/remotes/${REMOTE_NAME}/main..${RELEASE_SHA}" 2>/dev/null || true)
 if [ -z "$INCLUDED_COMMITS" ]; then
 	INCLUDED_COMMITS='없음'
@@ -413,7 +488,11 @@ printf '%s\n' "원격: ${REMOTE_NAME}"
 printf '%s\n' '포함할 로컬 커밋:'
 printf '%s\n' "$INCLUDED_COMMITS"
 printf '%s\n' "main push: ${MAIN_PUSH_SUMMARY}"
-printf '%s\n' "후속 태그: v${CANDIDATE_VERSION} (태그 push 뒤 Release workflow에서 검증)"
+if [ "${CURRENT_TAG_RECOVERY}" -eq 1 ]; then
+	printf '%s\n' "후속 태그: v${CANDIDATE_VERSION} (기존 태그 재사용; tag push 생략 후 Release 복구)"
+else
+	printf '%s\n' "후속 태그: v${CANDIDATE_VERSION} (태그 push 뒤 Release workflow에서 검증)"
+fi
 printf '%s' '이 내용으로 진행할까요? [y/N] '
 if ! IFS= read -r APPROVAL; then
 	fail_release '최종 확인 입력을 읽지 못해 원격 변경 없이 중단했습니다.'
@@ -434,51 +513,41 @@ printf '%s\n' '[publish-release] main은 push하지 않고 대상 커밋의 태�
 TAG_NAME="v${CANDIDATE_VERSION}"
 EXPECTED_DMG_NAME="yeonchamyeotgae-${CANDIDATE_VERSION}-arm64.dmg"
 
-# 사용자 승인 사이에 생긴 로컬·원격 태그도 덮어쓰지 않고 기존 복구 대상으로 멈춘다.
-if git show-ref --verify --quiet "refs/tags/${TAG_NAME}"; then
-	fail_release "${TAG_NAME} 태그가 이미 있어 덮어쓰지 않고 중단했습니다. 기존 릴리스 복구 대상으로 확인하세요."
-fi
+# 사용자 승인 사이에 생긴 로컬·원격 태그도 덮어쓰지 않고 같은 대상을 재사용한다.
 if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
 	fail_release "${TAG_NAME} 원격 태그 상태를 확인하지 못해 중단했습니다. 로컬 태그는 아직 만들지 않았습니다."
 fi
+# 원격 태그가 정확한 후보를 이미 가리키면 재 push하지 않고 해당 Release 복구만 진행한다.
+TAG_PUSH_REQUIRED=1
 if [ -n "$REMOTE_TAG_INFO" ]; then
-	fail_release "${TAG_NAME} 원격 태그가 이미 있어 덮어쓰지 않고 중단했습니다. 기존 릴리스 복구 대상으로 확인하세요."
+	TAG_PUSH_REQUIRED=0
 fi
 
-# 릴리스 태그는 준비한 정확한 커밋을 가리키는 annotated tag로만 만든다.
-if ! git tag --annotate "$TAG_NAME" "$RELEASE_SHA" --message "$TAG_NAME"; then
-	fail_release "${TAG_NAME} 태그 생성에 실패했습니다. 이미 만들어진 로컬 태그가 있다면 삭제하지 않고 보존합니다."
-fi
-if ! TAG_TYPE=$(git cat-file -t "$TAG_NAME" 2>/dev/null); then
-	fail_release "${TAG_NAME} 태그 타입을 확인하지 못했습니다. 로컬 태그와 커밋을 삭제하지 않고 보존합니다."
-fi
-if [ "$TAG_TYPE" != 'tag' ]; then
-	fail_release "${TAG_NAME}이 주석 태그가 아니어서 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
-fi
-if ! TAG_TARGET_SHA=$(git rev-parse --verify "${TAG_NAME}^{commit}" 2>/dev/null); then
-	fail_release "${TAG_NAME}의 대상 커밋을 확인하지 못했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
-fi
-if [ "$TAG_TARGET_SHA" != "$RELEASE_SHA" ]; then
-	fail_release "${TAG_NAME}이 정확한 릴리스 커밋을 가리키지 않아 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
-fi
-if ! TAG_MESSAGE=$(git for-each-ref --format='%(contents:subject)' "refs/tags/${TAG_NAME}" 2>/dev/null); then
-	fail_release "${TAG_NAME} 메시지를 확인하지 못했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
-fi
-if [ "$TAG_MESSAGE" != "$TAG_NAME" ]; then
-	fail_release "${TAG_NAME} 메시지가 태그 이름과 달라 중단했습니다. 로컬 태그를 삭제하지 않고 보존합니다."
-fi
-
-# 태그 하나만 일반 push해 기존 pre-push 검증과 원격 Release workflow를 시작한다.
-printf '%s\n' "[publish-release] ${TAG_NAME}을 push합니다. 기존 pre-push 검증이 실행됩니다."
-if ! git push "$REMOTE_NAME" "$TAG_NAME"; then
-	if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
-		REMOTE_TAG_STATE='확인하지 못함'
-	elif [ -n "$REMOTE_TAG_INFO" ]; then
-		REMOTE_TAG_STATE='있음 (상태를 추가 확인해야 함)'
-	else
-		REMOTE_TAG_STATE='없음'
+# 로컬 태그가 있으면 검증만 하고, 없을 때만 새 주석 태그를 만든다.
+if git show-ref --verify --quiet "refs/tags/${TAG_NAME}"; then
+	validate_local_release_tag
+elif [ "$TAG_PUSH_REQUIRED" -eq 1 ]; then
+	if ! git tag --annotate "$TAG_NAME" "$RELEASE_SHA" --message "$TAG_NAME"; then
+		fail_release "${TAG_NAME} 태그 생성에 실패했습니다. 이미 만들어진 로컬 태그가 있다면 삭제하지 않고 보존합니다."
 	fi
-	fail_release "태그 push에 실패했습니다. 로컬 주석 태그 ${TAG_NAME}는 보존했습니다. 원격 태그: ${REMOTE_TAG_STATE}. 원인을 해결한 뒤 같은 태그만 다시 push하세요: git push ${REMOTE_NAME} ${TAG_NAME}"
+	validate_local_release_tag
+fi
+
+# 태그가 없을 때만 일반 push해 기존 pre-push 검증과 원격 Release workflow를 시작한다.
+if [ "$TAG_PUSH_REQUIRED" -eq 1 ]; then
+	printf '%s\n' "[publish-release] ${TAG_NAME}을 push합니다. 기존 pre-push 검증이 실행됩니다."
+	if ! git push "$REMOTE_NAME" "$TAG_NAME"; then
+		if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
+			REMOTE_TAG_STATE='확인하지 못함'
+		elif [ -n "$REMOTE_TAG_INFO" ]; then
+			REMOTE_TAG_STATE='있음 (상태를 추가 확인해야 함)'
+		else
+			REMOTE_TAG_STATE='없음'
+		fi
+		fail_release "태그 push에 실패했습니다. 로컬 주석 태그 ${TAG_NAME}는 보존했습니다. 원격 태그: ${REMOTE_TAG_STATE}. 원인을 해결한 뒤 같은 태그만 다시 push하세요: git push ${REMOTE_NAME} ${TAG_NAME}"
+	fi
+else
+	printf '%s\n' "[publish-release] ${TAG_NAME}이 이미 정확한 원격 태그로 있어 tag push를 생략하고 Release를 복구합니다."
 fi
 
 # 원격 annotated tag의 peeled commit도 확인해 GitHub Release가 참조할 SHA를 고정한다.

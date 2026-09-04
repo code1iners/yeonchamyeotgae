@@ -559,14 +559,14 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(
 			flow.page.getByRole("tooltip").filter({ hasText: "근속에 따라" }),
 		);
-		/** focus 이동으로 설명을 먼저 닫아 tooltip overlay가 탭 클릭을 가리지 않게 한다. */
+		/** focus 이동으로 설명을 먼저 닫고 포커스된 탭을 키보드로 활성화한다. */
 		const historyTab = flow.page.getByRole("tab", { name: "이력" });
 		await historyTab.focus();
 		await flow.page
 			.getByRole("tooltip")
 			.filter({ hasText: "근속에 따라" })
 			.waitFor({ state: "hidden" });
-		await historyTab.click();
+		await historyTab.press("Enter");
 		expect(await grantedHelp.count()).toBe(0);
 		expect(
 			await flow.page
