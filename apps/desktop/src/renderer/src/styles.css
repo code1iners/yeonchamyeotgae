@@ -669,6 +669,8 @@ time,
 	top: calc(100% + 6px);
 	right: 0;
 	z-index: 20;
+	/* 읽기 전용 설명은 hover 뒤 이동하는 다른 조작의 hit target을 가리지 않는다. */
+	pointer-events: none;
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
