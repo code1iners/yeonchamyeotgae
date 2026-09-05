@@ -1,4 +1,4 @@
-# v* 태그 푸시에서 지원 대상인 macOS 바이너리를 패키징해 GitHub Release로 올린다.
+# v* 태그 푸시에서 macOS·Windows 바이너리를 패키징해 하나의 GitHub Release로 올린다.
 #
 # 릴리스를 쓰는 잡은 release 하나다 — electron-builder 내장 publish로 되돌리면 깨진다(스펙 8.2절).
 # electron-publish의 getOrCreateRelease()는 draft가 없으면 createRelease()를 부르는데,
@@ -28,7 +28,17 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    strategy:
+      # 한쪽 OS가 깨져도 다른 쪽 결과까지 확인한다.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            asset: '*.dmg'
+          - os: windows-latest
+            asset: '*.exe'
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       # version 입력은 적지 않는다 — 루트 package.json의 packageManager 핀과 병존하면
@@ -36,10 +46,14 @@ jobs:
       - uses: pnpm/setup@v2
         with: { runtime: node@24, cache: true, install: false }
       - run: pnpm install --frozen-lockfile
-      # 검증을 패키징보다 앞세워 별도 스텝으로 둔다 — CI 로그에서 "검증에서 깨졌다"와
-      # "패키징에서 깨졌다"가 스텝 이름으로 갈린다(스펙 8.2절).
-      - name: 전체 제품 검증
+      # macOS는 기존 전체 제품 검증을 유지한다. Windows는 현재 실제 제품 수용 검증
+      # 대상이 아니므로 기본 정적·단위 검증만 패키징 앞에 둔다.
+      - name: macOS 전체 제품 검증
+        if: matrix.os == 'macos-latest'
         run: pnpm verify:product
+      - name: Windows 기본 검증
+        if: matrix.os == 'windows-latest'
+        run: pnpm verify
       - name: 앱 빌드
         working-directory: apps/desktop
         run: pnpm build
@@ -54,8 +68,8 @@ jobs:
       # 아티팩트에 걸려 죽는 것을 풀어 재실행을 멱등하게 만든다.
       - uses: actions/upload-artifact@v7
         with:
-          name: dist-macos
-          path: apps/desktop/release/*.dmg
+          name: dist-${{ matrix.os }}
+          path: apps/desktop/release/${{ matrix.asset }}
           if-no-files-found: error
           overwrite: true
 

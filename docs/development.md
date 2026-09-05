@@ -31,9 +31,10 @@ pnpm verify:product
 CI (Continuous Integration: 커밋마다 자동으로 검사하는 통합 검증)·릴리스와 실제 운영체제 수용
 검증의 경계는 위 스펙을 참조합니다.
 
-지원하는 데스크톱 빌드와 제품 흐름 검증 환경은 macOS입니다. Windows 빌드·릴리스는 지원하지
-않으며, CI와 릴리스 워크플로도 macOS에서만 실행합니다. 지원 범위는
-[ADR-0003](adr/0003-macos-only-desktop-build.md)에 기록했습니다.
+macOS는 전체 제품 흐름과 Apple Silicon DMG를 검증·패키징합니다. 릴리스의 Windows x64 NSIS
+패키지는 Windows 러너에서 기본 검증 후 패키징하며, 실제 Windows 트레이·포커스 수용 검증은
+별도 경계입니다. 지원 범위 변경은 [ADR-0004](adr/0004-windows-release-resumption.md)에
+기록했습니다.
 
 훅 자체의 청결성·실행 순서·실패 경로를 실제 push 없이 확인하려면 다음 명령을 실행합니다.
 

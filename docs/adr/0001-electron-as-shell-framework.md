@@ -3,7 +3,7 @@
 - **상태**: 채택 (2026-08-26)
 - **결정 티켓**: [`.scratch/yeoncha-tray-app/issues/05-shell-framework-adr.md`](../../.scratch/yeoncha-tray-app/issues/05-shell-framework-adr.md)
 - **관련**: [ADR-0002 — 날짜는 Temporal.PlainDate로 다룬다](0002-temporal-plaindate-for-dates.md),
-  [ADR-0003 — 데스크톱 빌드와 릴리스는 macOS만 지원한다](0003-macos-only-desktop-build.md)
+  [ADR-0003 — 데스크톱 제품 흐름·수용 검증은 macOS만 지원한다](0003-macos-only-desktop-build.md)
 
 > **범위 변경:** 이 ADR의 Windows 알림 영역 지원 전제는 ADR-0003이 대체한다. Electron을 셸
 > 프레임워크로 사용하는 결정은 유지한다.

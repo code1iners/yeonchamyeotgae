@@ -14,6 +14,10 @@ const WORKFLOW_FILES = ["ci.yml", "release.yml"];
 const PRODUCT_VERIFY_COMMAND = "pnpm verify:product";
 /** 지원하는 원격 검증 운영체제. */
 const SUPPORTED_RUNNER = "runs-on: macos-latest";
+/** GitHub Actions 매트릭스 운영체제 표현식. */
+const MATRIX_OS_EXPRESSION = "$" + "{{ matrix.os }}";
+/** GitHub Actions 매트릭스 자산 표현식. */
+const MATRIX_ASSET_EXPRESSION = "$" + "{{ matrix.asset }}";
 
 /** 워크플로 파일을 읽고 기본 텍스트 형식 계약을 확인한다. */
 function readWorkflow(fileName) {
@@ -39,13 +43,19 @@ function requireText(source, fileName, text) {
 	assert(source.includes(text), `${fileName}에 필수 계약이 없습니다: ${text}`);
 }
 
-/** 워크플로가 지원 대상인 macOS만 제품 검증에 사용하는지 확인한다. */
+/** 워크플로별 지원 러너 계약을 확인한다. */
 function assertSupportedRunner(source, fileName) {
-	requireText(source, fileName, SUPPORTED_RUNNER);
-	assert(
-		!source.includes("windows-latest"),
-		`${fileName}에 지원하지 않는 Windows 잡이 남아 있습니다.`,
-	);
+	if (fileName === "ci.yml") {
+		requireText(source, fileName, SUPPORTED_RUNNER);
+		assert(
+			!source.includes("windows-latest"),
+			`${fileName}에 릴리스 전용 Windows 패키징 잡이 들어갈 수 없습니다.`,
+		);
+		return;
+	}
+
+	requireText(source, fileName, "os: [macos-latest, windows-latest]");
+	requireText(source, fileName, `runs-on: ${MATRIX_OS_EXPRESSION}`);
 }
 
 /** 제품 검증 명령이 기존 후속 단계보다 먼저 실행되는지 확인한다. */
@@ -65,7 +75,7 @@ function assertProductVerificationBefore(source, fileName, nextStepText) {
 	);
 }
 
-/** CI와 릴리스의 검증 호출이 단순한 기본 검증으로 되돌아가지 않았는지 확인한다. */
+/** CI와 릴리스가 운영체제별 검증 계약을 지키는지 확인한다. */
 function assertProductVerificationCall(source, fileName) {
 	/** 전체 제품 검증을 실행하는 run 단계 목록. */
 	const productVerificationRuns =
@@ -74,16 +84,32 @@ function assertProductVerificationCall(source, fileName) {
 	const defaultVerificationRuns =
 		source.match(/^\s+(?:-\s+)?run:\s+pnpm verify\s*$/gm) ?? [];
 
+	if (fileName === "ci.yml") {
+		assert.equal(
+			productVerificationRuns.length,
+			1,
+			`${fileName}은 ${PRODUCT_VERIFY_COMMAND}를 정확히 한 번 실행해야 합니다.`,
+		);
+		assert.equal(
+			defaultVerificationRuns.length,
+			0,
+			`${fileName}에 기본 검증만 실행하는 단계가 남아 있습니다.`,
+		);
+		return;
+	}
+
 	assert.equal(
 		productVerificationRuns.length,
 		1,
-		`${fileName}은 ${PRODUCT_VERIFY_COMMAND}를 정확히 한 번 실행해야 합니다.`,
+		`${fileName}은 macOS에서 ${PRODUCT_VERIFY_COMMAND}를 정확히 한 번 실행해야 합니다.`,
 	);
 	assert.equal(
 		defaultVerificationRuns.length,
-		0,
-		`${fileName}에 기본 검증만 실행하는 단계가 남아 있습니다.`,
+		1,
+		`${fileName}은 Windows에서 기본 검증을 정확히 한 번 실행해야 합니다.`,
 	);
+	requireText(source, fileName, "if: matrix.os == 'macos-latest'");
+	requireText(source, fileName, "if: matrix.os == 'windows-latest'");
 }
 
 /** CI 워크플로의 제품 검증 뒤 전체 빌드 계약을 확인한다. */
@@ -96,6 +122,14 @@ function assertReleaseWorkflow(source, fileName) {
 	assertProductVerificationBefore(source, fileName, "name: 앱 빌드");
 	assertProductVerificationBefore(source, fileName, "name: 패키징");
 	requireText(source, fileName, "needs: build");
+	requireText(source, fileName, "asset: '*.dmg'");
+	requireText(source, fileName, "asset: '*.exe'");
+	requireText(source, fileName, `name: dist-${MATRIX_OS_EXPRESSION}`);
+	requireText(
+		source,
+		fileName,
+		`path: apps/desktop/release/${MATRIX_ASSET_EXPRESSION}`,
+	);
 	requireText(source, fileName, "- uses: softprops/action-gh-release@v3");
 }
 

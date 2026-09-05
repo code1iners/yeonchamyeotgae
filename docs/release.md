@@ -17,7 +17,7 @@ pnpm build
 
 대화형 터미널에서 다음 명령을 실행하면 현재 상태와 버전을 확인하고, 필요한 준비 커밋을
 만듭니다. `main`은 push하지 않고 준비한 정확한 커밋을 가리키는 주석 태그 하나만 push합니다.
-태그 push로 시작된 정확한 Release 워크플로의 성공·공개 상태·대상 커밋·Apple Silicon DMG까지
+태그 push로 시작된 정확한 Release 워크플로의 성공·공개 상태·대상 커밋·macOS DMG·Windows NSIS EXE까지
 명령이 확인합니다.
 
 ```bash
@@ -29,7 +29,7 @@ pnpm publish-release
 `4) 직접 입력`이며, 빈 입력은 `1`과 같습니다. 이미 `origin/main`에 있는 미게시 버전은
 재사용하고, 로컬 `main`이 원격보다 앞선 경우 최종 확인에 포함 커밋을 표시합니다.
 뒤처짐·분기·오류 상태에서는 태그를 만들지 않습니다. 태그와 Release가 모두 검증된 경우에만
-성공으로 끝나며, 출력에 버전·태그·전체 SHA·Release URL·확인한 DMG 이름을 남깁니다.
+성공으로 끝나며, 출력에 버전·태그·전체 SHA·Release URL·확인한 DMG·Windows 설치 파일 이름을 남깁니다.
 GitHub Release API의 `targetCommitish`가 기준 브랜치 이름으로 반환되는 경우에도, 명령은 원격
 annotated tag의 peeled ref를 통해 정확한 전체 SHA를 별도로 확인합니다.
 
@@ -59,7 +59,8 @@ git push origin v<version>
 이미 태그가 있다면 다시 만들거나 강제로 덮어쓰지 말고, 해당 태그의 Release 워크플로와
 자산을 확인·재실행합니다.
 
-지원하는 릴리스 산출물은 macOS Apple Silicon용 `.dmg`입니다. CI와 릴리스 워크플로도 macOS만
-검증하고 패키징합니다. 이 결정은 [ADR-0003](adr/0003-macos-only-desktop-build.md)에
-기록했습니다. 릴리스 본문은
+지원하는 릴리스 산출물은 macOS Apple Silicon용 `.dmg`와 Windows x64용 NSIS 설치 파일 `.exe`입니다.
+릴리스 워크플로는 macOS에서 전체 제품 검증과 패키징을 수행하고, Windows에서는 기본 검증과
+NSIS 패키징을 수행합니다. Windows 실제 트레이·포커스 수용 검증은 별도 경계입니다. 이 결정은
+[ADR-0004](adr/0004-windows-release-resumption.md)에 기록했습니다. 릴리스 본문은
 [.github/RELEASE_BODY.md](../.github/RELEASE_BODY.md)에서 읽습니다.

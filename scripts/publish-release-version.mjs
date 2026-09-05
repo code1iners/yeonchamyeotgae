@@ -247,8 +247,8 @@ function selectReleaseRun(runs, targetTag, targetSha) {
 	};
 }
 
-/** GitHub Release의 공개 상태·태그·커밋·DMG 자산을 검증한다. */
-function verifyRelease(release, expectedTag, expectedSha, expectedAsset) {
+/** GitHub Release의 공개 상태·태그·커밋·macOS·Windows 자산을 검증한다. */
+function verifyRelease(release, expectedTag, expectedSha, expectedAssets) {
 	if (!release || typeof release !== "object" || Array.isArray(release)) {
 		throw new Error("GitHub Release 상세 응답이 객체가 아닙니다.");
 	}
@@ -285,19 +285,21 @@ function verifyRelease(release, expectedTag, expectedSha, expectedAsset) {
 		);
 	}
 
-	/** Release에 올라온 예상 Apple Silicon DMG. */
-	const asset = Array.isArray(release.assets)
-		? release.assets.find((item) => item?.name === expectedAsset)
-		: undefined;
-	if (!asset) {
-		throw new Error(`예상한 Release 자산이 없습니다: ${expectedAsset}`);
-	}
+	/** Release에 올라온 예상 macOS·Windows 자산. */
+	const assets = Array.isArray(release.assets) ? release.assets : [];
+	const verifiedAssets = expectedAssets.map((expectedAsset) => {
+		const asset = assets.find((item) => item?.name === expectedAsset);
+		if (!asset) {
+			throw new Error(`예상한 Release 자산이 없습니다: ${expectedAsset}`);
+		}
+		return asset.name;
+	});
 	/** 결과 요약에 사용할 공개 Release URL. */
 	const url = String(release.url ?? "");
 	if (!url) {
 		throw new Error("GitHub Release URL이 없습니다.");
 	}
-	console.log(`${url}\t${asset.name}`);
+	console.log([url, ...verifiedAssets].join("\t"));
 }
 
 /** 명령행 인자를 검사한다. */
@@ -406,8 +408,8 @@ async function main() {
 		case "verify-release": {
 			requireArguments(
 				argumentsList,
-				3,
-				"verify-release <tag-name> <commit-sha> <asset-name>",
+				4,
+				"verify-release <tag-name> <commit-sha> <macos-asset-name> <windows-asset-name>",
 			);
 			/** GitHub Release 상세 응답 원문. */
 			const release = JSON.parse((await readStandardInput()).trim() || "null");
@@ -415,7 +417,7 @@ async function main() {
 				release,
 				argumentsList[0],
 				argumentsList[1],
-				argumentsList[2],
+				argumentsList.slice(2),
 			);
 			return;
 		}

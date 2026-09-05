@@ -370,6 +370,7 @@ async function createFixture(options = {}) {
 		`  is_draft=false`,
 		`  is_prerelease=false`,
 		`  asset_name="yeonchamyeotgae-${dollar}version-arm64.dmg"`,
+		`  windows_asset_name="yeonchamyeotgae-${dollar}version-x64.exe"`,
 		`  case "${dollar}mode" in`,
 		`    error) exit 1 ;;`,
 		`    wrong-sha) target_commitish='0000000000000000000000000000000000000000' ;;`,
@@ -379,11 +380,14 @@ async function createFixture(options = {}) {
 		`    draft) is_draft=true ;;`,
 		`    prerelease) is_prerelease=true ;;`,
 		`    missing-dmg) asset_name='' ;;`,
+		`    missing-windows) windows_asset_name='' ;;`,
 		`  esac`,
-		`  if [ -n "${dollar}asset_name" ]; then`,
+		`  if [ -z "${dollar}asset_name" ]; then`,
+		`    printf '{"tagName":"%s","isDraft":%s,"isPrerelease":%s,"targetCommitish":"%s","url":"https://example.test/releases/%s","assets":[{"name":"%s"}]}\\n' "${dollar}release_tag" "${dollar}is_draft" "${dollar}is_prerelease" "${dollar}target_commitish" "${dollar}tag_name" "${dollar}windows_asset_name"`,
+		`  elif [ -z "${dollar}windows_asset_name" ]; then`,
 		`    printf '{"tagName":"%s","isDraft":%s,"isPrerelease":%s,"targetCommitish":"%s","url":"https://example.test/releases/%s","assets":[{"name":"%s"}]}\\n' "${dollar}release_tag" "${dollar}is_draft" "${dollar}is_prerelease" "${dollar}target_commitish" "${dollar}tag_name" "${dollar}asset_name"`,
 		"  else",
-		`    printf '{"tagName":"%s","isDraft":%s,"isPrerelease":%s,"targetCommitish":"%s","url":"https://example.test/releases/%s","assets":[]}\\n' "${dollar}release_tag" "${dollar}is_draft" "${dollar}is_prerelease" "${dollar}target_commitish" "${dollar}tag_name"`,
+		`    printf '{"tagName":"%s","isDraft":%s,"isPrerelease":%s,"targetCommitish":"%s","url":"https://example.test/releases/%s","assets":[{"name":"%s"},{"name":"%s"}]}\\n' "${dollar}release_tag" "${dollar}is_draft" "${dollar}is_prerelease" "${dollar}target_commitish" "${dollar}tag_name" "${dollar}asset_name" "${dollar}windows_asset_name"`,
 		"  fi",
 		"  exit 0",
 		"fi",
@@ -535,6 +539,10 @@ test("정상 기본 patch는 main을 push하지 않고 정확한 태그와 Relea
 		assert.match(
 			result.output,
 			/확인한 DMG: yeonchamyeotgae-0\.1\.4-arm64\.dmg/,
+		);
+		assert.match(
+			result.output,
+			/확인한 Windows 설치 파일: yeonchamyeotgae-0\.1\.4-x64\.exe/,
 		);
 		assert.equal((commandLog.match(/^pre-push$/gm) ?? []).length, 1);
 		assert.doesNotMatch(commandLog, /gh:run list --workflow ci\.yml/);
@@ -1171,7 +1179,7 @@ test("빈 conclusion인 진행 중 Release도 run watch 성공까지 기다린�
 	);
 });
 
-test("공개 Release의 태그·SHA·상태·DMG가 맞지 않으면 원격 태그를 삭제하지 않는다", async () => {
+test("공개 Release의 태그·SHA·상태·OS별 자산이 맞지 않으면 원격 태그를 삭제하지 않는다", async () => {
 	/** Release 상세 응답을 일부러 실패시키는 가짜 상태 목록. */
 	const modes = [
 		"error",
@@ -1182,6 +1190,7 @@ test("공개 Release의 태그·SHA·상태·DMG가 맞지 않으면 원격 태�
 		"draft",
 		"prerelease",
 		"missing-dmg",
+		"missing-windows",
 	];
 	// 각 Release 상세 응답 상태를 순서대로 검증한다.
 	/** 현재 Release 상세 응답 상태. */

@@ -512,6 +512,7 @@ printf '%s\n' '[publish-release] main은 push하지 않고 대상 커밋의 태�
 # 게시할 단일 릴리스 태그와 기대하는 macOS DMG 이름을 고정한다.
 TAG_NAME="v${CANDIDATE_VERSION}"
 EXPECTED_DMG_NAME="yeonchamyeotgae-${CANDIDATE_VERSION}-arm64.dmg"
+EXPECTED_WINDOWS_NAME="yeonchamyeotgae-${CANDIDATE_VERSION}-x64.exe"
 
 # 사용자 승인 사이에 생긴 로컬·원격 태그도 덮어쓰지 않고 같은 대상을 재사용한다.
 if ! REMOTE_TAG_INFO=$(remote_tag_refs); then
@@ -582,10 +583,10 @@ RELEASE_RUN_ID=$VERIFIED_RUN_ID
 if ! RELEASE_VIEW_JSON=$(gh release view "$TAG_NAME" --json tagName,isDraft,isPrerelease,targetCommitish,url,assets 2>/dev/null); then
 	fail_release "GitHub Release 검증에 실패했습니다: ${TAG_NAME}의 상세 정보를 읽지 못했습니다. 원격 태그 ${TAG_NAME}는 보존했습니다. 정확한 Release 실행을 재실행한 뒤 다시 확인하세요: gh run rerun ${RELEASE_RUN_ID}"
 fi
-if ! RELEASE_VERIFICATION=$(printf '%s' "$RELEASE_VIEW_JSON" | node "$VERSION_HELPER" verify-release "$TAG_NAME" "$RELEASE_SHA" "$EXPECTED_DMG_NAME" 2>&1); then
+if ! RELEASE_VERIFICATION=$(printf '%s' "$RELEASE_VIEW_JSON" | node "$VERSION_HELPER" verify-release "$TAG_NAME" "$RELEASE_SHA" "$EXPECTED_DMG_NAME" "$EXPECTED_WINDOWS_NAME" 2>&1); then
 	fail_release "GitHub Release 검증에 실패했습니다: ${RELEASE_VERIFICATION}. 원격 태그 ${TAG_NAME}는 보존했습니다. Release 실행을 재실행한 뒤 같은 태그의 공개 상태와 자산을 다시 확인하세요: gh run rerun ${RELEASE_RUN_ID}"
 fi
-IFS="$(printf '\t')" read -r RELEASE_URL RELEASE_ASSET <<EOF
+IFS="$(printf '\t')" read -r RELEASE_URL RELEASE_DMG RELEASE_WINDOWS <<EOF
 $RELEASE_VERIFICATION
 EOF
 
@@ -597,11 +598,12 @@ if [ "$REMOTE_TAG_COMMIT" != "$RELEASE_SHA" ]; then
 	fail_release "원격 ${TAG_NAME}가 최종 확인 중 기대한 전체 SHA를 가리키지 않게 되었습니다. 원격 태그 ${TAG_NAME}는 삭제하지 않고 보존했습니다."
 fi
 
-# Release 공개와 기대한 Apple Silicon DMG까지 확인한 뒤에만 전체 명령을 성공시킨다.
+# Release 공개와 기대한 macOS DMG·Windows 설치 파일까지 확인한 뒤에만 전체 명령을 성공시킨다.
 printf '%s\n' ''
 printf '%s\n' '[publish-release] 릴리스 게시와 검증이 완료되었습니다.'
 printf '%s\n' "버전: ${CANDIDATE_VERSION}"
 printf '%s\n' "태그: ${TAG_NAME}"
 printf '%s\n' "전체 SHA: ${RELEASE_SHA}"
 printf '%s\n' "Release URL: ${RELEASE_URL}"
-printf '%s\n' "확인한 DMG: ${RELEASE_ASSET}"
+printf '%s\n' "확인한 DMG: ${RELEASE_DMG}"
+printf '%s\n' "확인한 Windows 설치 파일: ${RELEASE_WINDOWS}"

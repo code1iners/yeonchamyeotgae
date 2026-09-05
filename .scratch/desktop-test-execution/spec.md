@@ -2,10 +2,10 @@
 
 Status: ready-for-agent
 
-> **지원 범위 변경 (2026-09-02):** [ADR-0003](../../docs/adr/0003-macos-only-desktop-build.md)에
-> 따라 데스크톱 빌드·제품 흐름·릴리스 검증의 지원 대상은 macOS다. 아래 Windows 요구사항은
-> 최초 승인 당시의 기록으로 남기되 현재 계약에서는 제외한다. CI와 릴리스 워크플로는 macOS만
-> 실행하며 Windows 결과를 선행 조건이나 수용 증거로 사용하지 않는다.
+> **제품 흐름 지원 범위 (2026-09-05):** [ADR-0003](../../docs/adr/0003-macos-only-desktop-build.md)과
+> [ADR-0004](../../docs/adr/0004-windows-release-resumption.md)에 따라 실제 제품 흐름·OS 수용
+> 검증 대상은 macOS다. 릴리스는 Windows x64 패키지를 별도 Windows 러너에서 만들지만,
+> Windows 기본 검증 결과를 실제 Windows 트레이·포커스 수용 증거로 사용하지 않는다.
 
 연차몇개의 자동 검증을 무창 기본 검증, 비활성 Electron 제품 흐름, 전면 Electron 제품
 흐름으로 분리한다. 로컬 개발과 에이전트 작업은 사용자의 다른 앱을 방해하지 않고 반복할 수
@@ -120,7 +120,8 @@ push를 차단한다. 원격 CI와 릴리스는 사용자 작업 흐름이 없�
   전체 자동 검증을 다시 수행한다.
 - 제품 흐름은 기존과 같이 임시 사용자 데이터와 결정론적 시드를 사용하고 성공·실패 모두에서
   Electron 및 보조 프로세스와 임시 데이터를 정리한다.
-- 지원 대상은 macOS다. Windows, Linux와 Wayland용 표시·포커스 대체 경로는 만들지 않는다.
+- 제품 흐름·OS 수용 검증 대상은 macOS다. Windows 패키징은 별도 릴리스 러너에서 수행하며,
+  Windows, Linux와 Wayland용 표시·포커스 대체 경로는 만들지 않는다.
 - 저장 스키마, 계산 API, 프로세스 간 통신 계약, 화면 문구와 접근성 계약은 변경하지 않는다.
 
 ## Testing Decisions
@@ -145,8 +146,9 @@ push를 차단한다. 원격 CI와 릴리스는 사용자 작업 흐름이 없�
   제품 흐름 실패 시 push를 차단해야 한다.
 - Node 또는 pnpm을 찾지 못하는 훅 테스트는 비검증 성공으로 폴백하지 않고 실행 가능한 복구
   안내와 함께 실패해야 한다.
-- CI·릴리스 정의는 macOS에서 `verify:product`를 호출하고 Windows 잡을 포함하지 않는지 정적으로
-  확인한다. 실제 잡 결과는 macOS의 비활성 Electron 회귀 증거로만 기록한다.
+- CI 정의는 macOS에서 `verify:product`를 호출하고, 릴리스 정의는 macOS `verify:product`와
+  Windows 기본 `verify` 뒤에 각 OS를 패키징하는지 정적으로 확인한다. 실제 잡 결과는 macOS의
+  비활성 Electron 회귀 증거로만 기록하고 Windows 결과는 패키징 증거로만 기록한다.
 - macOS 실제 포커스, 바깥 클릭 blur, 메뉴 막대 클릭과 팝오버 위치는 기존 수용 티켓의 전면
   검증으로 별도 확인한다.
 - 기존 선례는 격리된 사용자 데이터, 결정론적 시드, 두 번째 인스턴스와 주입된 blur를 사용하는
