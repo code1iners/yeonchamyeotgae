@@ -319,18 +319,10 @@ export function App() {
 											ref={entryTriggerRef}
 											type="button"
 											className="primary"
-											aria-describedby="head-entry-shortcut"
 											onClick={handleOpenEntry}
 										>
 											휴가 등록
 										</button>
-										<span
-											id="head-entry-shortcut"
-											className="head-entry-shortcut"
-										>
-											단축키{" "}
-											<kbd>{shortcutLabel("open-entry", shortcutPlatform)}</kbd>
-										</span>
 									</div>
 								)}
 								{!onboarding && (

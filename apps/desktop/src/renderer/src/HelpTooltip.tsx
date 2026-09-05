@@ -102,7 +102,7 @@ export function HelpTooltip({ label, children, shortcut, context }: Props) {
 				role="tooltip"
 				hidden={!open}
 			>
-				<span>{children}</span>
+				{children}
 				{shortcut && <kbd>{shortcut}</kbd>}
 			</span>
 		</span>

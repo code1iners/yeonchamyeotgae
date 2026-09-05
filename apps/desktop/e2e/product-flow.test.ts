@@ -486,10 +486,15 @@ describe.sequential("Electron 제품 흐름", () => {
 		await expectVisible(
 			flow.page.getByRole("rowheader", { name: "발생", exact: true }),
 		);
-		/** 모든 정상 탭에서 같은 위치에 남는 전역 등록 행동과 단축키 안내. */
+		/** 모든 정상 탭에서 같은 위치에 남는 전역 등록 행동과 단축키 도움말. */
 		const entryTrigger = flow.page.getByRole("button", { name: "휴가 등록" });
 		await expectVisible(entryTrigger);
-		await expectVisible(flow.page.getByText("단축키 ⌘⇧N", { exact: true }));
+		/** 헤더의 등록 행동 옆에는 중복 단축키 문구를 두지 않는다. */
+		const entryHeaderText = await entryTrigger.evaluate((button) =>
+			button.parentElement?.textContent?.replace(/\s+/g, " ").trim(),
+		);
+		expect(entryHeaderText).toBe("휴가 등록");
+		expect(await entryTrigger.getAttribute("aria-describedby")).toBeNull();
 
 		await flow.page.getByRole("tab", { name: "이력" }).click();
 		await expectVisible(flow.page.getByRole("button", { name: "리스트" }));
@@ -518,6 +523,20 @@ describe.sequential("Electron 제품 흐름", () => {
 			.getByRole("tooltip")
 			.filter({ hasText: "휴가 등록" });
 		await expectVisible(shortcutTooltip);
+		/** 헤더 단축키 도움말에서 줄별로 렌더링되는 항목. */
+		const shortcutRows = shortcutTooltip.locator(":scope > span");
+		expect(await shortcutRows.count()).toBe(5);
+		/** 각 항목의 block 표시와 서로 다른 세로 위치로 줄바꿈을 확인한다. */
+		const shortcutRowLayout = await shortcutRows.evaluateAll((rows) =>
+			rows.map((row) => ({
+				display: getComputedStyle(row).display,
+				top: Math.round(row.getBoundingClientRect().top),
+			})),
+		);
+		expect(shortcutRowLayout.every(({ display }) => display === "block")).toBe(
+			true,
+		);
+		expect(new Set(shortcutRowLayout.map(({ top }) => top)).size).toBe(5);
 		expect(await shortcutHelp.getAttribute("aria-expanded")).toBe("true");
 		const tooltipId = await shortcutTooltip.getAttribute("id");
 		expect(await shortcutHelp.getAttribute("aria-describedby")).toBe(tooltipId);
